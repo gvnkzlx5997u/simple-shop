@@ -1,0 +1,21 @@
+# =============================================================================
+# 测试环境配置
+#
+# 目的：让自测**跑在独立库** simple_shop_test 上，不污染开发库 simple_shop。
+#   - 库由连接串的 createDatabaseIfNotExist=true 自动创建；
+#   - 表由 Flyway 迁移脚本建立（与开发库同一套 V1/V2），因此测试同时验证了迁移脚本；
+#   - 队列序号行与卖家账号也来自 V2 种子，故 part 3 的口令码断言可直接用种子账号。
+#
+# ⚠️ Hibernate 的 ddl-auto 仍为 validate：上下文能启动本身就等于
+#    「实体 ↔ 库结构一致」这条断言通过（§9.1 推荐的本地自检手段）。
+# =============================================================================
+
+spring:
+  datasource:
+    url: ${TEST_DB_URL:jdbc:mysql://localhost:3306/simple_shop_test?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&connectionTimeZone=UTC&rewriteBatchedStatements=true&createDatabaseIfNotExist=true}
+
+logging:
+  level:
+    # 测试期间压低 SQL 日志噪音；断言失败时按需调回 debug
+    org.hibernate.SQL: warn
+    org.hibernate.orm.jdbc.bind: warn

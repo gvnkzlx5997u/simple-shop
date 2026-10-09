@@ -1,0 +1,20 @@
+# 构建产物
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# 项目内本地 Maven 仓库（见 .mvn/maven.config）
+.m2/
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.settings/
+.classpath
+.project
+
+# OS
+Thumbs.db
+Desktop.ini
