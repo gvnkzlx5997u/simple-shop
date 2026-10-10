@@ -1,0 +1,16 @@
+caseName,raw,expected
+规范形式,ABC123DEF456,true
+小写输入,abc123def456,true
+首尾空格,"  ABC123DEF456  ",true
+小写加首尾空格,"  abc123def456  ",true
+制表符包裹,"{TAB}ABC123DEF456{LF}",true
+全数字,123456789012,true
+全字母,ABCDEFGHIJKL,true
+11位,ABC123DEF45,false
+13位,ABC123DEF4567,false
+内部有空格,ABC 123DEF45,false
+含连字符,ABC-23DEF456,false
+含中文,口令码ABCDEF12,false
+空串,"",false
+全空格,"   ",false
+null,NULL,false

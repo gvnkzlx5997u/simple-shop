@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ============================================================================
+  simple-shop 日志配置
+  依据：《后端业务层与卖家端接口层开发方案》§7（操作日志与审计）
+        G6-01、NFR-12、DEC-14（8 类关键操作日志）
+        C-18、12-P7（日志保留 3 个月，应用日志文件轮转）
+        9-B、12-G（操作日志【不纳入数据库表结构】，由应用日志实现）
+        12-H、Q-4/Q-9（日志【不记录口令码明文】）
+
+  ⚠️ 本文件只【追加】审计 appender，不覆盖 Spring Boot 的默认控制台日志——
+     使用 <include resource="org/springframework/boot/logging/logback/base.xml"/>
+     引入官方基线，再为 com.simpleshop.audit 挂上独立文件 appender。
+  ============================================================================
+-->
+<configuration>
+
+    <!-- Spring Boot 官方日志基线：控制台 appender、默认 pattern、日志级别配置 -->
+    <include resource="org/springframework/boot/logging/logback/base.xml"/>
+
+    <!--
+      日志文件输出目录。
+      ⚠️ 用 logback 的系统属性（-DAUDIT_LOG_PATH=...）而非环境变量：
+         logback 的 ${ENV_VAR:-default} 语法对「未定义的【环境变量】」不可靠
+         （logback 手册只保证「系统属性 / 已定义属性」的默认值语义）。
+         若要按环境改目录，启动时加 -DAUDIT_LOG_PATH=/var/log/simple-shop。
+    -->
+    <property name="AUDIT_LOG_PATH" value="${AUDIT_LOG_PATH:-logs}"/>
+
+    <!--
+      审计日志的 rolling policy：
+        · 按天 + 按大小滚动
+        · maxHistory=90 → 只保留最近 90 天（≈3 个月），满足 C-18 / NFR-12 / 12-P7
+        · totalSizeCap=1GB → 兜底上限，防止异常刷日志把磁盘写满
+        · 时间戳用 UTC（%d{..., UTC}）——与数据层「库内一律 UTC」的口径一致（C-10、NFR-18）。
+          ⚠️ 此处【必须】显式写 UTC：默认 pattern 用的是 JVM 时区，
+             而日志时间戳若用本地时间，会对不上库内时间，排查时容易误判。
+      日志保留期为 3 个月；业务数据为【永久保留】（NFR-08），两者分列、不得互相套用。
+    -->
+    <appender name="AUDIT_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${AUDIT_LOG_PATH}/audit.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${AUDIT_LOG_PATH}/audit.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>50MB</maxFileSize>
+            <maxHistory>90</maxHistory>
+            <totalSizeCap>1GB</totalSizeCap>
+            <cleanHistoryOnStart>true</cleanHistoryOnStart>
+        </rollingPolicy>
+        <encoder>
+            <!--
+              key=value 紧致格式（见 OperationLogService 类注释）：
+              UTC 时间戳、logger 名、级别、消息、换行。
+              ⚠️ 消息内容由 OperationLogService 组装，【不含】口令码与密码。
+            -->
+            <pattern>%d{yyyy-MM-dd'T'HH:mm:ss.SSS'Z', UTC} %-5level [%thread] %logger{36} - %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!--
+      审计 logger：只让 com.simpleshop.audit 走独立文件。
+        additivity=false → 【不】向上冒泡到根 logger，避免审计日志同时刷进控制台
+                           （控制台日志在容器里会被 docker logs 采集，无需重复）。
+        level=INFO      → OperationLogService 用 INFO 记录。
+    -->
+    <logger name="com.simpleshop.audit" level="INFO" additivity="false">
+        <appender-ref ref="AUDIT_FILE"/>
+    </logger>
+
+</configuration>

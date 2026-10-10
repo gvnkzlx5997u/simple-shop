@@ -1,0 +1,16 @@
+caseName,status,freezeBy,queuedCount,tradingCount,operation,expectedCode
+冻结-在售无排队,on_sale,NULL,0,0,freeze,0
+冻结-在售但有排队澄清Q18即PS-02,on_sale,NULL,2,0,freeze,0
+冻结-已手动冻结,frozen,manual,0,0,freeze,20003
+冻结-交易冻结中,frozen,trade,0,0,freeze,20003
+解冻-手动冻结,frozen,manual,0,0,unfreeze,0
+解冻-交易冻结为PS-06核心拦截项,frozen,trade,0,0,unfreeze,20005
+解冻-frozen但freezeBy为null属脏状态按可解冻处理,frozen,NULL,0,0,unfreeze,0
+解冻-在售,on_sale,NULL,0,0,unfreeze,20004
+下架-在售队列空即PS-08,on_sale,NULL,0,0,offline,0
+下架-在售队列非空即BR-09,on_sale,NULL,2,0,offline,20006
+下架-已手动冻结,frozen,manual,0,0,offline,20003
+下架-在售却有trading意向由INV-05兜底,on_sale,NULL,0,1,offline,30005
+无商品-冻结,NULL,NULL,0,0,freeze,20002
+无商品-解冻,NULL,NULL,0,0,unfreeze,20002
+无商品-下架,NULL,NULL,0,0,offline,20002

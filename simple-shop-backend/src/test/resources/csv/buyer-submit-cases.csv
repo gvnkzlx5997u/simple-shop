@@ -1,0 +1,22 @@
+caseName,status,freezeBy,nonTerminalCount,name,tel,expectedPrompt
+正常-在售无排队,on_sale,NULL,0,张三,13800000000,OK
+正常-在售已有排队,on_sale,NULL,2,李四,13800000000,OK
+正常-姓名首尾空格被trim,on_sale,NULL,0,"  张三  ",13800000000,OK
+冻结-手动冻结,frozen,manual,0,张三,13800000000,GOODS_FROZEN
+冻结-交易冻结,frozen,trade,0,张三,13800000000,GOODS_FROZEN
+冻结-手动冻结且队列非空,frozen,manual,2,张三,13800000000,GOODS_FROZEN
+冻结-交易冻结且队列非空,frozen,trade,1,张三,13800000000,GOODS_FROZEN
+无商品,NULL,NULL,0,张三,13800000000,GOODS_UNAVAILABLE
+姓名-空串,on_sale,NULL,0,"",13800000000,NAME_TEL_REQUIRED
+姓名-null,on_sale,NULL,0,NULL,13800000000,NAME_TEL_REQUIRED
+姓名-全空格,on_sale,NULL,0,"   ",13800000000,NAME_TEL_REQUIRED
+姓名-51字符,on_sale,NULL,0,REPEAT(名:51),13800000000,NAME_INVALID
+姓名-含小于号,on_sale,NULL,0,a<b,13800000000,NAME_INVALID
+姓名-含换行,on_sale,NULL,0,张{LF}三,13800000000,NAME_INVALID
+电话-6位,on_sale,NULL,0,张三,123456,TEL_INVALID
+电话-含字母,on_sale,NULL,0,张三,abcdefg,TEL_INVALID
+电话-21位,on_sale,NULL,0,张三,REPEAT(1:21),TEL_INVALID
+电话-空串,on_sale,NULL,0,张三,"",NAME_TEL_REQUIRED
+电话-null,on_sale,NULL,0,张三,NULL,NAME_TEL_REQUIRED
+顺序-姓名与电话都非法时先报姓名,on_sale,NULL,0,REPEAT(名:51),123456,NAME_INVALID
+顺序-姓名缺失电话非法时先报缺失,on_sale,NULL,0,"",abcdefg,NAME_TEL_REQUIRED

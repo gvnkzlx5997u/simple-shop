@@ -14,6 +14,18 @@ spring:
   datasource:
     url: ${TEST_DB_URL:jdbc:mysql://localhost:3306/simple_shop_test?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&connectionTimeZone=UTC&rewriteBatchedStatements=true&createDatabaseIfNotExist=true}
 
+# =============================================================================
+# 图片目录：测试期指向 target/ 下的独立目录
+#
+# ⚠️ 为什么必须覆盖：`I11-05` 的上传用例会真的把文件写到
+#    simple-shop.image.directory。若不覆盖，测试会往【开发期共用的】./data/images 里写垃圾文件，
+#    而那个目录正是生产图片的存放位置（C-08、DEC-09）——测试污染生产数据是不可接受的。
+#    指向 target/test-images 后：① 与真实图片目录彻底隔离；② mvn clean 会一并清掉。
+# =============================================================================
+simple-shop:
+  image:
+    directory: ./target/test-images
+
 logging:
   level:
     # 测试期间压低 SQL 日志噪音；断言失败时按需调回 debug
