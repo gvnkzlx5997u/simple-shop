@@ -5,10 +5,12 @@
     <modelVersion>4.0.0</modelVersion>
 
     <!--
-      simple-shop 数据层
-      依据：《数据库与数据层设计说明书》v1.2 §2.1 选型 / §2.2 版本说明（3.5 线）
+      simple-shop 后端
+      阶段一/二（数据层）：依据《数据库与数据层设计说明书》v1.2 §2.1 选型 / §2.2 版本说明（3.5 线）
       已定决策：DEC-DB-01（Maven）、DEC-DB-02（Spring Boot 3.5.x + Java 21 + MySQL >= 8.0.16）、
                 DEC-DB-12（groupId 与包名统一为 com.simpleshop）
+      阶段三（本轮）：新增 web 与 validation 两个 starter，用于 Service 层 + 卖家端 REST 接口层。
+                      ⚠️ 仍不引入 JSP 相关依赖（买家端 JSP 属下一轮范围）。
     -->
 
     <parent>
@@ -21,8 +23,23 @@
     <groupId>com.simpleshop</groupId>
     <artifactId>simple-shop</artifactId>
     <version>0.1.0-SNAPSHOT</version>
+
+    <!--
+      打包方式：war（不是 jar）
+      为什么：下一轮买家端为【服务端渲染的 JSP】（C-05、A-02、A-05），
+              JSP 由 servlet 容器编译，需要 WEB-INF 下的 web 资源目录结构，
+              jar 包无法承载。本轮先改打包方式，下一轮只需加
+              tomcat-embed-jasper 依赖 + src/main/webapp/WEB-INF/views 目录即可。
+      ⚠️ 本轮【有意保留】spring-boot-starter-web 自带的 embedded Tomcat：
+         · 开发期 java -jar target/*.war 仍可直接启动（war 是「可执行 war」）
+         · 也仍可 put 进外部 Tomcat 的 webapps/
+         · JSP 直出需要 tomcat-embed-jasper，属下一轮的依赖，本轮不加
+         → 只有【确定不再需要 java -jar 启动】时，才把 embedded Tomcat 设为 provided。
+    -->
+    <packaging>war</packaging>
+
     <name>simple-shop</name>
-    <description>simple-shop 后端数据层（数据库 / entity / repository，不含 Service 与 Controller）</description>
+    <description>simple-shop 后端（数据库 / entity / repository / Service / 卖家端 REST 接口层；打包为 war 以承载下一轮买家端 JSP）</description>
 
     <properties>
         <!-- 技术基线固定为 Java 21（DEC-DB-02）。release 会让编译期与运行期 API 一并按 21 校验 -->
@@ -37,6 +54,30 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+
+        <!--
+          任务 3（业务层 + 卖家端接口层）新增：web 层。
+          卖家端为前后端分离（Vue，C-06 / A-01），须提供 REST 接口契约（第 11 章 I11-01 ~ I11-16）。
+          ⚠️ 本依赖会连带引入 tomcat-embed-core（servlet 容器）与 spring-webmvc；
+             它**不引入** JSP 支持（tomcat-embed-jasper / jstl 是另外的依赖，本轮明确不加）——
+             买家端 JSP 属下一轮范围，本轮只提供 Service。
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!--
+          任务 3 新增：Bean Validation（hibernate-validator）。
+          仅用于 **请求 DTO**（web/dto/*），不用于实体——
+          设计说明书 DEC-DB-10 ③ 已定「实体上不加 Bean Validation 业务注解」，
+          以免 @Size(max=50) 与 @Column(length=50) 形成双源不一致。
+          Service 层仍须独立校验（G6-02：服务端必须独立校验前置条件，不得依赖 DTO 注解）。
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
         <!-- 任务 1 指定：MySQL 驱动 -->
@@ -78,7 +119,16 @@
     </dependencies>
 
     <build>
+        <!-- 最终包名：simple-shop.war（去掉 version，便于部署时路径稳定；不含版本号也便于容器挂载） -->
+        <finalName>simple-shop</finalName>
         <plugins>
+            <!--
+              spring-boot-maven-plugin：把 war 打成「可执行 war」。
+              打包方式为 war 时 repackage 目标默认生效：
+                · MANIFEST 写入 Main-Class / Start-Class
+                · 依赖放入 WEB-INF/lib-provided（外部容器部署时由容器提供）与 WEB-INF/lib
+              因此同一个 war 既能 java -jar 直接跑，也能放进外部 Tomcat。
+            -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>

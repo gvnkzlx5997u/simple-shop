@@ -1,10 +1,15 @@
 # simple-shop
 
-在线购物系统的**后端数据层**：数据库 DDL、JPA 实体与仓储接口。
+在线购物系统的**后端**：数据库 DDL + JPA 实体与仓储（阶段二）+ **业务层 Service 与卖家端接口层 Controller（阶段三）**。
 
-> **范围**：数据库表结构、JPA `entity`、Spring Data JPA `repository`。
-> **不含**：Service、Controller、DTO、页面（`spring.main.web-application-type=none`，启动后不占端口）。
-> **依据**：《数据库与数据层设计说明书》v1.2 ｜《需求规格说明书》v1.1 ｜《开发方决策记录》。
+> **当前范围**：数据层、业务层（Service）、**卖家端 REST 接口 `I11-01` ~ `I11-16`（16 个，全部实现）**。
+> **不含**：买家端页面（`B11-xx` 的 JSP，属下一轮；其 Service 已就绪）。
+> **依据**：《数据库与数据层设计说明书》v1.2 ｜《需求规格说明书》v1.1 ｜
+> 《后端业务层与卖家端接口层开发方案》（已拆分为 [docs/业务层与接口层/](docs/业务层与接口层/)，见该目录的 README）。
+>
+> **验证状态**：`mvn clean verify` → **BUILD SUCCESS，462 用例全绿**。
+> ⚠️ **交接请先读 [《业务层与接口层 · 交接说明》](docs/业务层与接口层/交接说明.md)**——
+> 环境核对、硬口径、容易踩的坑、已知限制与下一轮待办都在那里。
 
 ---
 
@@ -17,6 +22,8 @@
 | Java | 编译目标 **21**（构建 JDK 需 ≥ 21） |
 | MySQL | ≥ 8.0.16（开发库 8.0.44） |
 | 持久化 | Spring Data JPA + Hibernate 6.6.53.Final |
+| Web | **Spring MVC（内嵌 Tomcat）**；打包为 **war**（为下一轮 JSP 准备） |
+| 会话 | **进程内**（`SessionStore`，后端单容器；✅ 已定 Q-3） |
 | schema 版本化 | Flyway 11.7.2 + 手写 SQL |
 | 基础包名 | `com.simpleshop` |
 | 连接池 | HikariCP（Spring Boot 默认） |
@@ -26,11 +33,21 @@
 > ⚠️ **请在工程根目录（`simple-shop/simple-shop-backend/`）执行 `mvn`**，原因见 §5。
 
 ```bash
-mvn clean verify        # 编译 + 全部测试
+mvn clean verify        # 编译 + 全部 462 个测试（约 75 秒）
 mvn clean compile       # 仅编译
-mvn spring-boot:run     # 启动（无 web 层：连库 → Flyway 迁移 → 结构校验后正常退出）
+mvn spring-boot:run     # 启动 web 应用（默认 8080 端口）
+mvn clean package       # 产出 target/simple-shop.war
+java -jar target/simple-shop.war   # 以 war 方式启动（真实端口验证用这条）
 mvn test                # 仅跑测试
 ```
+
+**运行期环境变量**（容器化时用它覆盖，详见《交接说明》§1.2）：
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` | 本机 `simple_shop` / `root` / `123456` | 连接串须保留 `connectionTimeZone=UTC` |
+| `IMAGE_DIR` | `./data/images` | 商品图片目录，**容器化须挂持久卷** |
+| `-DAUDIT_LOG_PATH`（**系统属性**，非环境变量） | `logs` | 审计日志目录 |
 
 **JDK**：编译目标为 Java 21，构建 JDK **不得低于 21**（pom 中的 enforcer 规则会拦截并提示）。
 更高的 JDK 也可构建（已在 JDK 21 与 24 上实测：24 构建出的字节码仍为 Java 21，全部测试通过），
@@ -77,7 +94,16 @@ CREATE DATABASE IF NOT EXISTS simple_shop
 ```
 src/main/java/com/simpleshop
 ├── SimpleShopApplication.java
+├── config/                         # AppProperties、JacksonConfig
 ├── security/                       # PasswordHasher、PasswordHashTool
+├── session/                        # SessionStore（进程内会话）
+├── service/                        # ★ 阶段三：业务层
+│   ├── dto/ support/ exception/    #   响应 DTO / 校验器 / ErrorCode
+│   ├── SellerAuthService、SellerGoodsService、SellerIntentionService、SellerHistoryService
+│   ├── BuyerIntentionService、PasscodeService、SubmitRateLimiter   # 买家端（无 Controller）
+│   └── ArchiveService、ImageStorageService、OperationLogService
+├── web/                            # ★ 阶段三：卖家端接口层（5 个 Controller）
+│   └── dto/ ApiResponse GlobalExceptionHandler SellerAuthInterceptor WebMvcConfig
 └── persistence
     ├── entity/                     # 7 个实体
     ├── enums/                      # 6 个枚举
@@ -86,15 +112,33 @@ src/main/java/com/simpleshop
 
 src/main/resources
 ├── application.yml
+├── logback-spring.xml              # 控制台 + 独立审计 appender（3 个月轮转）
 └── db/migration/                   # V1__baseline_schema.sql、V2__seed_initial_data.sql
 
 src/test
-├── java/com/simpleshop/            # 测试基类 + 3 个测试类
-└── resources/application-test.yml  # 测试库配置（simple_shop_test）
+├── java/com/simpleshop/            # 24 个测试类 / 462 用例 + testing/ 测试设施
+└── resources/                      # application-test.yml、csv/（15 张用例表）、images/
 ```
 
 包结构详见《数据库与数据层设计说明书》§6.1。原设计的 `persistence/id` 包与自定义主键生成器
 **已废弃、不再建立**（主键改为「前缀 + 标准 UUID」，在实体 `@PrePersist` 中赋值）。
+
+### 4.1 业务层与接口层速览（阶段三交付）
+
+| 项 | 内容 |
+| --- | --- |
+| 接口 | **`I11-01` ~ `I11-16` 共 16 个**：会话/账号 3（S3）、商品与图片 6（S4）、意向与交易 5（S6）、历史 2（S8） |
+| 统一响应 | `{code, message, data}`；**业务规则拒绝返回 HTTP 200 + 业务码**（仅 4 个例外：`10002`→401、`20011`→404、`50000`→500、`50002`→400） |
+| 错误码 | `ErrorCode` 是唯一来源，域归属 `1xxxx` 认证 / `2xxxx` 商品 / `3xxxx` 意向 / `4xxxx` 口令码 / `5xxxx` 通用；**不得增删编号** |
+| 鉴权 | `Authorization: Bearer <token>`，拦截器只覆盖 `/api/seller/**`（登录端点排除）；**买家端不需要鉴权** |
+| 事务与加锁 | 一个业务动作一个事务；卖家写 `@Transactional(timeout=5)`；**统一加锁顺序 ①序号表 → ②商品行 → ③意向行** |
+| 归档 | 手动下架与标记成功都会在**同一事务内**把商品与全部意向搬进历史表并硬删当前表 |
+| 审计日志 | 独立 appender（`com.simpleshop.audit`），UTC 时间戳、保留 90 天；**不记口令码与密码** |
+| 性能 | 查询 P95 ≤ 150ms、典型写 P95 ≤ 59ms（预算 500ms/1s）；⚠️ **归档满队列（1000 条）未达标（1.7~2.8s）**，见《交接说明》§7.1 |
+
+**⚠️ 三条最容易踩的**（详见《交接说明》§4~§6）：DTO 注解只判「有没有」；
+`I11-15` 与 `I11-10` 的排序口径**相反**；`trade_start`/`create_at`/`trade_end` 都是**秒精度**，
+同一秒内的先后**不确定**——**不要写断言顺序的用例**。
 
 ## 5. ⚠️ Maven 本地仓库在项目内
 
@@ -136,6 +180,12 @@ src/test
 统一加锁顺序：**① 序号表行 → ② 商品行 → ③ 意向行**（防死锁）。
 凡改变商品状态、或改变「是否有意向处于 `trading`」的事务，必须首先锁商品行。
 
+### 6.5 与业务层的关系（阶段三之后）
+
+数据层的**校验责任边界不变**：数据库只管结构（非空、唯一、外键、时间不倒流），「值对不对」全归 Service。
+⚠️ 业务层**没有改动任何数据层交付物**（实体、仓储、V1/V2 迁移脚本），
+唯一一处配置改动是新增 `hibernate.jdbc.batch_size: 50`（性能实测逼出来的，见《交接说明》§7.1）。
+
 ## 7. 初始账号与改密
 
 | 项 | 值 |
@@ -152,8 +202,12 @@ src/test
 
 ## 8. 更多细节
 
-实现细节（实体映射要点、加锁契约、归档口径、测试注意事项、本机环境特殊化处理核对表、
-以及设计说明书的 4 处实现期订正）统一记录在：
+实现细节统一记录在文档里（**都是「代码里看不出为什么」的部分**）：
 
-- **[《交接说明》](./docs/数据层/交接说明.md)** —— 环境核对、实现要点、测试口径、设计文档订正
-- **《数据库与数据层设计说明书》v1.2** —— 表结构、字段口径、仓储方法表的权威依据
+| 想了解 | 看 |
+| --- | --- |
+| **接手本工程**（环境核对、硬口径、坑、限制、下一轮待办） | **[《业务层与接口层 · 交接说明》](docs/业务层与接口层/交接说明.md)** |
+| 接口契约、业务口径、测试策略（**设计文档 16 篇**） | [docs/业务层与接口层/设计文档/](docs/业务层与接口层/设计文档/README.md) |
+| 每个阶段**实际怎么做的、踩了什么**（**实现过程记录 9 篇**） | [docs/业务层与接口层/实现过程记录/](docs/业务层与接口层/实现过程记录/README.md) |
+| 表结构、字段口径、仓储方法表 | 《数据库与数据层设计说明书》v1.2 ｜ [docs/数据层/交接说明.md](docs/数据层/交接说明.md) |
+| 上游需求（含 16 个接口的契约） | `../需求规格说明书/`（第 11 章为接口需求） |

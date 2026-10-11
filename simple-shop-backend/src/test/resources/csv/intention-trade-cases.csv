@@ -1,0 +1,8 @@
+caseName,goodsSetup,targetKind,extraTrading,expectedHttp,expectedCode,expectedGoodsStatus
+队首-成功进入交易,on_sale,head,NULL,200,0,frozen
+非队首-服务端防线BR-12,on_sale,second,NULL,200,30002,on_sale
+不存在的意向-同样不满足队首,on_sale,missing,NULL,200,30002,on_sale
+队列为空-无队首,on_sale,none,NULL,200,30002,on_sale
+商品手动冻结-要求on_sale,manual,head,NULL,200,20003,frozen
+无商品-拒绝,NONE,head,NULL,200,20002,NULL
+在售却有trading意向-防御性INV-02,on_sale,head,YES,200,30004,on_sale

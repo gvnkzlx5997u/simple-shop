@@ -1,0 +1,7 @@
+caseName,goodsSetup,targetKind,expectedHttp,expectedCode,expectedTargetStatus
+正常-标记成功,trade,head,200,0,succeeded
+商品在售-要求已冻结,on_sale,head,200,20004,queued
+商品手动冻结-必须先解冻即Q-1,manual,head,200,20004,queued
+目标非交易中,trade,second,200,30003,queued
+目标不存在,trade,missing,200,30003,NULL
+无商品-拒绝,NONE,head,200,20002,NULL

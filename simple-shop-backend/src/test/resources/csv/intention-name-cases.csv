@@ -1,0 +1,19 @@
+caseName,input,expectedPrompt,expectedStored
+正常-中文姓名,张三,OK,张三
+正常-含空格与间隔号,李 四·五,OK,李 四·五
+正常-恰好50个字符,REPEAT(名:50),OK,REPEAT(名:50)
+正常-恰好50个码点即50个emoji,REPEAT(😀:50),OK,REPEAT(😀:50)
+非法-51个字符,REPEAT(名:51),NAME_INVALID,NULL
+非法-51个码点即51个emoji,REPEAT(😀:51),NAME_INVALID,NULL
+归一化-首尾空格被trim,"  张三  ",OK,张三
+归一化-trim后为48个字符,"  REPEAT(名:48)  ",OK,REPEAT(名:48)
+归一化-trim在长度判定之前,"  REPEAT(名:50)  ",OK,REPEAT(名:50)
+非法-含小于号,a<b,NAME_INVALID,NULL
+非法-含大于号,a>b,NAME_INVALID,NULL
+非法-含script标签,<script>alert(1)</script>,NAME_INVALID,NULL
+非法-含换行,张{LF}三,NAME_INVALID,NULL
+非法-含回车,张{CR}三,NAME_INVALID,NULL
+缺失-null,NULL,NAME_TEL_REQUIRED,NULL
+缺失-空串,"",NAME_TEL_REQUIRED,NULL
+缺失-全空格,"   ",NAME_TEL_REQUIRED,NULL
+缺失-制表符,{TAB},NAME_TEL_REQUIRED,NULL

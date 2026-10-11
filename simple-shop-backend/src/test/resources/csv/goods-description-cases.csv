@@ -1,0 +1,15 @@
+caseName,input,expectedCode,expectedStored
+正常-普通描述,好吃又实惠,0,好吃又实惠
+正常-允许换行,第一行{LF}第二行,0,第一行{LF}第二行
+正常-恰好500个中文字符,REPEAT(描:500),0,REPEAT(描:500)
+非法-501个中文字符,REPEAT(描:501),20008,NULL
+非法-含小于号,a<b,20008,NULL
+非法-含大于号,a>b,20008,NULL
+非法-含script标签,<script>alert(1)</script>,20008,NULL
+可选-null,NULL,0,NULL
+可选-空串,"",0,NULL
+可选-全空格,"   ",0,NULL
+可选-只有换行,{LF},0,NULL
+归一化-首尾空格被trim,"  描述文字  ",0,描述文字
+归一化-trim后为498个字符,"  REPEAT(描:498)  ",0,REPEAT(描:498)
+归一化-换行不被trim掉,{LF}REPEAT(描:3){LF},0,REPEAT(描:3)

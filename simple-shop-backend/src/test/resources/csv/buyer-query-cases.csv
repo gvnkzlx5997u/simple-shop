@@ -1,0 +1,9 @@
+caseName,status,queuedAhead,expectedPrompt,expectedRank
+不存在,NULL,0,PASSCODE_NOT_FOUND,NULL
+排队中-队首,queued,0,QUEUED_RANK,1
+排队中-前面有2人,queued,2,QUEUED_RANK,3
+交易中,trading,0,ENTERED_TRADE,NULL
+交易中-即便前面有人排队也无位次,trading,2,ENTERED_TRADE,NULL
+终态-交易成功,succeeded,0,PASSCODE_EXPIRED,NULL
+终态-交易失败,failed,0,PASSCODE_EXPIRED,NULL
+终态-已撤销,revoked,0,PASSCODE_EXPIRED,NULL
