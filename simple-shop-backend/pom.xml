@@ -116,6 +116,32 @@
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-crypto</artifactId>
         </dependency>
+
+        <!--
+          任务 4（买家端开发）新增：JSP 视图层支持。
+          买家端为服务端渲染 JSP（C-05 / A-02 / A-05，不走 REST、不出接口文档），
+          需要 Jasper 引擎在运行时把 .jsp 编译成 servlet。
+          任务 3 的 pom 注释里已交代「JSP 属下一轮范围，本轮只提供 Service」，本依赖即该轮补齐。
+
+          ⚠️ 三个坐标**都不写 <version>**：spring-boot-dependencies 已统一锁定版本。
+             网上流传的教程普遍写 2.0.0，那是 javax.* 时代的旧版号，照抄会踩版本坑。
+          ⚠️ 必须是 jakarta.* 命名空间（Spring Boot 3 / Tomcat 10+），不可混入 javax.*。
+          ⚠️ 本依赖覆盖的是「内嵌 Tomcat 运行 / 可执行 war」这一形态；
+             若部署到外部独立 Tomcat，还需另加 jakarta.servlet-api(provided) 并排除内嵌 Tomcat
+             —— 这与 OPEN-01 容器化的关系待与组长确认，本轮不动。
+        -->
+        <dependency>
+            <groupId>org.apache.tomcat.embed</groupId>
+            <artifactId>tomcat-embed-jasper</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>jakarta.servlet.jsp.jstl</groupId>
+            <artifactId>jakarta.servlet.jsp.jstl-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.glassfish.web</groupId>
+            <artifactId>jakarta.servlet.jsp.jstl</artifactId>
+        </dependency>
     </dependencies>
 
     <build>

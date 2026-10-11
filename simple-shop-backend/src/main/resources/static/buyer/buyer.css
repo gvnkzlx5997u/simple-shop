@@ -1,0 +1,558 @@
+/* ============================================================
+   simple-shop 买家端 · 原型样式表
+   ------------------------------------------------------------
+   依据：
+     · C-05  买家端服务端渲染（JSP）
+     · A-05  买家端不引入前端框架，响应式用原生 CSS
+     · DEC-20 移动端优先
+     · 第 10 章 §10.2「不涉及视觉设计」「不写 CSS」
+       ⇒ 配色、字体、间距由本原型自定，不属于需求层
+   ------------------------------------------------------------
+   本文件为【原型阶段】样式，后续转 JSP 时原样复用
+   （JSP 页面用 <link rel="stylesheet" href="..."> 引用即可）
+   ============================================================ */
+
+/* ---------- 1. 设计变量 ---------- */
+:root {
+  --brand:        #2563eb;
+  --brand-dark:   #1d4ed8;
+  --brand-soft:   #eff6ff;
+
+  --bg:           #f4f6fa;
+  --card:         #ffffff;
+  --text:         #1f2937;
+  --text-2:       #4b5563;
+  --muted:        #6b7280;
+  --line:         #e5e7eb;
+
+  --warn-bg:      #fffbeb;
+  --warn-fg:      #92400e;
+  --warn-line:    #fcd34d;
+
+  --err-bg:       #fef2f2;
+  --err-fg:       #b91c1c;
+  --err-line:     #fecaca;
+
+  --ok-bg:        #ecfdf5;
+  --ok-fg:        #047857;
+  --ok-line:      #a7f3d0;
+
+  --radius:       12px;
+  --radius-sm:    8px;
+  --shadow:       0 1px 2px rgba(16, 24, 40, .06), 0 4px 14px rgba(16, 24, 40, .06);
+}
+
+/* ---------- 2. 基础 ---------- */
+* { box-sizing: border-box; }
+
+/* hidden 属性优先级最高（原型用它切换状态，避免被 flex 等覆盖） */
+[hidden] { display: none !important; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei",
+               "PingFang SC", "Hiragino Sans GB", sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  /* JSP 版：原型的固定工具条（.proto-bar）不存在了，原本为它留的 132px 一并去掉。 */
+  padding-bottom: 0;
+}
+
+/* ==========================================================================
+   JSP 版补充：<button> → <a> 的样式补齐
+   --------------------------------------------------------------------------
+   原型里所有按钮都是 <button>；JSP 版把「跳转」类动作改成 <a class="btn">
+   （服务端渲染不需要 JS，链接语义也更正确），
+   但补上 <button> 自带、<a> 没有的两条：容器居中、无下划线。
+   ========================================================================== */
+a.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  text-decoration: none;
+}
+
+/* 冻结态的「提交购买意向」：按 10-B 置灰【保留】而不是隐藏。
+   <a> 没有 disabled 属性，故用 aria-disabled 同时表达语义与样式，
+   并以 pointer-events 挡住点击（服务端另有独立校验兜底，G6-02：不得只靠前端禁用）。 */
+a.btn[aria-disabled="true"] {
+  opacity: .5;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+a { color: var(--brand); }
+
+/* ---------- 3. 顶栏 ---------- */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 52px;
+  padding: 0 12px;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+}
+
+.topbar__title {
+  flex: 1;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.topbar__side {
+  width: 56px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.topbar__side--right { text-align: right; }
+
+.topbar__back {
+  color: var(--text-2);
+  text-decoration: none;
+}
+
+/* ---------- 4. 版心 ---------- */
+.wrap {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 16px 14px 24px;
+}
+
+.stack > * + * { margin-top: 14px; }
+
+/* ---------- 5. 卡片 ---------- */
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.card__media {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  background: linear-gradient(135deg, #eef2f7 0%, #e2e8f0 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #94a3b8;
+  font-size: 13px;
+  letter-spacing: .5px;
+}
+
+.card__media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.card__body { padding: 14px; }
+
+.card__title {
+  margin: 0 0 6px;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.card__desc {
+  margin: 0 0 12px;
+  color: var(--text-2);
+  font-size: 14px;
+  white-space: pre-wrap; /* 描述为纯文本，保留换行 */
+}
+
+.price {
+  color: #dc2626;          /* 人民币价格，红色（国内惯例） */
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -.3px;
+}
+
+.price__unit { font-size: 14px; font-weight: 600; margin-right: 2px; }
+
+/* ---------- 6. 状态标签 ---------- */
+.tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.7;
+  vertical-align: middle;
+}
+
+.tag--frozen {
+  background: var(--warn-bg);
+  color: var(--warn-fg);
+  border: 1px solid var(--warn-line);
+}
+
+.tag--ok {
+  background: var(--ok-bg);
+  color: var(--ok-fg);
+  border: 1px solid var(--ok-line);
+}
+
+.tag--muted {
+  background: #f3f4f6;
+  color: var(--muted);
+  border: 1px solid var(--line);
+}
+
+/* ---------- 7. 提示条 ---------- */
+.notice {
+  display: flex;
+  gap: 8px;
+  padding: 11px 13px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  border: 1px solid transparent;
+}
+
+.notice__icon { flex: 0 0 auto; }
+
+.notice--warn  { background: var(--warn-bg); color: var(--warn-fg); border-color: var(--warn-line); }
+.notice--error { background: var(--err-bg);  color: var(--err-fg);  border-color: var(--err-line); }
+.notice--ok    { background: var(--ok-bg);   color: var(--ok-fg);   border-color: var(--ok-line); }
+.notice--info  { background: var(--brand-soft); color: var(--brand-dark); border-color: #bfdbfe; }
+
+/* ---------- 8. 按钮 ---------- */
+.btn {
+  display: block;
+  width: 100%;
+  min-height: 46px;
+  padding: 11px 16px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: #fff;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  transition: background .15s, border-color .15s, opacity .15s;
+}
+
+.btn + .btn { margin-top: 10px; }
+
+.btn--primary { background: var(--brand); color: #fff; }
+.btn--primary:hover:not(:disabled) { background: var(--brand-dark); }
+
+.btn--ghost {
+  background: #fff;
+  color: var(--text-2);
+  border-color: var(--line);
+}
+.btn--ghost:hover:not(:disabled) { background: #f9fafb; }
+
+.btn--danger { background: #fff; color: var(--err-fg); border-color: var(--err-line); }
+.btn--danger:hover:not(:disabled) { background: var(--err-bg); }
+
+.btn--link {
+  min-height: auto;
+  padding: 6px 0;
+  background: none;
+  border: none;
+  color: var(--brand);
+  font-weight: 500;
+  text-align: center;
+}
+
+.btn:disabled,
+.btn[disabled] {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+.btn--primary:disabled { background: #94a3b8; color: #fff; }
+.btn--danger:disabled  { background: #f9fafb; color: #9ca3af; border-color: var(--line); }
+
+/* ---------- 9. 表单 ---------- */
+.field + .field { margin-top: 14px; }
+
+.field__label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.field__req { color: #dc2626; margin-left: 3px; }
+
+.field__hint {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.field__error {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  color: var(--err-fg);
+}
+
+.input {
+  width: 100%;
+  min-height: 46px;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  font-family: inherit;
+  font-size: 15px;
+  color: var(--text);
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+
+.input:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, .12);
+}
+
+.input.is-error { border-color: var(--err-line); background: var(--err-bg); }
+
+.input--code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 18px;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+/* ---------- 10. 口令码展示（P10-03 核心） ---------- */
+.token-box {
+  padding: 18px 14px;
+  border: 1px dashed var(--brand);
+  border-radius: var(--radius);
+  background: var(--brand-soft);
+  text-align: center;
+}
+
+.token-code {
+  margin: 4px 0 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: var(--brand-dark);
+  word-break: break-all;
+  user-select: all;
+}
+
+.token-cap {
+  font-size: 12.5px;
+  color: var(--muted);
+  letter-spacing: 0;
+  font-family: inherit;
+  font-weight: 400;
+}
+
+/* ---------- 11. 结果区（P10-04） ---------- */
+.result {
+  padding: 16px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.result--ok    { border-color: var(--ok-line);    background: var(--ok-bg); }
+.result--error { border-color: var(--err-line);   background: var(--err-bg); }
+
+.result__head {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.result__main {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.result--ok .result__main    { color: var(--ok-fg); }
+.result--error .result__main { color: var(--err-fg); }
+
+.queue-no {
+  font-size: 28px;
+  color: #dc2626;
+  font-weight: 800;
+  padding: 0 4px;
+}
+
+.kv {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--line);
+  font-size: 14px;
+  color: var(--text-2);
+}
+
+.kv__row { display: flex; justify-content: space-between; gap: 12px; }
+.kv__row + .kv__row { margin-top: 6px; }
+.kv__k { color: var(--muted); flex: 0 0 auto; }
+.kv__v { text-align: right; word-break: break-all; }
+
+/* ---------- 12. 空态 ---------- */
+.empty {
+  padding: 52px 20px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.empty__icon {
+  font-size: 40px;
+  line-height: 1;
+  margin-bottom: 12px;
+  opacity: .45;
+}
+
+.empty__text { font-size: 15px; }
+
+/* ---------- 13. 分区标题 / 工具 ---------- */
+.sec-title {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.hr {
+  height: 1px;
+  background: var(--line);
+  margin: 14px 0;
+  border: 0;
+}
+
+.muted { color: var(--muted); font-size: 13px; }
+
+.center { text-align: center; }
+
+/* ---------- 14. 二次确认弹层 ----------
+   用于 UX-01 / UX-02 / UX-03 等二次确认点。
+   ⚠️ 第 10 章 §10.5.3：二次确认属【建议】项，非业务方强制；
+      但 M10-01 / M10-04 / M10-06 / M10-07 / M10-08 属【必须】项。
+   ------------------------------------ */
+.modal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(17, 24, 39, .45);
+}
+
+.modal {
+  width: 100%;
+  max-width: 380px;
+  padding: 20px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .22);
+}
+
+.modal__title { margin: 0 0 10px; font-size: 17px; font-weight: 700; }
+
+.modal__body {
+  margin: 0 0 18px;
+  font-size: 14.5px;
+  color: var(--text-2);
+  white-space: pre-wrap;
+}
+
+.modal__actions { display: flex; gap: 10px; }
+.modal__actions .btn { margin-top: 0; flex: 1; }
+
+/* ---------- 15. 原型状态预览工具条（上线前整体删除） ---------- */
+.proto-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px 10px;
+  background: rgba(17, 24, 39, .95);
+  color: #e5e7eb;
+  font-size: 12.5px;
+}
+
+.proto-bar__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.proto-bar__label { color: #fbbf24; font-weight: 600; }
+
+.proto-bar__hint { color: #9ca3af; }
+
+.proto-bar__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.proto-bar button {
+  padding: 4px 10px;
+  border: 1px solid #4b5563;
+  border-radius: 999px;
+  background: #1f2937;
+  color: #e5e7eb;
+  font-family: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.proto-bar button:hover { background: #374151; }
+
+.proto-bar button.is-active {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+  font-weight: 600;
+}
+
+.proto-bar__note { color: #6ee7b7; margin-left: auto; font-family: ui-monospace, Consolas, monospace; }
+
+/* ---------- 16. 桌面端（排列差异，无额外元素） ---------- */
+@media (min-width: 720px) {
+  body { font-size: 15.5px; }
+
+  .wrap { max-width: 720px; padding: 20px 20px 28px; }
+
+  /* 商品卡片：图左文右 */
+  .card--media-split { display: flex; }
+  .card--media-split .card__media { flex: 0 0 320px; aspect-ratio: auto; min-height: 240px; }
+  .card--media-split .card__body  { flex: 1; padding: 18px 20px; }
+
+  .actions-row { display: flex; gap: 10px; }
+  .actions-row .btn { margin-top: 0; flex: 1; }
+}
