@@ -300,6 +300,58 @@ public class BuyerIntentionService {
     // -------------------------------------------------------------------------
 
     /**
+     * 取某条意向的联系人信息（姓名／电话），供买家端页面<b>回显与预填</b>。
+     *
+     * <h2>⚠️ 为什么必须有这个方法（本轮 JSP 落地时新增）</h2>
+     * <p>{@link PasscodeQueryResult.Active} <b>刻意只带</b> {@code rank} 与 {@code trading}，
+     * <b>不带</b>姓名电话——那是「最小暴露」的设计取向（见该 DTO 的类注释），
+     * 本身没有问题。但页面 {@code P10-04} 有两个需求需要这两个值：
+     * <ol>
+     *   <li>结果区要展示「姓名／联系电话」（{@code FR-15} 的查询输出）；</li>
+     *   <li>「修改信息」表单要<b>预填当前值</b>——否则用户只想改电话时，
+     *       姓名框是空的，提交的空串会被判 {@code M10-11}「请填写姓名与联系电话」。</li>
+     * </ol>
+     *
+     * <h2>⚠️ 为什么不把这两个字段塞进 {@code Active}</h2>
+     * <p>那会削弱「最小暴露」：{@code Active} 的字段越少，将来被人「顺手加个买家信息」
+     * 的空间越小。宁可在需要时多调一个方法，也不放宽那个 DTO 的形状。
+     *
+     * <h2>⚠️ 为什么不在 Controller 里注入 Repository</h2>
+     * <p>本项目的分层约定是「<b>Controller 只调 Service</b>」——
+     * 卖家端的全部 Controller（{@code SellerProductController}、
+     * {@code SellerHistoryController} 等）<b>无一</b>注入 Repository。
+     * 买家端若破例，会出现一条绕过 Service 的取数路径，
+     * 而「买家端的所有数据口径都收敛在 Service」正是本轮的一条架构约定。
+     *
+     * <h2>⚠️ 调用方必须保证：只在【有效口令】时调用</h2>
+     * <p>{@code BR-29}／{@code NFR-13} 要求「口令码失效时不得返回买家信息」。
+     * 本方法<b>自身不判状态</b>——它只是「按口令码取联系人」这一件事。
+     * 因此调用方必须<b>先确认意向处于有效态</b>（{@code isTokenValid()}）再调用，
+     * 否则会绕过 {@link PasscodeQueryResult.Expired} 的「零字段」保护。
+     * 当前唯一的调用方是 {@code BuyerQueryController}，且只在 {@code Active} 分支调用。
+     *
+     * <p>⚠️ 本方法<b>不返回终态意向的联系人</b>：查不到、或意向已是终态时，
+     * 一律返回 {@link java.util.Optional#empty()}——把「不该暴露」的情形
+     * 在<b>这里</b>挡住，而不是指望每个调用方都记得先判状态。
+     *
+     * @param rawToken 口令码（原样输入，内部会归一化）
+     * @return {@code [姓名, 电话]}；口令码为空／查不到／意向非有效态时为
+     *         {@link java.util.Optional#empty()}。姓名或电话本身可能为 {@code null}
+     *         （字段在库里可为空），调用方需按屏幕展示处理
+     */
+    @Transactional(readOnly = true)
+    public java.util.Optional<String[]> contactByToken(String rawToken) {
+        String token = PasscodeService.normalize(rawToken);
+        if (token == null || token.isEmpty()) {
+            return java.util.Optional.empty();
+        }
+        return intentionRepository.findByToken(token)
+                // ⚠️ 终态即口令码失效，绝不返回其联系人（BR-29）
+                .filter(i -> i.getStatus().isTokenValid())
+                .map(i -> new String[] {i.getName(), i.getTel()});
+    }
+
+    /**
      * 凭口令码修改姓名／电话（{@code B11-06} 页面的「修改信息」）。
      *
      * <h2>⚠️ 三项「不许动」</h2>
