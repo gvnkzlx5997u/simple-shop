@@ -62,7 +62,7 @@
             <img src="${ctx}${goods.picUrl}" alt="<c:out value='${goods.name}'/>">
           </c:when>
           <c:otherwise>
-            <span>商品图片占位</span>
+            <img class="card__media--placeholder" src="${ctx}/buyer/product.svg" alt="商品图片占位">
           </c:otherwise>
         </c:choose>
       </div>
