@@ -1,0 +1,18 @@
+{
+  "name": "simple-shop-test-e2e",
+  "version": "1.0.0",
+  "description": "End-to-end acceptance tests: Playwright drives Microsoft Edge over the running simple-shop app.",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "playwright test"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@playwright/test": "^1.64.0"
+  }
+}
