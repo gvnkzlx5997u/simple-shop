@@ -1,0 +1,102 @@
+# =============================================================================
+# simple-shop 单机容器化部署（Docker Compose）
+# 依据：安装与部署手册 v1.0（2026-10-13）
+#   方案乙：买家端在 /（后端 JSP），卖家 SPA 在 /seller/（nginx 静态）
+#   D-3：只有 nginx 暴露宿主端口 80；backend 与 mysql 不映射任何宿主端口
+#   D-4：MySQL 容器只建库，建表与种子数据由后端启动时的 Flyway 完成
+#   D-5：应用用最小权限账号 simpleshop；口令全部来自 deploy/.env（不提交）
+# 用法：cd deploy && cp .env.example .env && 填口令 && docker compose up -d --build
+# =============================================================================
+name: simple-shop
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # MySQL 8（独立容器，数据落命名卷）
+  # ---------------------------------------------------------------------------
+  mysql:
+    # 回退官方源：把 .env 里的 IMAGE_PREFIX 设为空即可
+    image: ${IMAGE_PREFIX-docker.xuanyuan.me/library/}mysql:8.0
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in deploy/.env}
+      MYSQL_DATABASE: simple_shop
+      MYSQL_USER: ${DB_USERNAME:-simpleshop}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in deploy/.env}
+      TZ: UTC
+    volumes:
+      - mysql-data:/var/lib/mysql
+      # 只在数据目录为空（首次初始化）时执行
+      - ./mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    networks: [shop-net]
+
+  # ---------------------------------------------------------------------------
+  # 后端（可执行 war + JRE21；同时提供卖家 REST 与买家 JSP）
+  # ---------------------------------------------------------------------------
+  backend:
+    build:
+      context: ../simple-shop-backend
+      args:
+        REGISTRY: ${IMAGE_PREFIX-docker.xuanyuan.me/library/}
+    environment:
+      # 保留 connectionTimeZone=UTC 与 characterEncoding=UTF-8；建库交给 mysql 初始化脚本
+      DB_URL: "jdbc:mysql://mysql:3306/simple_shop?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&connectionTimeZone=UTC&rewriteBatchedStatements=true"
+      DB_USERNAME: ${DB_USERNAME:-simpleshop}
+      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in deploy/.env}
+      IMAGE_DIR: /app/data/images
+      TZ: UTC
+      # 审计日志目录：Dockerfile 里以 -DAUDIT_LOG_PATH 系统属性注入 JVM
+      AUDIT_LOG_PATH: /var/log/simple-shop
+    volumes:
+      # ⚠️ 商品图片必须持久化：归档不搬迁图片文件（DEC-09）
+      - backend-images:/app/data/images
+      # 审计日志保留 3 个月（C-18 / 12-P7）
+      - backend-logs:/var/log/simple-shop
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    networks: [shop-net]
+
+  # ---------------------------------------------------------------------------
+  # 前端 + 反向代理（nginx：/seller/ 静态 SPA，其余代理到后端）
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ../simple-shop-frontend
+      args:
+        REGISTRY: ${IMAGE_PREFIX-docker.xuanyuan.me/library/}
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_started
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+    networks: [shop-net]
+
+volumes:
+  mysql-data:
+  backend-images:
+  backend-logs:
+
+networks:
+  shop-net:
+    driver: bridge

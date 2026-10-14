@@ -1,0 +1,12 @@
+# 这些不参与镜像构建（node_modules 必须排除，否则会覆盖 npm ci 的结果）
+node_modules/
+dist/
+.vite/
+.vitest/
+coverage/
+*.tsbuildinfo
+.idea/
+.vscode/
+.git/
+*.log
+README.md

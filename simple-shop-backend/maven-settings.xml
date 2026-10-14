@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  simple-shop 后端构建用 Maven settings。
+  依据：安装与部署手册 v1.0 §3.2（记录日期 2026-10-13）。
+  ⚠️ 第三方镜像站可能变更/限流/停服，接手人请自行核对；不可用时删掉 <mirrors> 即回到 Maven Central。
+-->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 https://maven.apache.org/xsd/settings-1.2.0.xsd">
+  <mirrors>
+    <mirror>
+      <id>tencent-cloud</id>
+      <name>Tencent Cloud Maven Public</name>
+      <url>https://mirrors.tencent.com/nexus/repository/maven-public/</url>
+      <mirrorOf>*</mirrorOf>
+    </mirror>
+  </mirrors>
+</settings>

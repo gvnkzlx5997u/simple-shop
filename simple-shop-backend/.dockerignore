@@ -1,0 +1,12 @@
+# 构建上下文瘦身：这些都不参与镜像构建
+target/
+.m2/
+data/
+logs/
+docs/
+.mvn/
+.idea/
+.vscode/
+*.iml
+.git/
+README.md
