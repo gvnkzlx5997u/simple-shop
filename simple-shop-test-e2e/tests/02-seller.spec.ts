@@ -18,7 +18,8 @@
  *   FR-10/PS-04/IS-07 标记失败 + 重新排队        → S10
  *   FR-10/PS-04/IS-06 标记失败 + 作废            → S10b（2026-10-14 补）
  *   FR-11     查看历史商品                      → S12、S13
- *   AC-07     商品冻结前后口令码查询结果完全一致  → S4b + S6b（2026-10-14 补，P0）
+ *   AC-07     商品冻结/解冻前后口令码查询结果完全一致 → S4b + S6b + S7（P0）
+ *   AC-08     排队中口令码必然有效                  → S10
  *   AC-10     交易冻结期买家端提示 M10-01        → S6
  *   AC-11     M10-08「您已进入交易」             → S9
  *   AC-14     历史中每次交易结果可查             → S13
@@ -165,7 +166,7 @@ test.describe.serial('卖家端 · 完整业务流程', () => {
     expect(afterFreeze, '冻结不得让队列中已有买家的口令码失效').not.toContain('失效');
   });
 
-  test('S7 手动解冻 → 恢复「在售」（FR-06、PS-05）', async ({ page }) => {
+  test('S7 手动解冻 → 恢复「在售」（FR-06、PS-05、AC-07 步骤⑤）', async ({ page }) => {
     await uiLogin(page);
     await page.getByRole('button', { name: '手动解冻' }).click();
 
@@ -174,6 +175,14 @@ test.describe.serial('卖家端 · 完整业务流程', () => {
     // 提交入口恢复可用
     await page.goto(`${BUYER_URL}/`);
     await expect(page.locator('a[href="/intent/new"]')).not.toHaveAttribute('aria-disabled', 'true');
+
+    // ⑤ AC-07 步骤⑤：解冻【之后】再用同一个口令码查询 → 仍与冻结前完全一致。
+    //    「商品状态变化前后完全一致」里的「变化」含【解冻】这一步，故不能只验冻结中。
+    const afterUnfreeze = await buyerQuery(page, codeA);
+    expect(
+      afterUnfreeze,
+      'AC-07 判据：口令码返回结果在商品状态变化（含解冻）前后必须【完全一致】',
+    ).toBe(textBeforeFreeze);
   });
 
   test('S8 进入交易（仅队首）→ 商品转为交易冻结（FR-07、PS-01、IS-02、AC-22）', async ({
