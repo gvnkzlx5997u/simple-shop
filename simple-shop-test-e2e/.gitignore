@@ -1,0 +1,15 @@
+# ---- dependencies & run artefacts (large / regenerated every run) ----
+node_modules/
+report/
+evidence/
+logs/
+test-results/
+playwright-report/
+data/
+
+# ---- local credentials (real passwords; template: local-config.example.bat) ----
+local-config.bat
+
+# ---- editors ----
+.vscode/
+.idea/
