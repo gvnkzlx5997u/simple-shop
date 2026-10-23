@@ -1,5 +1,7 @@
 # simple-shop 在线购物系统
 
+> **阶段二提示**：本文档描述阶段一形态；阶段一/阶段二文档已集中到 [simple-shop-doc](./simple-shop-doc/README.md)。阶段二实现以该目录下的阶段二文档为准。
+
 > 本文件是项目的**简介与仓库结构说明**。业务需求、部署与构建细节分列在下列文档中，本文只做索引与「为什么这么定」的登记。
 
 ---
@@ -32,12 +34,13 @@ simple-shop 是一个**极简单商品**的在线购物系统，形态由三条�
 
 | 想了解 | 看 |
 | --- | --- |
-| 业务需求（`FR` / `BR` / `INV` / `NFR` / `AC`、页面与接口契约） | 《需求规格说明书》 |
-| **部署与运维**（容器拓扑、镜像、启动、初始化、备份、改密、升级回滚、故障排查） | [安装与部署手册.md](安装与部署手册.md) |
-| 本地构建与运行命令 | [构建过程手册.md](构建过程手册.md) |
-| 后端实现（数据层 / 业务层 / 接口层 / 买家端 JSP）与后端偏离取舍 | [simple-shop-backend/README.md](simple-shop-backend/README.md) ｜ `simple-shop-backend/docs/` |
+| 业务需求（`FR` / `BR` / `INV` / `NFR` / `AC`、页面与接口契约） | [《需求规格说明书》](./simple-shop-doc/阶段一/需求规格说明书/需求规格说明书.md) |
+| **阶段二**（升级需求、状态模型、后端开发计划） | [阶段二文档](./simple-shop-doc/阶段二/README.md) |
+| **部署与运维**（容器拓扑、镜像、启动、初始化、备份、改密、升级回滚、故障排查） | [安装与部署手册](./simple-shop-doc/阶段一/项目手册/安装与部署手册.md) |
+| 本地构建与运行命令 | [构建过程手册](./simple-shop-doc/阶段一/项目手册/构建过程手册.md) |
+| 后端实现（数据层 / 业务层 / 接口层 / 买家端 JSP）与后端偏离取舍 | [simple-shop-backend/README.md](simple-shop-backend/README.md) ｜ [阶段一后端文档](./simple-shop-doc/阶段一/后端文档/README.md) |
 | 卖家前端实现与前端偏离取舍 | [simple-shop-frontend/README.md](simple-shop-frontend/README.md) |
-| 端到端自动验收（Playwright 驱动 Edge，36 条） | [simple-shop-test-e2e/验收测试说明.md](simple-shop-test-e2e/验收测试说明.md) |
+| 端到端自动验收（Playwright 驱动 Edge，36 条） | [验收测试说明](./simple-shop-doc/阶段一/项目手册/验收测试说明.md) |
 
 ---
 
@@ -46,13 +49,13 @@ simple-shop 是一个**极简单商品**的在线购物系统，形态由三条�
 ```
 simple-shop/
 ├─ README.md                       ← 本文件（项目简介与仓库结构）
-├─ 安装与部署手册.md                ← 部署/运维主文档（含容器化决策 D-1 ~ D-13）
-├─ 构建过程手册.md                  ← 本地构建/运行命令速查
+├─ (安装与部署手册.md 已迁至 ./simple-shop-doc/阶段一/项目手册/)
+├─ (构建过程手册.md 已迁至 ./simple-shop-doc/阶段一/项目手册/)
 ├─ simple-shop-backend/            ← 后端 + 买家端 JSP（Spring Boot，可执行 war）
 │  ├─ src/main/java/com/simpleshop/   数据层 / 业务层 / 接口层（卖家 REST + 买家端 Controller）
 │  ├─ src/main/webapp/WEB-INF/views/  买家端 4 个 JSP（放 WEB-INF 下，浏览器不能直接访问）
 │  ├─ src/main/resources/db/migration/ Flyway 迁移脚本 V1 / V2
-│  ├─ docs/                           数据层、业务层与接口层的设计文档与交接说明
+│  ├─ docs/                           已迁移至 ./simple-shop-doc/阶段一/后端文档/
 │  ├─ Dockerfile                      后端镜像（多阶段：Maven 构建 war + JRE21 运行）
 │  └─ README.md                       后端说明与「已知偏离、决定与取舍」
 ├─ simple-shop-frontend/           ← 卖家端 SPA（Vue 3 + Vite + Pinia）
@@ -81,7 +84,7 @@ simple-shop/
 
 ## 四、容器化部署：决定与取舍
 
-> 本章登记「为什么这么定」与已知取舍；**操作步骤见 [安装与部署手册.md](安装与部署手册.md)**。
+> 本章登记「为什么这么定」与已知取舍；**操作步骤见 [安装与部署手册](./simple-shop-doc/阶段一/项目手册/安装与部署手册.md)**。
 
 ### 4.1 部署形态（已定）
 
