@@ -6,8 +6,9 @@ spring:
 
   servlet:
     multipart:
-      max-file-size: 5MB
-      max-request-size: 10MB
+      # 视频单文件上限 20MB；图片在 Service 层按用途另行限制 5MB。
+      max-file-size: 20MB
+      max-request-size: 25MB
 
   datasource:
     url: ${DB_URL:jdbc:mysql://localhost:3306/simple_shop?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&connectionTimeZone=UTC&rewriteBatchedStatements=true&createDatabaseIfNotExist=true}
@@ -32,12 +33,18 @@ spring:
 
 server:
   tomcat:
-    max-swallow-size: 10MB
+    # 需要覆盖略超 20MB 的上传请求，才能把业务错误响应正常发回客户端。
+    max-swallow-size: 25MB
 
 simple-shop:
-  image:
-    directory: ${IMAGE_DIR:./data/images}
-    url-prefix: /images
+  media:
+    # 媒体根目录。保留 IMAGE_DIR 作为阶段一部署变量的兼容回退。
+    directory: ${MEDIA_DIR:${IMAGE_DIR:./data/media}}
+    url-prefix: /media
+    # 商品图片与描述图片是两套独立限制，当前取值相同，后续可分别调整。
+    goods-image-max-size: 5MB
+    description-image-max-size: 5MB
+    description-video-max-size: 20MB
 
   session:
     timeout: 30m
@@ -54,6 +61,12 @@ simple-shop:
   pagination:
     default-size: 10
     max-size: 100
+
+springdoc:
+  api-docs:
+    enabled: ${SPRINGDOC_ENABLED:true}
+  swagger-ui:
+    enabled: ${SPRINGDOC_ENABLED:true}
 
 logging:
   level:

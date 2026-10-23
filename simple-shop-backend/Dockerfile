@@ -1,5 +1,5 @@
 # simple-shop backend image: Maven build + JRE21 running an executable war.
-# The application exposes REST APIs under /api and images under /images; it serves no HTML.
+# The application exposes REST APIs under /api and media under /media; it serves no HTML.
 ARG REGISTRY=docker.xuanyuan.me/library/
 
 FROM ${REGISTRY}maven:3.10.0-eclipse-temurin-21-noble AS build
@@ -28,7 +28,7 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends curl \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --create-home --uid 10001 --shell /usr/sbin/nologin appuser \
- && mkdir -p /app/data/images /var/log/simple-shop \
+ && mkdir -p /app/data/media /app/data/images /var/log/simple-shop \
  && chown -R appuser:appuser /app /var/log/simple-shop
 
 WORKDIR /app

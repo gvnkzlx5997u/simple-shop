@@ -20,6 +20,7 @@ public enum ErrorCode {
     PASSWORD_INVALID(10004, "password does not meet the requirements", HttpStatus.OK),
     USERNAME_TAKEN(10005, "username already taken", HttpStatus.OK),
     USERNAME_INVALID(10006, "username is invalid", HttpStatus.OK),
+    ACCOUNT_INVALID(10010, "account is invalid", HttpStatus.OK),
     PHONE_INVALID(10007, "phone number is invalid", HttpStatus.OK),
     DEFAULT_LOCATION_INVALID(10008, "default trade location is invalid", HttpStatus.OK),
     ACCOUNT_NOT_FOUND(10009, "account not found", HttpStatus.NOT_FOUND),
@@ -45,6 +46,10 @@ public enum ErrorCode {
     QUEUE_NOT_EMPTY(20022, "intention queue is not empty", HttpStatus.OK),
     GOODS_STATUS_MISMATCH(20023, "goods status does not allow this operation", HttpStatus.OK),
     GOODS_STOCK_NOT_ZERO(20024, "goods stock is not zero", HttpStatus.OK),
+    VIDEO_INVALID(20025, "video is invalid or too large", HttpStatus.OK),
+    MEDIA_INVALID(20026, "media is invalid or too large", HttpStatus.OK),
+    MEDIA_TYPE_NOT_ALLOWED(20027, "media type is not allowed for this purpose", HttpStatus.OK),
+    CONFIRMATION_REQUIRED(20028, "explicit confirmation is required", HttpStatus.OK),
 
     // 3xxxx 意向与交易
     INTENTION_NOT_FOUND(30001, "intention not found", HttpStatus.NOT_FOUND),
@@ -64,7 +69,9 @@ public enum ErrorCode {
     INTERNAL_ERROR(50000, "internal server error", HttpStatus.INTERNAL_SERVER_ERROR),
     TOO_MANY_REQUESTS(50001, "too many requests", HttpStatus.OK),
     PARAM_INVALID(50002, "missing or malformed parameter", HttpStatus.BAD_REQUEST),
-    RESOURCE_NOT_FOUND(50003, "resource not found", HttpStatus.NOT_FOUND);
+    RESOURCE_NOT_FOUND(50003, "resource not found", HttpStatus.NOT_FOUND),
+    METHOD_NOT_ALLOWED(50004, "method not allowed", HttpStatus.METHOD_NOT_ALLOWED),
+    UNSUPPORTED_MEDIA_TYPE(50005, "unsupported media type", HttpStatus.UNSUPPORTED_MEDIA_TYPE);
 
     private final int code;
     private final String message;

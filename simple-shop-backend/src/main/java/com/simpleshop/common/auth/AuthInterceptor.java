@@ -53,7 +53,7 @@ public class AuthInterceptor implements HandlerInterceptor {
                 });
     }
 
-    static String extractToken(HttpServletRequest request) {
+    public static String extractToken(HttpServletRequest request) {
         String header = request.getHeader("Authorization");
         if (header == null || header.length() <= BEARER_PREFIX.length()) {
             return null;

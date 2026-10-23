@@ -23,6 +23,18 @@ public final class TextRules {
         return value.indexOf('\n') >= 0 || value.indexOf('\r') >= 0;
     }
 
+    /** 是否包含任意 ISO 控制字符（含换行、制表符）。 */
+    public static boolean containsControlChar(String value) {
+        return value != null && value.codePoints().anyMatch(Character::isISOControl);
+    }
+
+    /** 是否包含除换行、回车、制表符之外的控制字符；用于允许换行的描述文本。 */
+    public static boolean containsDisallowedControlChar(String value) {
+        return value != null && value.codePoints().anyMatch(codePoint ->
+                Character.isISOControl(codePoint)
+                        && codePoint != '\n' && codePoint != '\r' && codePoint != '\t');
+    }
+
     /** 去掉首尾空白；结果为空串时返回 {@code null}。 */
     public static String trimToNull(String raw) {
         if (raw == null) {

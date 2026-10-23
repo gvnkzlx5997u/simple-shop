@@ -15,9 +15,9 @@ import com.simpleshop.common.auth.AuthRole;
 import com.simpleshop.common.auth.SessionStore;
 
 /**
- * Web 层配置：注册买卖双方的鉴权拦截器、映射图片目录、启用定时任务。
+ * Web 层配置：注册买卖双方的鉴权拦截器、映射媒体目录、启用定时任务。
  *
- * <p>登录与注册端点从各自角色的拦截器中排除；图片资源公开访问。
+ * <p>登录与注册端点从各自角色的拦截器中排除；媒体资源公开访问。
  */
 @Configuration
 @EnableScheduling
@@ -55,19 +55,19 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        AppProperties.Image image = properties.getImage();
-        String location = image.directoryPath().toString();
+        AppProperties.Media media = properties.getMedia();
+        String location = media.directoryPath().toString();
         if (!location.endsWith(File.separator)) {
             location = location + File.separator;
         }
-        registry.addResourceHandler(image.getUrlPrefix() + "/**")
+        registry.addResourceHandler(media.getUrlPrefix() + "/**")
                 .addResourceLocations("file:" + location);
 
-        if (!image.directoryPath().toFile().isDirectory()) {
-            log.warn("image directory does not exist yet: {} (url prefix: {})",
-                    image.directoryPath(), image.getUrlPrefix());
+        if (!media.directoryPath().toFile().isDirectory()) {
+            log.warn("media directory does not exist yet: {} (url prefix: {})",
+                    media.directoryPath(), media.getUrlPrefix());
         } else {
-            log.info("serving images: {} -> {}", image.getUrlPrefix() + "/**", location);
+            log.info("serving media: {} -> {}", media.getUrlPrefix() + "/**", location);
         }
     }
 }

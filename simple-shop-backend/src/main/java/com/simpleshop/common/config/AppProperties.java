@@ -5,6 +5,7 @@ import java.time.Duration;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
+import org.springframework.util.unit.DataSize;
 
 /**
  * 业务配置，前缀 {@code simple-shop}。
@@ -15,14 +16,14 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "simple-shop")
 public class AppProperties {
 
-    private final Image image = new Image();
+    private final Media media = new Media();
     private final Session session = new Session();
     private final Queue queue = new Queue();
     private final RateLimit rateLimit = new RateLimit();
     private final Pagination pagination = new Pagination();
 
-    public Image getImage() {
-        return image;
+    public Media getMedia() {
+        return media;
     }
 
     public Session getSession() {
@@ -41,10 +42,20 @@ public class AppProperties {
         return pagination;
     }
 
-    public static class Image {
+    /** 媒体存储与上传限制。 */
+    public static class Media {
 
-        private String directory = "./data/images";
-        private String urlPrefix = "/images";
+        private String directory = "./data/media";
+        private String urlPrefix = "/media";
+
+        /** 商品主图/图集：只允许图片。 */
+        private DataSize goodsImageMaxSize = DataSize.ofMegabytes(5);
+
+        /** 描述内容块中的图片。目前与商品图片同值，但保留独立配置。 */
+        private DataSize descriptionImageMaxSize = DataSize.ofMegabytes(5);
+
+        /** 描述内容块中的视频。 */
+        private DataSize descriptionVideoMaxSize = DataSize.ofMegabytes(20);
 
         public String getDirectory() {
             return directory;
@@ -62,7 +73,31 @@ public class AppProperties {
             this.urlPrefix = urlPrefix;
         }
 
-        /** 归一化后的图片目录绝对路径，用于目录穿越校验。 */
+        public DataSize getGoodsImageMaxSize() {
+            return goodsImageMaxSize;
+        }
+
+        public void setGoodsImageMaxSize(DataSize goodsImageMaxSize) {
+            this.goodsImageMaxSize = goodsImageMaxSize;
+        }
+
+        public DataSize getDescriptionImageMaxSize() {
+            return descriptionImageMaxSize;
+        }
+
+        public void setDescriptionImageMaxSize(DataSize descriptionImageMaxSize) {
+            this.descriptionImageMaxSize = descriptionImageMaxSize;
+        }
+
+        public DataSize getDescriptionVideoMaxSize() {
+            return descriptionVideoMaxSize;
+        }
+
+        public void setDescriptionVideoMaxSize(DataSize descriptionVideoMaxSize) {
+            this.descriptionVideoMaxSize = descriptionVideoMaxSize;
+        }
+
+        /** 归一化后的媒体目录绝对路径，用于目录穿越校验。 */
         public Path directoryPath() {
             return Path.of(directory).toAbsolutePath().normalize();
         }

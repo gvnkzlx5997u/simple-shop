@@ -8,6 +8,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.BindException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingPathVariableException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -15,6 +17,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
@@ -40,7 +44,9 @@ public class GlobalExceptionHandler {
             HttpMessageNotReadableException.class,
             MissingServletRequestParameterException.class,
             MissingPathVariableException.class,
-            MethodArgumentTypeMismatchException.class
+            MethodArgumentTypeMismatchException.class,
+            MissingServletRequestPartException.class,
+            MultipartException.class
     })
     public ResponseEntity<ApiResponse<Void>> handleBadRequest(Exception exception) {
         log.debug("rejected malformed request: {}", exception.getMessage());
@@ -51,14 +57,28 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ApiResponse<Void>> handleUploadTooLarge(MaxUploadSizeExceededException exception) {
         log.warn("rejected oversized upload: {}", exception.getMessage());
-        return ResponseEntity.status(ErrorCode.IMAGE_INVALID.httpStatus())
-                .body(ApiResponse.error(ErrorCode.IMAGE_INVALID));
+        return ResponseEntity.status(ErrorCode.MEDIA_INVALID.httpStatus())
+                .body(ApiResponse.error(ErrorCode.MEDIA_INVALID));
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<ApiResponse<Void>> handleNotFound(NoResourceFoundException exception) {
         return ResponseEntity.status(ErrorCode.RESOURCE_NOT_FOUND.httpStatus())
                 .body(ApiResponse.error(ErrorCode.RESOURCE_NOT_FOUND));
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMethodNotAllowed(
+            HttpRequestMethodNotSupportedException exception) {
+        return ResponseEntity.status(ErrorCode.METHOD_NOT_ALLOWED.httpStatus())
+                .body(ApiResponse.error(ErrorCode.METHOD_NOT_ALLOWED));
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUnsupportedMediaType(
+            HttpMediaTypeNotSupportedException exception) {
+        return ResponseEntity.status(ErrorCode.UNSUPPORTED_MEDIA_TYPE.httpStatus())
+                .body(ApiResponse.error(ErrorCode.UNSUPPORTED_MEDIA_TYPE));
     }
 
     @ExceptionHandler(Exception.class)

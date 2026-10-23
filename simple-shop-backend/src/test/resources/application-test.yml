@@ -1,0 +1,21 @@
+# 数据层测试配置：使用独立的 simple_shop_test 库。
+spring:
+  datasource:
+    url: ${TEST_DB_URL:jdbc:mysql://localhost:3306/simple_shop_test?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&connectionTimeZone=UTC&rewriteBatchedStatements=true&createDatabaseIfNotExist=true}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+
+simple-shop:
+  media:
+    directory: ./target/test-media
+  # API 测试不触发限流；限流算法由 RateLimiterTest 单独覆盖。
+  rate-limit:
+    register-per-minute: 1000
+    login-per-minute: 1000
+    submit-intention-per-minute: 1000
+
+logging:
+  level:
+    org.hibernate.SQL: warn
+    org.hibernate.orm.jdbc.bind: warn
