@@ -49,11 +49,18 @@ export interface GoodsImage {
   sort_no: number
 }
 
-/** 描述块：type 为 text 时读 text，为 image/video 时读 url。 */
+/**
+ * 描述块类型。
+ * 注意：后端返回与接收的都是**大写下划线枚举**（TEXT / IMAGE / VIDEO），
+ * Swagger 里没有标出可选值，联调时按实际返回为准。
+ */
+export type DescriptionBlockType = 'TEXT' | 'IMAGE' | 'VIDEO'
+
+/** 描述块：type 为 TEXT 时读 text，为 IMAGE/VIDEO 时读 url。 */
 export interface DescriptionBlock {
-  type: string
-  text: string
-  url: string
+  type: DescriptionBlockType
+  text: string | null
+  url: string | null
 }
 
 /** 列表项。 */
@@ -89,11 +96,14 @@ export interface GoodsDetail {
   purchasable: boolean
 }
 
-/** 我的历史条目：只有四个字段，不含价格与图片。 */
+/**
+ * 我的历史条目：只有四个字段，不含价格与图片。
+ * result 为全大写枚举（数据库 CHECK 约束固定为 SUCCEEDED / FAILED）。
+ */
 export interface BuyerHistoryEntry {
   goods_name: string
   create_at: string
-  result: string
+  result: 'SUCCEEDED' | 'FAILED'
   finish_at: string
 }
 

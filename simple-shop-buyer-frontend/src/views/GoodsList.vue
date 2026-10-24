@@ -88,7 +88,7 @@ onMounted(() => {
             {{ c.l1 }} / {{ c.name }}
           </option>
         </select>
-        <button class="primary" @click="search">搜索</button>
+        <button class="primary search-btn" @click="search">搜索</button>
       </div>
     </div>
 
@@ -135,6 +135,12 @@ onMounted(() => {
   border-radius: 4px;
   background: #fff;
   min-width: 160px;
+}
+
+/* 搜索按钮不被输入框挤压，文字不换行 */
+.search-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .grid {

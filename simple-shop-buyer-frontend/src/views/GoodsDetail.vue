@@ -114,8 +114,18 @@ onMounted(load)
         <h2 class="section-title">商品描述</h2>
         <div v-if="goods.description.length" class="description">
           <template v-for="(block, idx) in goods.description" :key="idx">
-            <p v-if="block.type === 'text'">{{ block.text }}</p>
-            <img v-else-if="block.url" :src="block.url" class="desc-image" />
+            <p v-if="block.type === 'TEXT' && block.text">{{ block.text }}</p>
+            <img
+              v-else-if="block.type === 'IMAGE' && block.url"
+              :src="block.url"
+              class="desc-image"
+            />
+            <video
+              v-else-if="block.type === 'VIDEO' && block.url"
+              :src="block.url"
+              controls
+              class="desc-image"
+            />
           </template>
         </div>
         <p v-else class="muted">暂无描述</p>

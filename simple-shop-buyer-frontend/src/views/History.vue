@@ -42,7 +42,7 @@ function formatTime(iso: string): string {
 }
 
 function resultText(result: string): string {
-  return result === 'succeeded' ? '交易成功' : '交易失败'
+  return result === 'SUCCEEDED' ? '交易成功' : '交易失败'
 }
 
 onMounted(load)
@@ -75,7 +75,7 @@ onMounted(load)
           <tr v-for="(row, idx) in items" :key="idx">
             <td>{{ row.goods_name }}</td>
             <td>{{ formatTime(row.create_at) }}</td>
-            <td :class="{ success: row.result === 'succeeded' }">
+            <td :class="{ success: row.result === 'SUCCEEDED' }">
               {{ resultText(row.result) }}
             </td>
             <td>{{ formatTime(row.finish_at) }}</td>
