@@ -20,6 +20,8 @@ export const ApiCode = {
   USERNAME_INVALID: 10006,
   PHONE_INVALID: 10007,
   DEFAULT_LOCATION_INVALID: 10008,
+  /** 商品不存在 / 已下架 / 已归档；后端同时回 HTTP 404。 */
+  GOODS_NOT_FOUND: 20011,
   TOO_MANY_REQUESTS: 50001,
   PARAM_INVALID: 50002,
 } as const

@@ -68,6 +68,7 @@ export const useAuthStore = defineStore('auth', () => {
  */
 export function describeError(err: unknown): string {
   if (err instanceof ApiError) {
+    // 先按业务码判断；业务码覆盖不到的，再按 HTTP 状态兜底。
     switch (err.code) {
       case ApiCode.LOGIN_FAILED:
         return '用户名或密码不正确'
@@ -83,15 +84,16 @@ export function describeError(err: unknown): string {
         return '电话格式不对：请填 7~20 位数字，可含短横'
       case ApiCode.DEFAULT_LOCATION_INVALID:
         return '默认交易地点不符合要求：最多 50 字，不能含换行'
+      case ApiCode.GOODS_NOT_FOUND:
+        return '商品不存在或已下架'
       case ApiCode.TOO_MANY_REQUESTS:
         return '操作太频繁了，请稍后再试'
       case ApiCode.PARAM_INVALID:
         return '填写的内容不符合要求'
-      case 404:
-        return '商品不存在或已下架'
-      default:
-        return '操作失败，请稍后再试'
     }
+    // 兜底：后端也可能只给 HTTP 状态码、业务码不在上面清单里。
+    if (err.httpStatus === 404) return '商品不存在或已下架'
+    return '操作失败，请稍后再试'
   }
   return '网络异常，请检查后重试'
 }
