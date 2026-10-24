@@ -14,14 +14,24 @@ const submitting = ref(false)
 const errorText = ref('')
 
 async function onSubmit() {
-  if (!username.value.trim() || !password.value) {
-    errorText.value = '请填写用户名和密码'
+  // 分开提示：只缺一项时告诉用户缺的是哪一项，不要笼统说"都要填"。
+  const u = username.value.trim()
+  if (!u && !password.value) {
+    errorText.value = '请输入用户名和密码'
+    return
+  }
+  if (!u) {
+    errorText.value = '请输入用户名'
+    return
+  }
+  if (!password.value) {
+    errorText.value = '请输入密码'
     return
   }
   submitting.value = true
   errorText.value = ''
   try {
-    await auth.login({ username: username.value.trim(), password: password.value })
+    await auth.login({ username: u, password: password.value })
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
     router.replace(redirect || { name: 'goods-list' })
   } catch (err) {
