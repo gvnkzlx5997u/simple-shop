@@ -97,13 +97,13 @@ onMounted(() => {
           @keyup.enter="search"
         />
         <select v-model="l1Id" class="select">
-          <option value="">全部一级类别</option>
+          <option value="">一级类别</option>
           <option v-for="c in categories" :key="c.id" :value="c.id">
             {{ c.name }}
           </option>
         </select>
         <select v-model="l2Id" class="select" :disabled="!l1Id">
-          <option value="">{{ l1Id ? '全部二级类别' : '先选一级类别' }}</option>
+          <option value="">二级类别</option>
           <option v-for="c in l2Options" :key="c.id" :value="c.id">
             {{ c.name }}
           </option>
