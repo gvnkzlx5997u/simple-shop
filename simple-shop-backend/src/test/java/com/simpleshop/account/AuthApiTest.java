@@ -1,4 +1,4 @@
-package com.simpleshop;
+package com.simpleshop.account;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -15,6 +15,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 
 import com.simpleshop.common.auth.AuthRole;
+import com.simpleshop.testing.ApiTestBase;
 
 class AuthApiTest extends ApiTestBase {
 

@@ -1,4 +1,4 @@
-package com.simpleshop;
+package com.simpleshop.intention;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -23,6 +23,7 @@ import com.simpleshop.intention.entity.GoodsQueueSequence;
 import com.simpleshop.intention.entity.Intention;
 import com.simpleshop.intention.enums.FailType;
 import com.simpleshop.intention.enums.IntentionStatus;
+import com.simpleshop.testing.DataLayerTestBase;
 
 class IntentionDataTest extends DataLayerTestBase {
 

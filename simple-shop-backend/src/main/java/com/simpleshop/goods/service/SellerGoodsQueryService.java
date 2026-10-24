@@ -82,6 +82,16 @@ public class SellerGoodsQueryService {
                 contentBlocks.findByGoods_IdOrderBySortNoAsc(goods.getId()));
     }
 
+    /** 按主键只读加载商品，供 goods 之外的功能（如意向名单）校验存在性。 */
+    @Transactional(readOnly = true)
+    public Goods requireGoods(String id) {
+        if (id == null || id.isBlank()) {
+            throw new BusinessException(ErrorCode.GOODS_NOT_FOUND);
+        }
+        return goodsRepository.findById(id.trim())
+                .orElseThrow(() -> new BusinessException(ErrorCode.GOODS_NOT_FOUND));
+    }
+
     private Map<String, String> mainImages(List<Goods> goods) {
         if (goods.isEmpty()) {
             return Map.of();

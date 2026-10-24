@@ -1,4 +1,4 @@
-package com.simpleshop;
+package com.simpleshop.goods;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -7,6 +7,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MvcResult;
+import com.simpleshop.testing.ApiTestBase;
 
 class MediaApiTest extends ApiTestBase {
 

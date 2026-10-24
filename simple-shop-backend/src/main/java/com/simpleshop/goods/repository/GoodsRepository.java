@@ -9,6 +9,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -30,6 +31,15 @@ public interface GoodsRepository extends JpaRepository<Goods, String> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select g from Goods g where g.id = :id")
     Optional<Goods> findWithLockById(@Param("id") String id);
+
+    /**
+     * 直接删除当前商品行，绕过一级缓存（实体引用会阻断 em.remove 的 flush）。
+     * 归档流程专用：意向外键 RESTRICT，必须先删该商品全部意向行；
+     * 图片、描述块、队列序号行由数据库级联删除。
+     */
+    @Modifying(flushAutomatically = true)
+    @Query("delete from Goods g where g.id = :id")
+    void deleteRowById(@Param("id") String id);
 
     /**
      * 卖家/公共商品列表共用查询。categoryLevel 为 0 表示不按类别筛选，

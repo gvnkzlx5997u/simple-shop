@@ -18,7 +18,7 @@ import com.simpleshop.common.auth.SessionStore;
 import com.simpleshop.common.security.RateLimiter;
 
 /**
- * 买家注册与登录。
+ * 买家注册、登录与账号读取。
  */
 @Service
 public class BuyerAuthService {
@@ -65,6 +65,13 @@ public class BuyerAuthService {
         }
         return sessions.create(new AuthPrincipal(
                 AuthRole.BUYER, buyer.getId(), buyer.getUsername()));
+    }
+
+    /** 按主键加载买家账号，供 account 之外的功能（如提交意向）读取。 */
+    @Transactional(readOnly = true)
+    public BuyerAccount requireAccount(String id) {
+        return buyers.findById(id)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ACCOUNT_NOT_FOUND));
     }
 
     private void requireRateLimit(RateLimiter.Scope scope, String clientKey) {

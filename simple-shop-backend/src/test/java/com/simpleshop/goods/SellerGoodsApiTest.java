@@ -1,4 +1,4 @@
-package com.simpleshop;
+package com.simpleshop.goods;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -26,6 +26,7 @@ import com.simpleshop.category.entity.CategoryL2;
 import com.simpleshop.goods.entity.Goods;
 import com.simpleshop.goods.enums.GoodsStatus;
 import com.simpleshop.intention.entity.Intention;
+import com.simpleshop.testing.ApiTestBase;
 
 class SellerGoodsApiTest extends ApiTestBase {
 

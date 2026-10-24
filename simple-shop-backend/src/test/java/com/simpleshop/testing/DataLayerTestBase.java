@@ -1,4 +1,4 @@
-package com.simpleshop;
+package com.simpleshop.testing;
 
 import java.math.BigDecimal;
 import java.util.UUID;

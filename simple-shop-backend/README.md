@@ -1,6 +1,6 @@
 # simple-shop 后端
 
-阶段二重构中的后端工程。当前完成 **S0 清理与骨架**、**S1 数据层**、**S2 公共能力与账号** 与 **S3 类别与商品**：V1/V2 数据库基线、实体/仓储、双角色会话与鉴权、买家注册/登录、卖家登录/改密、媒体上传、两级类别、商品发布/查询/库存/上下架/改挂和 springdoc 已落地。
+阶段二重构中的后端工程。当前完成 **S0 清理与骨架**、**S1 数据层**、**S2 公共能力与账号**、**S3 类别与商品**、**S4 意向与交易** 与 **S5 归档与历史**：V1/V2 数据库基线、实体/仓储、双角色会话与鉴权、买家注册/登录、卖家登录/改密、媒体上传、两级类别、商品发布/查询/库存/上下架/改挂、买家提交意向、按商品队列、卖家交易裁决、成交售罄归档、买家历史 union、卖家历史查询与客户管理已落地。
 
 业务口径以 [阶段二文档](../simple-shop-doc/阶段二/README.md) 为准，实施顺序见 [后端开发计划](../simple-shop-doc/阶段二/后端开发计划.md)。
 
@@ -34,8 +34,8 @@ src/main/java/com/simpleshop/
   account/     账号 entity、repository、service、controller、dto、support
   category/    一级/二级类别 entity、repository、service、controller、dto
   goods/       商品、图片、描述块 entity、repository、enums、support、service、controller、dto
-  intention/   意向、队列序号 entity、repository、enums、队列端口实现
-  history/     历史商品、历史意向 entity、repository、enums
+  intention/   意向、队列序号 entity、repository、enums、队列端口、service、controller、dto
+  history/     历史商品、历史意向 entity、repository、enums、service（归档写入与卖家历史查询）
 src/main/resources/
   application.yml
   logback-spring.xml
@@ -45,7 +45,7 @@ db/legacy/     阶段一脚本与数据库备份（不参与运行）
 scripts/       注释编号门禁
 ```
 
-`account`、`category`、`goods`、`intention`、`history` 五个功能包已建立 entity、repository、enums；S2 已补 `account` 的 service/controller/dto/support 与 `goods` 的媒体上传；S3 已补 `category` 的完整两级类别能力，以及 `goods` 的发布、查询、库存、上下架与改挂。controller 下按 seller/buyer 区分，公共查询放在 `controller/publicapi`。
+`account`、`category`、`goods`、`intention`、`history` 五个功能包已建立 entity、repository、enums；S2 已补 `account` 的 service/controller/dto/support 与 `goods` 的媒体上传；S3 已补 `category` 的完整两级类别能力，以及 `goods` 的发布、查询、库存、上下架与改挂；S4 已补 `intention` 的提交/队列/裁决/买家历史与 `history` 的归档写入。controller 下按 seller/buyer 区分，公共查询放在 `controller/publicapi`。
 
 ## 构建与运行
 
@@ -116,7 +116,17 @@ Spring 的 multipart 上限已调到 20MB/25MB，图片的 5MB 由 Service 按�
 | PUT | `/api/seller/goods/{id}/stock` | 修改库存 |
 | POST | `/api/seller/goods/{id}/off-shelf` | 手动下架 |
 | POST | `/api/seller/goods/{id}/re-list` | 重新上架，body 必须带 `{"confirm":true}` |
+| POST | `/api/buyer/intentions` | 提交购买意向，body 仅 `goods_id`；回执不含排队位次 |
+| GET | `/api/buyer/history` | 我的历史；仅终态意向，按下单时间倒序分页 |
+| GET | `/api/seller/goods/{id}/intentions` | 意向名单；按队列序号升序分页，可按状态筛选 |
+| POST | `/api/seller/intentions/{id}/trade` | 选定队首进入交易；商品在售、无其他交易中意向、且必须是队首 |
+| POST | `/api/seller/intentions/{id}/success` | 标记交易成功；扣库存，扣减后为 0 时商品与全部意向同事务归档 |
+| POST | `/api/seller/intentions/{id}/failure` | 标记交易失败；disposal 取 `VOIDED`（作废）或 `REQUEUED`（重排至队尾） |
 | PUT | `/api/seller/goods/{id}/category` | 改挂二级类别 |
+| GET | `/api/seller/history/goods` | 历史商品列表；按归档时间倒序分页 |
+| GET | `/api/seller/history/goods/{id}` | 历史商品详情；含快照与全部历史意向 |
+| GET | `/api/seller/customers` | 注册客户列表；按注册时间倒序分页 |
+| GET | `/api/seller/customers/{id}` | 客户详情 + 购买历史；分页作用于历史并集 |
 
 - 鉴权：`Authorization: Bearer <token>`；买家 token 与卖家 token 不能互用；`/api/public/**` 无需令牌。
 - 媒体上传 `purpose` 取 `GOODS_IMAGE` 或 `DESCRIPTION_MEDIA`。S2 的上传与商品解耦，S3 发布商品时绑定返回的 URL。
@@ -130,6 +140,23 @@ Spring 的 multipart 上限已调到 20MB/25MB，图片的 5MB 由 Service 按�
 - 描述是 TEXT / IMAGE / VIDEO 的有序内容块，不存 HTML；文本总长 1000 字符，单块同样最多 1000。
 - 商品状态为 `ON_SALE`、`FROZEN`、`OFF_MANUAL`、`OFF_ZERO`；在售改库存为 0 会触发 `OFF_ZERO`，清零下架改大于 0 自动回到在售。
 - 手动下架和库存清零下架都要求没有排队中/交易中意向；手动下架后重新上架必须显式确认。
+
+### 意向与交易口径
+
+- 每个商品独立排队；队列序号从 1 递增、同商品内唯一、只增不回收，重新排队刷新至队尾且下单时间不变；重新上架不重置序号。
+- 提交意向要求商品在售，不扣库存、不去重（同一买家可重复提交）；非终态意向（排队中/交易中）达 `simple-shop.queue.max-size`（默认 1000）后拒绝新提交。
+- 进入交易只能选队首；同一商品同时至多一笔交易；商品进入交易中（`FROZEN`）后不收新意向、禁止改库存/改挂/下架。
+- 标记成功扣库存 1 件：扣减后大于 0 商品回在售、其余排队保留；等于 0 时商品与全部意向同事务归档——其余排队中意向自动置失败（商品已售出），类别名、买家用户名/电话、描述与图片以快照写入历史表，当前表删除商品行与意向行，队列序号行随外键级联删除。
+- 标记失败须裁决：作废（意向置失败·卖家作废）或重新排队；商品回在售，库存不变。
+- 买家历史是当前表已终态意向与历史意向表的并集，分页在并集之后；只含自己的终态记录，字段仅商品名、下单时间、结果、交易时间。
+- 商品行是同一商品写操作的聚合锁；加锁顺序固定为商品行 → 队列序号行 → 意向行，禁止反向。
+
+### 历史与客户口径
+
+- 历史只读：只有成交售罄会归档（写入历史表并删除当前行），归档内容为快照（类别名、买家用户名/电话、描述与图片 JSON），历史不引用当前类别、账号与商品。
+- 卖家历史商品列表/详情来自历史表；详情内含该商品全部历史意向，电话完整展示不脱敏。
+- 客户列表与详情只读：字段仅限用户名、电话、默认交易地点与注册时间，不提供搜索、统计或导出。
+- 客户购买历史 = 当前表已终态意向 ∪ 历史意向表，分页在并集之后；由 intention 实现、account 经端口调用，account 不反向依赖意向功能。
 
 ## 数据库
 
@@ -166,6 +193,8 @@ Spring 的 multipart 上限已调到 20MB/25MB，图片的 5MB 由 Service 按�
 - 建立 11 个实体、11 个仓储与 6 个枚举；完成 JSON 快照、主图唯一、队列序号唯一、状态/失败原因约束等数据层测试。
 - S2 落地双角色会话与鉴权、买家注册/登录/退出、卖家登录/退出/改密、媒体上传、springdoc，以及账号字段的业务校验。
 - S3 落地两级类别新增/重命名/删除与删除前置、商品发布/列表/详情/搜索、主图/图集、TEXT/IMAGE/VIDEO 描述块、库存调整、手动上下架、库存清零下架与改挂类别。
-- 全部 141 个用例全绿（数据层 22 个、S2 接口与校验 23 个、S3 接口与字段规则 40 个、其余公共能力 56 个）；开发库与测试库均通过 Flyway 与 `ddl-auto=validate`。
+- S4 落地买家提交意向（限流/队列上限/重复提交）、卖家意向名单（分页/状态筛选）、进入交易（队首/唯一交易守卫）、标记成功（库存扣减、售罄同事务归档）、标记失败（作废/重排队）、买家历史 union，以及并发不变量测试（序号唯一、唯一交易、不超卖、归档一致性）。
+- S5 落地卖家历史商品列表/详情（快照解析、历史意向名单）与客户管理（注册客户列表、客户详情 + 购买历史并集，经跨包端口读取）。
+- 全部 190 个用例全绿（S0~S4 遗留 180 个，S5 新增 10 个：卖家历史 4、客户管理 6）；开发库与测试库均通过 Flyway 与 `ddl-auto=validate`。S4、S5 期间数据库零变更，V1/V2 未动。
 
-下一步是 S4：买家意向、按商品队列、卖家交易裁决与库存扣减。
+下一步是 S6：收口与联调（springdoc 文档收口、卖家/买家前端联调、E2E、性能、部署与文档）。

@@ -32,6 +32,8 @@ public class OperationLogService {
     public static final String RENAME_CATEGORY = "RENAME_CATEGORY";
     public static final String DELETE_CATEGORY = "DELETE_CATEGORY";
 
+    public static final String SUBMIT_INTENTION = "SUBMIT_INTENTION";
+
     public static final String ENTER_TRADE = "ENTER_TRADE";
     public static final String MARK_TRADE_SUCCESS = "MARK_TRADE_SUCCESS";
     public static final String MARK_TRADE_FAILURE = "MARK_TRADE_FAILURE";

@@ -1,4 +1,4 @@
-package com.simpleshop;
+package com.simpleshop.testing;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -74,5 +74,10 @@ public abstract class ApiTestBase extends DataLayerTestBase {
     protected String tokenOf(MvcResult result) throws Exception {
         JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
         return body.path("data").path("token").asText();
+    }
+
+    /** 响应体 data 节点；分页断言用 data.path("items") / data.path("total")。 */
+    protected JsonNode dataOf(MvcResult result) throws Exception {
+        return objectMapper.readTree(result.getResponse().getContentAsString()).path("data");
     }
 }

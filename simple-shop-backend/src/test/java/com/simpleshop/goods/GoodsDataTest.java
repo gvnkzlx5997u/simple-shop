@@ -1,4 +1,4 @@
-package com.simpleshop;
+package com.simpleshop.goods;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -21,6 +21,7 @@ import com.simpleshop.goods.enums.ContentBlockType;
 import com.simpleshop.goods.enums.GoodsStatus;
 import com.simpleshop.history.entity.GoodsHistory;
 import com.simpleshop.history.enums.GoodsHistoryResult;
+import com.simpleshop.testing.DataLayerTestBase;
 
 class GoodsDataTest extends DataLayerTestBase {
 

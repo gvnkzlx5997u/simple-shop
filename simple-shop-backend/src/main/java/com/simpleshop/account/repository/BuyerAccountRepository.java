@@ -16,5 +16,6 @@ public interface BuyerAccountRepository extends JpaRepository<BuyerAccount, Stri
 
     long countByPhone(String phone);
 
-    Page<BuyerAccount> findAllByOrderByCreateAtDesc(Pageable pageable);
+    /** 卖家客户列表；注册时间秒级精度，用 id 做 tie-breaker。 */
+    Page<BuyerAccount> findAllByOrderByCreateAtDescIdDesc(Pageable pageable);
 }

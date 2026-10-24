@@ -1,4 +1,4 @@
-package com.simpleshop;
+package com.simpleshop.category;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -16,6 +16,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 
 import com.simpleshop.category.entity.CategoryL2;
+import com.simpleshop.testing.ApiTestBase;
 
 class SellerCategoryApiTest extends ApiTestBase {
 
