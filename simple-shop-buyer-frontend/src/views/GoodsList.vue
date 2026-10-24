@@ -12,7 +12,9 @@ const keyword = ref('')
 const l1Id = ref('')
 const l2Id = ref('')
 const page = ref(1)
-const pageSize = 10
+// 12 = 列表 3 行 × 4 列刚好排满一屏，不留残缺。
+// 后端 simplexhop.pagination.max-size = 100，超过会返回 400。
+const pageSize = 12
 
 const items = ref<GoodsSummary[]>([])
 const total = ref(0)
