@@ -1,287 +1,200 @@
-# simple-shop
+# simple-shop 后端
 
-在线购物系统的**后端**：数据库 DDL + JPA 实体与仓储（阶段二）+ **业务层 Service 与卖家端接口层 Controller（阶段三）** + **买家端 JSP 页面（任务 4）**。
+阶段二重构中的后端工程。当前完成 **S0 清理与骨架**、**S1 数据层**、**S2 公共能力与账号**、**S3 类别与商品**、**S4 意向与交易** 与 **S5 归档与历史**：V1/V2 数据库基线、实体/仓储、双角色会话与鉴权、买家注册/登录、卖家登录/改密、媒体上传、两级类别、商品发布/查询/库存/上下架/改挂、买家提交意向、按商品队列、卖家交易裁决、成交售罄归档、买家历史 union、卖家历史查询与客户管理已落地。
 
-> **当前范围**：数据层、业务层（Service）、**卖家端 REST 接口 `I11-01` ~ `I11-16`（16 个）**、
-> **买家端 JSP 页面 `B11-01` ~ `B11-07`（4 个页面，服务端渲染）**——三部分均已实现。
-> 买家端**不出 REST 契约**（`C-05`、`A-02`），页面路由与实现口径见 §4.2，偏离与取舍见 §8。
-> **依据**：《数据库与数据层设计说明书》v1.2 ｜《需求规格说明书》v1.1 ｜
-> 《后端业务层与卖家端接口层开发方案》（已拆分为 [docs/业务层与接口层/](docs/业务层与接口层/)，见该目录的 README）。
->
-> **验证状态**：`mvn clean verify` → **BUILD SUCCESS，484 用例全绿**（462 原有 + 22 买家端 JSP）。
-> ⚠️ **交接请先读 [《业务层与接口层 · 交接说明》](docs/业务层与接口层/交接说明.md)**——
-> 环境核对、硬口径、容易踩的坑、已知限制都在那里（其 §11 的「买家端 JSP 五项」已由本轮的 §4.2 落实）。
+业务口径以 [阶段二文档](../simple-shop-doc/阶段二/README.md) 为准，实施顺序见 [后端开发计划](../simple-shop-doc/阶段二/后端开发计划.md)。
 
----
-
-## 1. 技术基线
+## 技术基线
 
 | 项 | 取值 |
 | --- | --- |
-| 构建工具 | Maven |
-| Spring Boot | 3.5.16（3.5 线） |
-| Java | 编译目标 **21**（构建 JDK 需 ≥ 21） |
-| MySQL | ≥ 8.0.16（开发库 8.0.44） |
-| 持久化 | Spring Data JPA + Hibernate 6.6.53.Final |
-| Web | **Spring MVC（内嵌 Tomcat）+ JSP / JSTL**；打包为**可执行 war**（`java -jar`） |
-| 会话 | **进程内**（`SessionStore`，后端单容器；✅ 已定 Q-3） |
-| schema 版本化 | Flyway 11.7.2 + 手写 SQL |
-| 基础包名 | `com.simpleshop` |
-| 连接池 | HikariCP（Spring Boot 默认） |
+| 构建 | Maven，可执行 war |
+| Java | 编译目标 21，构建 JDK ≥ 21 |
+| Spring Boot | 3.5.16 |
+| 持久化 | Spring Data JPA + Hibernate，MySQL 8.0.16+ |
+| 迁移 | Flyway + 手写 SQL |
+| 会话 | 进程内 token，买家/卖家按角色隔离 |
+| 前端 | 前后端分离，后端只提供 REST 与媒体文件 |
 
-## 2. 构建与运行
+## 目录结构
 
-> ⚠️ **请在工程根目录（`simple-shop/simple-shop-backend/`）执行 `mvn`**，原因见 §5。
+```text
+src/main/java/com/simpleshop/
+  SimpleShopApplication.java
+  common/
+    api/       统一响应、分页、错误码、异常处理、健康检查
+    auth/      角色、会话、鉴权拦截器、当前用户、密码哈希
+    config/    应用配置、Jackson、Web MVC
+    media/     图片/视频识别与媒体落盘
+    text/      文本规则、UTC 时间格式化
+    audit/     关键操作日志
+    time/      UTC 时间来源
+    security/  限流
+    id/        主键生成
+  account/     账号 entity、repository、service、controller、dto、support
+  category/    一级/二级类别 entity、repository、service、controller、dto
+  goods/       商品、图片、描述块 entity、repository、enums、support、service、controller、dto
+  intention/   意向、队列序号 entity、repository、enums、队列端口、service、controller、dto
+  history/     历史商品、历史意向 entity、repository、enums、service（归档写入与卖家历史查询）
+src/main/resources/
+  application.yml
+  logback-spring.xml
+  db/migration/  Flyway V1 基线、V2 种子
+db/draft/      设计草案（保留作对照，不参与运行）
+db/legacy/     阶段一脚本与数据库备份（不参与运行）
+scripts/       注释编号门禁
+```
+
+`account`、`category`、`goods`、`intention`、`history` 五个功能包已建立 entity、repository、enums；S2 已补 `account` 的 service/controller/dto/support 与 `goods` 的媒体上传；S3 已补 `category` 的完整两级类别能力，以及 `goods` 的发布、查询、库存、上下架与改挂；S4 已补 `intention` 的提交/队列/裁决/买家历史与 `history` 的归档写入。controller 下按 seller/buyer 区分，公共查询放在 `controller/publicapi`。
+
+## 构建与运行
+
+在 `simple-shop-backend/` 目录执行：
 
 ```bash
-mvn clean verify        # 编译 + 全部 484 个测试（约 75 秒）
-mvn clean compile       # 仅编译
-mvn spring-boot:run     # 启动 web 应用（默认 8080 端口）
-mvn clean package       # 产出 target/simple-shop.war
-java -jar target/simple-shop.war   # 以 war 方式启动（真实端口验证用这条）
-mvn test                # 仅跑测试
+mvn clean compile      # 仅编译，不需要数据库
+mvn test               # 数据层 + API 测试，需要 MySQL；默认使用 simple_shop_test
+mvn clean verify       # 编译 + 全部测试
+mvn spring-boot:run    # 启动，需要 MySQL；默认使用 simple_shop
 ```
 
-**运行期环境变量**（容器化时用它覆盖，详见《交接说明》§1.2）：
+应用启动时由 Flyway 自动执行 `V1__baseline_schema.sql` 与 `V2__seed_initial_data.sql`，随后由 `ddl-auto=validate` 校验实体与表结构。
 
-| 变量 | 默认值 | 说明 |
+构建产物为 `target/simple-shop.war`，可用 `java -jar` 启动。
+
+## 配置
+
+| 环境变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` | 本机 `simple_shop` / `root` / `123456` | 连接串须保留 `connectionTimeZone=UTC` |
-| `IMAGE_DIR` | `./data/images` | 商品图片目录，**容器化须挂持久卷** |
-| `-DAUDIT_LOG_PATH`（**系统属性**，非环境变量） | `logs` | 审计日志目录 |
+| `DB_URL` | 本机 `simple_shop` | JDBC 连接串，已带 UTC 与 utf8mb4 参数 |
+| `DB_USERNAME` | `root` | 数据库账号 |
+| `DB_PASSWORD` | `123456` | 数据库口令 |
+| `MEDIA_DIR` | `./data/media` | 媒体根目录；兼容阶段一的 `IMAGE_DIR`，容器部署时必须挂持久卷 |
+| `AUDIT_LOG_PATH` | `logs` | 审计日志目录，保留 90 天 |
+| `SPRINGDOC_ENABLED` | `true` | 是否开放 `/v3/api-docs` 与 Swagger UI；生产建议设为 `false` |
 
-**JDK**：编译目标为 Java 21，构建 JDK **不得低于 21**（pom 中的 enforcer 规则会拦截并提示）。
-更高的 JDK 也可构建（已在 JDK 21 与 24 上实测：24 构建出的字节码仍为 Java 21，全部测试通过），
-因此不要求本机必须恰好装 JDK 21。
+媒体限制在 `application.yml` 的 `simple-shop.media` 下配置：
 
-**控制台乱码**（中文 Windows 常见）时可加：
+| 配置项 | 默认值 | 说明 |
+| --- | --- | --- |
+| `goods-image-max-size` | 5MB | 商品主图/图集，只允许 JPG/PNG |
+| `description-image-max-size` | 5MB | 描述内容块中的图片，与商品图片是独立限制 |
+| `description-video-max-size` | 20MB | 描述内容块中的视频，当前只接受 MP4 |
 
-```powershell
-$env:MAVEN_OPTS='-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8'
-```
+Spring 的 multipart 上限已调到 20MB/25MB，图片的 5MB 由 Service 按用途单独校验。
 
-## 3. 数据库
+媒体 URL 形状：
 
-```sql
-CREATE DATABASE IF NOT EXISTS simple_shop
-  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-```
+- 商品图片：`/media/goods/uuuu/MM/<uuid>.jpg|png`
+- 描述媒体：`/media/description/uuuu/MM/<uuid>.jpg|png|mp4`
 
-连接配置在 `src/main/resources/application.yml`，三项均可用环境变量覆盖（默认值面向本机开发）：
+数据库只存相对 URL；服务端回验时会同时检查用途目录、扩展名和文件是否存在。
 
-| 变量 | 默认值 |
-| --- | --- |
-| `DB_URL` | `jdbc:mysql://localhost:3306/simple_shop?...&createDatabaseIfNotExist=true` |
-| `DB_USERNAME` | `root` |
-| `DB_PASSWORD` | `123456` |
+## API
 
-> 连接串带 `createDatabaseIfNotExist=true` 是为了本机开箱即用；
-> **正式环境请预先建库并交 DBA 管控**，并通过环境变量注入账号口令，不要沿用默认值。
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/public/health` | 健康检查 |
+| GET | `/api/public/categories` | 两级类别树，无需登录 |
+| GET | `/api/public/goods` | 在售商品列表/搜索；keyword、category_id、page、page_size |
+| GET | `/api/public/goods/{id}` | 商品详情；在售、交易中可见，下架返回 404 |
+| POST | `/api/buyer/auth/register` | 买家注册：username、password、phone、default_location |
+| POST | `/api/buyer/auth/session` | 买家登录，返回 token 与 expire_at |
+| DELETE | `/api/buyer/auth/session` | 买家退出，幂等 |
+| POST | `/api/seller/auth/session` | 卖家登录 |
+| DELETE | `/api/seller/auth/session` | 卖家退出，幂等 |
+| PUT | `/api/seller/auth/password` | 卖家改密，成功后全部卖家会话失效 |
+| POST | `/api/seller/media` | 卖家上传媒体，multipart 字段 file + purpose |
+| GET | `/api/seller/categories` | 卖家类别树 |
+| POST | `/api/seller/categories/l1` | 新增一级类别 |
+| PUT/DELETE | `/api/seller/categories/l1/{id}` | 重命名/删除一级类别 |
+| POST | `/api/seller/categories/l2` | 新增二级类别：l1_id、name |
+| PUT/DELETE | `/api/seller/categories/l2/{id}` | 重命名/删除二级类别 |
+| GET | `/api/seller/goods` | 卖家商品列表；status、category_id、keyword、page、page_size |
+| POST | `/api/seller/goods` | 发布商品；含类别、库存、描述块、主图/图集 URL |
+| GET | `/api/seller/goods/{id}` | 商品详情，包含全部当前状态 |
+| PUT | `/api/seller/goods/{id}/stock` | 修改库存 |
+| POST | `/api/seller/goods/{id}/off-shelf` | 手动下架 |
+| POST | `/api/seller/goods/{id}/re-list` | 重新上架，body 必须带 `{"confirm":true}` |
+| POST | `/api/buyer/intentions` | 提交购买意向，body 仅 `goods_id`；回执不含排队位次 |
+| GET | `/api/buyer/history` | 我的历史；仅终态意向，按下单时间倒序分页 |
+| GET | `/api/seller/goods/{id}/intentions` | 意向名单；按队列序号升序分页，可按状态筛选 |
+| POST | `/api/seller/intentions/{id}/trade` | 选定队首进入交易；商品在售、无其他交易中意向、且必须是队首 |
+| POST | `/api/seller/intentions/{id}/success` | 标记交易成功；扣库存，扣减后为 0 时商品与全部意向同事务归档 |
+| POST | `/api/seller/intentions/{id}/failure` | 标记交易失败；disposal 取 `VOIDED`（作废）或 `REQUEUED`（重排至队尾） |
+| PUT | `/api/seller/goods/{id}/category` | 改挂二级类别 |
+| GET | `/api/seller/history/goods` | 历史商品列表；按归档时间倒序分页 |
+| GET | `/api/seller/history/goods/{id}` | 历史商品详情；含快照与全部历史意向 |
+| GET | `/api/seller/customers` | 注册客户列表；按注册时间倒序分页 |
+| GET | `/api/seller/customers/{id}` | 客户详情 + 购买历史；分页作用于历史并集 |
 
-### 3.1 库表版本化
+- 鉴权：`Authorization: Bearer <token>`；买家 token 与卖家 token 不能互用；`/api/public/**` 无需令牌。
+- 媒体上传 `purpose` 取 `GOODS_IMAGE` 或 `DESCRIPTION_MEDIA`。S2 的上传与商品解耦，S3 发布商品时绑定返回的 URL。
+- 接口文档：`/v3/api-docs`、`/swagger-ui/index.html`；生产用 `SPRINGDOC_ENABLED=false` 关闭。
 
-表由 Flyway 迁移脚本建立，`ddl-auto` 固定为 `validate`（核对实体与库结构一致）：
+### 类别与商品口径
 
-| 脚本 | 内容 |
-| --- | --- |
-| `V1__baseline_schema.sql` | 7 张表 + 索引 + 外键 + 物理性 CHECK |
-| `V2__seed_initial_data.sql` | 队列序号行 + 卖家账号（幂等） |
+- 类别只有两级；商品必须挂二级类别，一级只做分组。一级类别删除前必须没有二级子类，二级类别删除前必须没有当前商品引用。
+- 商品发布后名称、价格、描述、图片不可修改；库存可调、类别可改挂，交易中两者都禁止。
+- 主图可选；图集最多 8 张，且必须先有主图；主图 + 图集合计最多 9 张。
+- 描述是 TEXT / IMAGE / VIDEO 的有序内容块，不存 HTML；文本总长 1000 字符，单块同样最多 1000。
+- 商品状态为 `ON_SALE`、`FROZEN`、`OFF_MANUAL`、`OFF_ZERO`；在售改库存为 0 会触发 `OFF_ZERO`，清零下架改大于 0 自动回到在售。
+- 手动下架和库存清零下架都要求没有排队中/交易中意向；手动下架后重新上架必须显式确认。
 
-> **⚠️ 已发布的迁移脚本不得修改**（会导致 Flyway 校验和失配、启动直接报错）。
-> 后续每次变更新增 `V3`、`V4`…
+### 意向与交易口径
 
-## 4. 代码结构
+- 每个商品独立排队；队列序号从 1 递增、同商品内唯一、只增不回收，重新排队刷新至队尾且下单时间不变；重新上架不重置序号。
+- 提交意向要求商品在售，不扣库存、不去重（同一买家可重复提交）；非终态意向（排队中/交易中）达 `simple-shop.queue.max-size`（默认 1000）后拒绝新提交。
+- 进入交易只能选队首；同一商品同时至多一笔交易；商品进入交易中（`FROZEN`）后不收新意向、禁止改库存/改挂/下架。
+- 标记成功扣库存 1 件：扣减后大于 0 商品回在售、其余排队保留；等于 0 时商品与全部意向同事务归档——其余排队中意向自动置失败（商品已售出），类别名、买家用户名/电话、描述与图片以快照写入历史表，当前表删除商品行与意向行，队列序号行随外键级联删除。
+- 标记失败须裁决：作废（意向置失败·卖家作废）或重新排队；商品回在售，库存不变。
+- 买家历史是当前表已终态意向与历史意向表的并集，分页在并集之后；只含自己的终态记录，字段仅商品名、下单时间、结果、交易时间。
+- 商品行是同一商品写操作的聚合锁；加锁顺序固定为商品行 → 队列序号行 → 意向行，禁止反向。
 
-```
-src/main/java/com/simpleshop
-├── SimpleShopApplication.java
-├── config/                         # AppProperties、JacksonConfig
-├── security/                       # PasswordHasher、PasswordHashTool
-├── session/                        # SessionStore（进程内会话）
-├── service/                        # ★ 阶段三：业务层
-│   ├── dto/ support/ exception/    #   响应 DTO / 校验器 / ErrorCode
-│   ├── SellerAuthService、SellerGoodsService、SellerIntentionService、SellerHistoryService
-│   ├── BuyerIntentionService、PasscodeService、SubmitRateLimiter   # 买家端 Service（Controller 见 §4.2）
-│   └── ArchiveService、ImageStorageService、OperationLogService
-├── web/                            # ★ 接口层：卖家端 5 个 Controller + 买家端 3 个
-│   ├── BuyerHomeController、BuyerIntentController、BuyerQueryController   # 买家端 JSP（§4.2）
-│   └── dto/ ApiResponse GlobalExceptionHandler SellerAuthInterceptor WebMvcConfig
-└── persistence
-    ├── entity/                     # 7 个实体
-    ├── enums/                      # 6 个枚举
-    ├── time/                       # DatabaseTimeProvider（唯一时间来源）
-    └── repository/                 # 7 个仓储接口
+### 历史与客户口径
 
-src/main/resources
-├── application.yml                 # 含 spring.mvc.view：/WEB-INF/views/ + .jsp
-├── logback-spring.xml              # 控制台 + 独立审计 appender（3 个月轮转）
-├── static/buyer/                   # 买家端静态资源：buyer.css、product.svg
-└── db/migration/                   # V1__baseline_schema.sql、V2__seed_initial_data.sql
+- 历史只读：只有成交售罄会归档（写入历史表并删除当前行），归档内容为快照（类别名、买家用户名/电话、描述与图片 JSON），历史不引用当前类别、账号与商品。
+- 卖家历史商品列表/详情来自历史表；详情内含该商品全部历史意向，电话完整展示不脱敏。
+- 客户列表与详情只读：字段仅限用户名、电话、默认交易地点与注册时间，不提供搜索、统计或导出。
+- 客户购买历史 = 当前表已终态意向 ∪ 历史意向表，分页在并集之后；由 intention 实现、account 经端口调用，account 不反向依赖意向功能。
 
-src/main/webapp/WEB-INF/views/      # ★ 买家端 JSP（放 WEB-INF 下 ⇒ 浏览器不能直接访问）
-├── index.jsp                       # P10-01 当前商品页（GET /）
-├── intent-form.jsp                 # P10-02 提交意向表单（GET /intent/new、POST /intent）
-├── intent-success.jsp              # P10-03 提交成功页（无独立 URL，仅提交成功后在同一请求内渲染）
-└── query.jsp                       # P10-04 口令码查询与操作（GET|POST /query、/query/update、/query/revoke）
+## 数据库
 
-src/test
-├── java/com/simpleshop/            # 25 个测试类 / 484 用例 + testing/ 测试设施
-└── resources/                      # application-test.yml、csv/（15 张用例表）、images/
-```
+- 阶段二使用全新基线，不迁移阶段一数据；阶段一旧库与旧测试库已删除，备份在 `db/legacy/backup.sql`、`db/legacy/test_db_backup.sql`。
+- 活动迁移脚本是 `src/main/resources/db/migration/V1__baseline_schema.sql`（11 张表）与 `V2__seed_initial_data.sql`（卖家种子账号）。
+- `db/draft/` 保留设计草案供对照，不参与运行；`db/legacy/` 的旧脚本不会被 Flyway 加载。
+- 种子卖家：账号 `seller`，初始口令 `Abcd@1234`，首次登录后请修改。
+- 测试库默认 `simple_shop_test`，可通过 `TEST_DB_URL` 覆盖；测试会自动建库并跑 Flyway。
+- 已发布的迁移脚本不得修改，只能追加新版本。
 
-包结构详见《数据库与数据层设计说明书》§6.1。原设计的 `persistence/id` 包与自定义主键生成器
-**已废弃、不再建立**（主键改为「前缀 + 标准 UUID」，在实体 `@PrePersist` 中赋值）。
+## 代码约定
 
-### 4.1 业务层与接口层速览
+- 时间写入统一使用 `DatabaseTimeProvider`，库内一律 UTC。
+- 会话区分买家与卖家角色，令牌不能互用。
+- 商品图片只接受 JPG/PNG；描述媒体接受 JPG/PNG 和 MP4。文件名由服务端生成，数据库只存相对 URL，并做用途与目录穿越校验。
+- 账号字段在 Service 层校验：用户名/账号 1~50 字符且不含空白/控制字符/尖括号；密码至少 8 字符且 UTF-8 不超过 72 字节；电话为 7~20 位数字与 `-`；默认交易地点可空、最多 50 字符。
+- 类别名、商品名去首尾空白后 1~50 字符，拒绝控制字符、换行与尖括号；商品价格必须大于 0、不超过 999999.99 且最多两位小数；发布库存至少为 1。
+- 商品图片与描述图片使用独立配置项；当前都限 5MB，但后续可以分别调整。
+- 描述内容块按 `sort_no` 保存纯文本、图片、视频的混排顺序；纯文本整段 1000 字符上限由应用层校验，单个文本块在数据层也按 1000 字符预留。
+- 商品媒体 URL 必须指向 `/media/goods/` 或 `/media/description/` 下已落盘的文件；发布时按用途、扩展名和文件存在性回验，拒绝外链和目录穿越。
+- 注释只保留职责与非显然约束，不引用文档编号；可用 `pwsh -File scripts/check-comment-refs.ps1` 检查。
+- 控制器只调用本功能 Service，跨功能读取走 Service 或只读端口。
 
-| 项 | 内容 |
-| --- | --- |
-| 接口 | **`I11-01` ~ `I11-16` 共 16 个**：会话/账号 3（S3）、商品与图片 6（S4）、意向与交易 5（S6）、历史 2（S8） |
-| 买家端页面 | **`B11-01` ~ `B11-07` 共 7 个端点 / 4 个 JSP**：`@Controller` 服务端渲染，**无鉴权、无 REST 契约**，见 §4.2 |
-| 统一响应 | `{code, message, data}`；**业务规则拒绝返回 HTTP 200 + 业务码**（仅 4 个例外：`10002`→401、`20011`→404、`50000`→500、`50002`→400） |
-| 错误码 | `ErrorCode` 是唯一来源，域归属 `1xxxx` 认证 / `2xxxx` 商品 / `3xxxx` 意向 / `4xxxx` 口令码 / `5xxxx` 通用；**不得增删编号** |
-| 鉴权 | `Authorization: Bearer <token>`，拦截器只覆盖 `/api/seller/**`（登录端点排除）；**买家端不需要鉴权** |
-| 事务与加锁 | 一个业务动作一个事务；卖家写 `@Transactional(timeout=5)`；**统一加锁顺序 ①序号表 → ②商品行 → ③意向行** |
-| 归档 | 手动下架与标记成功都会在**同一事务内**把商品与全部意向搬进历史表并硬删当前表 |
-| 审计日志 | 独立 appender（`com.simpleshop.audit`），UTC 时间戳、保留 90 天；**不记口令码与密码** |
-| 性能 | 查询 P95 ≤ 150ms、典型写 P95 ≤ 59ms（预算 500ms/1s）；⚠️ **归档满队列（1000 条）未达标（1.7~2.8s）**，见《交接说明》§7.1 |
+## 当前状态
 
-**⚠️ 三条最容易踩的**（详见《交接说明》§4~§6）：DTO 注解只判「有没有」；
-`I11-15` 与 `I11-10` 的排序口径**相反**；`trade_start`/`create_at`/`trade_end` 都是**秒精度**，
-同一秒内的先后**不确定**——**不要写断言顺序的用例**。
+已完成：
 
-### 4.2 买家端 JSP 页面（本轮交付）
+- 删除买家 JSP 层、3 个 JSP Controller、4 个 JSP、买家静态资源与 JSP/JSTL 依赖。
+- 删除口令码链路、交易流水、手动冻结、买家撤销/改资料相关代码与测试。
+- 删除阶段一实体、仓储、枚举、业务 Service、卖家 Controller 与请求/响应 DTO（这些将按阶段二模型重写）。
+- 旧迁移脚本移出活动目录；旧测试仅保留与业务模型无关的纯单元测试。
+- 建立 `common` 包并完成角色化会话、双角色鉴权、图片/视频媒体存储、文本、审计、限流、错误码与健康检查。
+- 增加类别、商品、账号与意向域 11 张表的阶段二基线，以及卖家种子账号。
+- 建立 11 个实体、11 个仓储与 6 个枚举；完成 JSON 快照、主图唯一、队列序号唯一、状态/失败原因约束等数据层测试。
+- S2 落地双角色会话与鉴权、买家注册/登录/退出、卖家登录/退出/改密、媒体上传、springdoc，以及账号字段的业务校验。
+- S3 落地两级类别新增/重命名/删除与删除前置、商品发布/列表/详情/搜索、主图/图集、TEXT/IMAGE/VIDEO 描述块、库存调整、手动上下架、库存清零下架与改挂类别。
+- S4 落地买家提交意向（限流/队列上限/重复提交）、卖家意向名单（分页/状态筛选）、进入交易（队首/唯一交易守卫）、标记成功（库存扣减、售罄同事务归档）、标记失败（作废/重排队）、买家历史 union，以及并发不变量测试（序号唯一、唯一交易、不超卖、归档一致性）。
+- S5 落地卖家历史商品列表/详情（快照解析、历史意向名单）与客户管理（注册客户列表、客户详情 + 购买历史并集，经跨包端口读取）。
+- 全部 190 个用例全绿（S0~S4 遗留 180 个，S5 新增 10 个：卖家历史 4、客户管理 6）；开发库与测试库均通过 Flyway 与 `ddl-auto=validate`。S4、S5 期间数据库零变更，V1/V2 未动。
 
-买家端是**服务端渲染**（`C-05`、`A-02`）：**不出 REST 契约**，凭证是**口令码**而非会话（`O-01`、`BR-32`），
-因此**不需要鉴权**——`WebMvcConfig` 的拦截器只覆盖 `/api/seller/**`。3 个 `@Controller` 返回**逻辑视图名**，
-由 `application.yml` 的 `spring.mvc.view`（`/WEB-INF/views/` + `.jsp`）解析到 4 个 JSP；
-
-| 端点 | 编号 | Controller | 视图 | 页面需求 |
-| --- | --- | --- | --- | --- |
-| `GET /` | `B11-01` | `BuyerHomeController` | `index.jsp` | `P10-01` 当前商品页（含「无商品」空态与「已冻结」态） |
-| `GET /intent/new` | `B11-02` | `BuyerIntentController` | `intent-form.jsp` | `P10-02` 提交意向表单 |
-| `POST /intent` | `B11-03` | `BuyerIntentController` | 成功 → `intent-success.jsp`；被拒 → 回表单 | `P10-03` 成功页（口令码仅展示一次） |
-| `GET` / `POST /query` | `B11-04` / `B11-05` | `BuyerQueryController` | `query.jsp` | `P10-04` 查询（`NotFound` / `Expired` / `Active` 排队中 / `Active` 交易中） |
-| `POST /query/update` | `B11-06` | `BuyerQueryController` | `query.jsp` | 改姓名 / 电话（`FR-16`） |
-| `POST /query/revoke` | `B11-07` | `BuyerQueryController` | `query.jsp` | 撤销意向（`FR-17`） |
-
-**四条实现口径**（逐条理由见代码注释与 §8）：
-
-1. **JSP 放 `WEB-INF/` 下**：浏览器**不能直接访问**，必须经 Controller 渲染——这正是 `B11-03` 口径②
-   「提交成功页不得通过 URL 直接访问」（`K5-02`、`BR-24`）成立的前提；实测 `GET /intent/success` → **404**。
-2. **成功页在同一个 POST 请求内渲染**（既不 `redirect` 也不 `forward:`）：口令码只经**请求属性**传递，
-   不进 URL、不进 session；代价是刷新会**重发 POST**——这是表单应用的既有语义，也正好使口令码不再展示。
-3. **响应的 record 摊平成 `LinkedHashMap` 再交视图**：JSP 的 EL 只认 JavaBeans，读不到 record 的访问器
-   （直接写 `${goods.status}` 会 `PropertyNotFoundException`），故 Controller **逐字段显式**搬进 `Map`，
-   JSP 里照旧写 `${goods.name}`（EL 对 `Map` 的属性访问就是 key 查找）。**不用反射式拷贝**，保证
-   「页面能看到哪些字段」是被明确挑选出来的（同设计说明书 §4.6.4）。
-4. **文案唯一权威是 `BuyerPrompt`**：JSP 不写死中文提示；商品文本与买家输入一律走 `<c:out>` /
-   `fn:escapeXml`——输出转义是输入拒绝之外的第二层，**两层不可互补**。
-
-> 买家端**未纳入**卖家端鉴权拦截器、`/images/**` **公开可访问**（买家看商品图所必需，`FR-12`）——
-> 这两处是**有意为之**，不是遗漏。若哪天有人把 `/**` 加进拦截器，买家端会整体 401，首页直接打不开。
-
-## 5. ⚠️ Maven 本地仓库在项目内
-
-本机 `~/.m2/repository` **不可写**，Maven 无法在其中落盘依赖。因此 `.mvn/maven.config` 把本地仓库
-重定向到项目内：
-
-```
--Dmaven.repo.local=.m2/repository
-```
-
-- 依赖会下载到 `simple-shop/simple-shop-backend/.m2/repository`（约 100 MB，已在 `.gitignore` 中排除）。
-- **该路径相对当前工作目录解析**，所以必须在工程根目录执行 `mvn`；
-  在别处用 `mvn -f <path>/pom.xml` 调用会把依赖下到**调用目录**。
-- 换到 `~/.m2` 可写的机器时，删除 `.mvn/maven.config` 即可改回全局仓库。
-
-## 6. 核心约定
-
-### 6.1 时间
-
-- 库内所有 `datetime` 一律为 **UTC**，由 `DatabaseTimeProvider` 统一提供。
-- **禁止**直接使用 `LocalDateTime.now()` / `new Date()` / `System.currentTimeMillis()` 入库。
-- 实体时间字段必须标注 `@JdbcTypeCode(SqlTypes.LOCAL_DATE_TIME)`，否则会**静默偏 8 小时**。
-- UTC+8 展示转换**不在数据层**，由应用层/前端完成。
-
-### 6.2 校验责任
-
-**数据库只管「结构对不对」（非空、唯一、外键、时间不倒流），「值对不对」全部归应用层。**
-枚举取值、数值区间、格式（口令码/电话）、文本规则、长度上限、跨表不变量（`INV-*`）、队列上限、
-状态迁移合法性，均由 Service 拦截并给出提示文案。
-
-### 6.3 主键与归档
-
-- 主键 `<前缀> + 标准 UUID`，列宽 `varchar(50)`；各实体在 `@PrePersist` 中 **`if (id == null)`** 赋值。
-- 该 `if` 是硬约束：归档时历史行须**沿用原 ID**，由调用方显式赋原值。
-
-### 6.4 加锁
-
-加锁方法一律以 `...ForUpdate` 结尾，**必须在事务内调用**。
-统一加锁顺序：**① 序号表行 → ② 商品行 → ③ 意向行**（防死锁）。
-凡改变商品状态、或改变「是否有意向处于 `trading`」的事务，必须首先锁商品行。
-
-### 6.5 与业务层的关系（阶段三之后）
-
-数据层的**校验责任边界不变**：数据库只管结构（非空、唯一、外键、时间不倒流），「值对不对」全归 Service。
-⚠️ 业务层**没有改动任何数据层交付物**（实体、仓储、V1/V2 迁移脚本），
-唯一一处配置改动是新增 `hibernate.jdbc.batch_size: 50`（性能实测逼出来的，见《交接说明》§7.1）。
-
-## 7. 初始账号与改密
-
-| 项 | 值 |
-| --- | --- |
-| 登录账号 | `seller` |
-| 初始口令 | `Abcd@1234` |
-| 库中存储 | BCrypt 哈希（脚本中无明文） |
-
-口令不以明文入库，改密需先用 `PasswordHashTool` 生成哈希，再执行 `UPDATE ... SET password = '<哈希>', update_at = UTC_TIMESTAMP()`。
-**完整步骤（含「库已上线时新增 V3 脚本而非改 V2」）见《交接说明》§9.2。**
-
-> ⚠️ 初始口令是约定的固定值：它能满足「不存明文」，但**不提供保密性**。
-> 首次登录后请立即改密，上线前换成只有运维知道的口令。
-
-## 8. 已知偏离、决定与取舍
-
-> 这里登记**上游文档未规定、或与上游写法不同**的后端口径与已有取舍；部署相关的取舍见根目录 [README.md](../README.md)。
-> 逐条细节在《业务层与接口层 · 交接说明》与设计文档里，下表只做索引。
-
-### 8.1 上游未规定 / 与上游不同的口径
-
-| # | 事项 | 本项目的口径 | 依据 / 详见 |
-| --- | --- | --- | --- |
-| 1 | 业务规则拒绝的 HTTP 状态 | 默认 **HTTP 200 + 业务码**；仅 4 个例外（`10002`→401、`20011`→404、`50000`→500、`50002`→400） | `§11.3.4`，交接 §4.1 |
-| 2 | `message` 的用途 | **ASCII 英文，仅供日志与排查**；界面文案由前端 / `BuyerPrompt` 按 `code` 映射第 10 章文案表 | 已定 Q-13，交接 §4.2 |
-| 3 | 请求 DTO 上的校验注解 | **只判「有没有」**（`@NotBlank` 等）；有专属错误码的字段不得用 `@Size`/`@Pattern`，否则专属码永远不可达 | 交接 §4.3 |
-| 4 | 契约未规定的三处分支 | 媒体类型协商失败 → 400 + `50002`；HTTP 方法不支持 → 405；Controller 方法参数约束不通过 → 400 + `50002` | 交接 §4.4 |
-| 5 | `price` 的类型 | 全程**字符串**（入参 `String` → `BigDecimal` 校验 → 出参 `toPlainString()`），不做浮点 | `11-F`，交接 §4.5 |
-| 6 | JSON 命名 | `snake_case` 靠**逐个 `@JsonProperty`**，不配全局命名策略（会连带影响实体） | 交接 §4.6 |
-| 7 | 三个秒精度排序键 | `trade_start` / `create_at` / `trade_end` 为**秒**精度，同秒先后不确定 ⇒ 界面不声称严格时序、用例不断言顺序 | 交接 §6 |
-| 8 | 买家端成功页的转交方式 | 不用 `redirect` / `forward:`，在同一个 POST 请求内渲染成功视图；口令码仅经请求属性 | `K5-02`、`BR-24`，§4.2 |
-| 9 | record 响应与 JSP EL | Controller 逐字段摊平成 `Map` 再交视图（record 访问器不符合 JavaBeans 规范） | §4.2 |
-| 10 | 买家端 `contactByToken` | 为 `P10-04` 预填/回显新增**只读**方法；不给 `PasscodeQueryResult.Active` 加字段（最小暴露），Controller 也不直连 Repository | 任务 4 实现记录 |
-
-### 8.2 有意保留的限制（已接受）
-
-| 项 | 说明 |
-| --- | --- |
-| 会话在进程内 | 后端**单容器**；**不可多副本 / 负载均衡**，容器重启丢会话（`Q-3`、`9-O`）。改多副本须换共享存储并复核 `C-04` |
-| 超出 `max-swallow-size`（10MB）的上传 | 仍会**断连**——有意不用 `-1`，不给攻击者白送资源消耗；5MB 上限内的拒绝仍正常返回 `20009` |
-| `publishGoods` 的 `INV-01` 并发竞态 | **已接受**（`DEC-DB-06`）：单管理员、无注册入口；将来引入多管理员须回头重评 |
-| 限流 | **固定窗口、计数在进程内**（`Q-8` 最小版本）；多副本时阈值会变成 `10 × 副本数` |
-| 上传文件名 | **不使用原文件名**，服务端生成 UUID 文件名（防枚举、防路径穿越） |
-| 审计日志 | 只有基本审计，**无测试保证**（用户明确降低要求）；可用「真实端口实测 + 全量日志统计 + 调用点走查」复核 |
-
----
-
-## 9. 更多细节
-
-实现细节统一记录在文档里（**都是「代码里看不出为什么」的部分**）：
-
-| 想了解 | 看 |
-| --- | --- |
-| **接手本工程**（环境核对、硬口径、坑、限制） | **[《业务层与接口层 · 交接说明》](docs/业务层与接口层/交接说明.md)** |
-| 接口契约、业务口径、测试策略（**设计文档 16 篇**） | [docs/业务层与接口层/设计文档/](docs/业务层与接口层/设计文档/README.md) |
-| 每个阶段**实际怎么做的、踩了什么**（**实现过程记录 9 篇**） | [docs/业务层与接口层/实现过程记录/](docs/业务层与接口层/实现过程记录/README.md) |
-| 表结构、字段口径、仓储方法表 | 《数据库与数据层设计说明书》v1.2 ｜ [docs/数据层/交接说明.md](docs/数据层/交接说明.md) |
-| 上游需求（含 16 个接口的契约） | `../需求规格说明书/`（第 11 章为接口需求） |
+下一步是 S6：收口与联调（springdoc 文档收口、卖家/买家前端联调、E2E、性能、部署与文档）。

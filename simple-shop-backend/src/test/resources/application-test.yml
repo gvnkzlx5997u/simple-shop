@@ -1,33 +1,21 @@
-# =============================================================================
-# 测试环境配置
-#
-# 目的：让自测**跑在独立库** simple_shop_test 上，不污染开发库 simple_shop。
-#   - 库由连接串的 createDatabaseIfNotExist=true 自动创建；
-#   - 表由 Flyway 迁移脚本建立（与开发库同一套 V1/V2），因此测试同时验证了迁移脚本；
-#   - 队列序号行与卖家账号也来自 V2 种子，故 part 3 的口令码断言可直接用种子账号。
-#
-# ⚠️ Hibernate 的 ddl-auto 仍为 validate：上下文能启动本身就等于
-#    「实体 ↔ 库结构一致」这条断言通过（§9.1 推荐的本地自检手段）。
-# =============================================================================
-
+# 数据层测试配置：使用独立的 simple_shop_test 库。
 spring:
   datasource:
     url: ${TEST_DB_URL:jdbc:mysql://localhost:3306/simple_shop_test?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&connectionTimeZone=UTC&rewriteBatchedStatements=true&createDatabaseIfNotExist=true}
+  jpa:
+    hibernate:
+      ddl-auto: validate
 
-# =============================================================================
-# 图片目录：测试期指向 target/ 下的独立目录
-#
-# ⚠️ 为什么必须覆盖：`I11-05` 的上传用例会真的把文件写到
-#    simple-shop.image.directory。若不覆盖，测试会往【开发期共用的】./data/images 里写垃圾文件，
-#    而那个目录正是生产图片的存放位置（C-08、DEC-09）——测试污染生产数据是不可接受的。
-#    指向 target/test-images 后：① 与真实图片目录彻底隔离；② mvn clean 会一并清掉。
-# =============================================================================
 simple-shop:
-  image:
-    directory: ./target/test-images
+  media:
+    directory: ./target/test-media
+  # API 测试不触发限流；限流算法由 RateLimiterTest 单独覆盖。
+  rate-limit:
+    register-per-minute: 1000
+    login-per-minute: 1000
+    submit-intention-per-minute: 1000
 
 logging:
   level:
-    # 测试期间压低 SQL 日志噪音；断言失败时按需调回 debug
     org.hibernate.SQL: warn
     org.hibernate.orm.jdbc.bind: warn
