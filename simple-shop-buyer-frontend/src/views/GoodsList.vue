@@ -96,12 +96,14 @@ onMounted(() => {
           placeholder="搜索商品名称或描述"
           @keyup.enter="search"
         />
+        <span class="filter-label">一级类别</span>
         <select v-model="l1Id" class="select">
           <option value="">全选</option>
           <option v-for="c in categories" :key="c.id" :value="c.id">
             {{ c.name }}
           </option>
         </select>
+        <span class="filter-label">二级类别</span>
         <select v-model="l2Id" class="select" :disabled="!l1Id">
           <option value="">全选</option>
           <option v-for="c in l2Options" :key="c.id" :value="c.id">
@@ -156,7 +158,13 @@ onMounted(() => {
   border: 1px solid var(--color-border);
   border-radius: 4px;
   background: #fff;
-  min-width: 132px;
+  min-width: 118px;
+  flex-shrink: 0;
+}
+
+/* 下拉框外面的字段名：原生 select 收起时只会显示第一项，所以标签放在外面 */
+.filter-label {
+  color: var(--color-text-weak);
   flex-shrink: 0;
 }
 
