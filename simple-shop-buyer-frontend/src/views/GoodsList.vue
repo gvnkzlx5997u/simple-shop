@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { fetchCategories, fetchGoods } from '../api/buyer'
@@ -9,7 +9,8 @@ import { describeError } from '../stores/auth'
 const router = useRouter()
 
 const keyword = ref('')
-const categoryId = ref('')
+const l1Id = ref('')
+const l2Id = ref('')
 const page = ref(1)
 const pageSize = 10
 
@@ -19,16 +20,25 @@ const categories = ref<CategoryNode[]>([])
 const loading = ref(false)
 const errorText = ref('')
 
-/** 二级类别拉平成下拉选项，value 用二级 id（商品只挂二级）。 */
-const flatCategories = ref<{ id: string; name: string; l1: string }[]>([])
+/**
+ * 两级类别分开筛选。
+ * 后端 GoodsRepository 的查询支持 categoryLevel：传一级 id 就筛该一级下所有商品，
+ * 传二级 id 就筛该二级。所以这里只要「二级优先、否则一级」地传一个 id 即可。
+ */
+const l2Options = computed<CategoryNode[]>(() => {
+  if (!l1Id.value) return []
+  const l1 = categories.value.find((c) => c.id === l1Id.value)
+  return l1 ? l1.children : []
+})
+
+/** 选了二级就用二级，只选一级就用一级；都没选则不带该参数。 */
+function categoryParam(): string | undefined {
+  return l2Id.value || l1Id.value || undefined
+}
 
 async function loadCategories() {
   try {
-    const tree = await fetchCategories()
-    categories.value = tree
-    flatCategories.value = tree.flatMap((l1) =>
-      l1.children.map((l2) => ({ id: l2.id, name: l2.name, l1: l1.name })),
-    )
+    categories.value = await fetchCategories()
   } catch {
     // 类别加载失败不阻塞列表；下拉留空即可。
   }
@@ -40,7 +50,7 @@ async function loadGoods() {
   try {
     const data = await fetchGoods({
       keyword: keyword.value.trim() || undefined,
-      category_id: categoryId.value || undefined,
+      category_id: categoryParam(),
       page: page.value,
       page_size: pageSize,
     })
@@ -65,7 +75,11 @@ function changePage(next: number) {
   loadGoods()
 }
 
-watch(categoryId, () => search())
+// 同时监听两级：改一级时清空二级，Vue 会把同一轮的两处变更合并成一次触发。
+watch([l1Id, l2Id], () => {
+  if (!l1Id.value) l2Id.value = ''
+  search()
+})
 
 onMounted(() => {
   loadCategories()
@@ -82,10 +96,16 @@ onMounted(() => {
           placeholder="搜索商品名称或描述"
           @keyup.enter="search"
         />
-        <select v-model="categoryId" class="select">
-          <option value="">全部类别</option>
-          <option v-for="c in flatCategories" :key="c.id" :value="c.id">
-            {{ c.l1 }} / {{ c.name }}
+        <select v-model="l1Id" class="select">
+          <option value="">全部一级类别</option>
+          <option v-for="c in categories" :key="c.id" :value="c.id">
+            {{ c.name }}
+          </option>
+        </select>
+        <select v-model="l2Id" class="select" :disabled="!l1Id">
+          <option value="">{{ l1Id ? '全部二级类别' : '先选一级类别' }}</option>
+          <option v-for="c in l2Options" :key="c.id" :value="c.id">
+            {{ c.name }}
           </option>
         </select>
         <button class="primary search-btn" @click="search">搜索</button>
@@ -136,7 +156,13 @@ onMounted(() => {
   border: 1px solid var(--color-border);
   border-radius: 4px;
   background: #fff;
-  min-width: 160px;
+  min-width: 132px;
+  flex-shrink: 0;
+}
+
+.select:disabled {
+  color: var(--color-text-weak);
+  background: #f7f8fa;
 }
 
 /* 搜索按钮不被输入框挤压，文字不换行 */
