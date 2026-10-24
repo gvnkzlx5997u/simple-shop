@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { fetchCategories, fetchGoods } from '../api/buyer'
@@ -75,11 +75,20 @@ function changePage(next: number) {
   loadGoods()
 }
 
-// 同时监听两级：改一级时清空二级，Vue 会把同一轮的两处变更合并成一次触发。
-watch([l1Id, l2Id], () => {
-  if (!l1Id.value) l2Id.value = ''
+/**
+ * 切换一级类别时必须无条件清空二级。
+ * 之前用 `if (!l1Id.value)` 只在"清空一级"时清二级，
+ * 结果一级从「图书」改成「家电」时 l2Id 还留着「技术书」，
+ * 查询就带着旧二级 id 去了 —— 下拉框看着重置了，实际筛选仍按旧类别。
+ */
+function onL1Change() {
+  l2Id.value = ''
   search()
-})
+}
+
+function onL2Change() {
+  search()
+}
 
 onMounted(() => {
   loadCategories()
@@ -97,14 +106,14 @@ onMounted(() => {
           @keyup.enter="search"
         />
         <span class="filter-label">一级类别</span>
-        <select v-model="l1Id" class="select">
+        <select v-model="l1Id" class="select" @change="onL1Change">
           <option value="">全选</option>
           <option v-for="c in categories" :key="c.id" :value="c.id">
             {{ c.name }}
           </option>
         </select>
         <span class="filter-label">二级类别</span>
-        <select v-model="l2Id" class="select" :disabled="!l1Id">
+        <select v-model="l2Id" class="select" :disabled="!l1Id" @change="onL2Change">
           <option value="">全选</option>
           <option v-for="c in l2Options" :key="c.id" :value="c.id">
             {{ c.name }}
