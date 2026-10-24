@@ -20,7 +20,8 @@ const notice = ref('')
 const goodsId = computed(() => String(route.params.id ?? ''))
 const allImages = computed(() => {
   if (!goods.value) return []
-  const list = goods.value.images.map((i) => i.url)
+  // 防御：images 理论上不会为 null，但少一个兜底就多一种白屏可能。
+  const list = (goods.value.images ?? []).map((i) => i.url)
   if (goods.value.main_image_url && !list.includes(goods.value.main_image_url)) {
     list.unshift(goods.value.main_image_url)
   }
@@ -97,7 +98,7 @@ onMounted(load)
           <h1 class="title">{{ goods.name }}</h1>
           <div class="price">¥{{ goods.price }}</div>
           <div class="muted">
-            {{ goods.category.l1_name }} / {{ goods.category.l2_name }}
+            {{ goods.category?.l1_name ?? '未分类' }} / {{ goods.category?.l2_name ?? '' }}
           </div>
           <div class="muted">库存 {{ goods.stock }}</div>
 
@@ -112,7 +113,7 @@ onMounted(load)
 
       <div class="card">
         <h2 class="section-title">商品描述</h2>
-        <div v-if="goods.description.length" class="description">
+        <div v-if="goods.description?.length" class="description">
           <template v-for="(block, idx) in goods.description" :key="idx">
             <p v-if="block.type === 'TEXT' && block.text">{{ block.text }}</p>
             <img

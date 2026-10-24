@@ -15,6 +15,11 @@ export const ApiCode = {
   OK: 0,
   LOGIN_FAILED: 10001,
   SESSION_INVALID: 10002,
+  PASSWORD_INVALID: 10004,
+  USERNAME_TAKEN: 10005,
+  USERNAME_INVALID: 10006,
+  PHONE_INVALID: 10007,
+  DEFAULT_LOCATION_INVALID: 10008,
   TOO_MANY_REQUESTS: 50001,
   PARAM_INVALID: 50002,
 } as const
@@ -122,4 +127,13 @@ export interface LoginRequest {
 export interface LoginData {
   token: string
   expire_at: string
+}
+
+/**
+ * 提交意向的响应。
+ * 只回意向记录的 id 与创建时间——**不含排队位次**，界面不得展示位置。
+ */
+export interface IntentionAccepted {
+  id: string
+  create_at: string
 }

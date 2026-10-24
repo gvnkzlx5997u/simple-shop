@@ -113,7 +113,9 @@ onMounted(() => {
         <div class="info">
           <div class="name">{{ g.name }}</div>
           <div class="price">¥{{ g.price }}</div>
-          <div class="muted">{{ g.category.l1_name }} / {{ g.category.l2_name }}</div>
+          <div class="muted">
+            {{ g.category?.l1_name ?? '未分类' }} / {{ g.category?.l2_name ?? '' }}
+          </div>
         </div>
       </div>
     </div>

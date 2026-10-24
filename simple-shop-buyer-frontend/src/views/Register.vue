@@ -4,6 +4,19 @@ import { useRouter } from 'vue-router'
 
 import { describeError, useAuthStore } from '../stores/auth'
 
+/*
+ * 字段规则与后端 AccountRules 保持一致（交接文档没写，这里是照后端源码抄的）：
+ *   用户名：非空、≤50 字、不含空格/换行/尖括号
+ *   密码  ：≥8 字（后端另有 UTF-8 ≤72 字节的限制，正常使用不会碰到）
+ *   电话  ：7~20 位数字，可含短横
+ *   交易地点：可选，≤50 字，不含换行/尖括号
+ * 前端先拦一道，是为了让用户看到「哪一项不对」，而不是等后端回一个笼统的错误码。
+ */
+const USERNAME_MAX = 50
+const PASSWORD_MIN = 8
+const LOCATION_MAX = 50
+const PHONE_RE = /^[0-9-]{7,20}$/
+
 const auth = useAuthStore()
 const router = useRouter()
 
@@ -14,9 +27,31 @@ const location = ref('')
 const submitting = ref(false)
 const errorText = ref('')
 
+/** 返回空串表示通过，否则返回给用户看的具体原因。 */
+function validate(): string {
+  const u = username.value.trim()
+  if (!u) return '请填用户名'
+  if (u.length > USERNAME_MAX) return `用户名最多 ${USERNAME_MAX} 个字符`
+  if (/[\s<>]/.test(u)) return '用户名不能包含空格、换行或尖括号'
+
+  if (!password.value) return '请填密码'
+  if (password.value.length < PASSWORD_MIN) return `密码至少 ${PASSWORD_MIN} 位`
+
+  const p = phone.value.trim()
+  if (!p) return '请填电话'
+  if (!PHONE_RE.test(p)) return '电话请填 7~20 位数字，可含短横'
+
+  const loc = location.value.trim()
+  if (loc && (loc.length > LOCATION_MAX || /[<>]/.test(loc) || /[\r\n]/.test(loc))) {
+    return `默认交易地点最多 ${LOCATION_MAX} 字，不能含换行或尖括号`
+  }
+  return ''
+}
+
 async function onSubmit() {
-  if (!username.value.trim() || !password.value || !phone.value.trim()) {
-    errorText.value = '用户名、密码、电话都要填'
+  const reason = validate()
+  if (reason) {
+    errorText.value = reason
     return
   }
   submitting.value = true
@@ -46,21 +81,25 @@ async function onSubmit() {
       <label class="field">
         <span>用户名</span>
         <input v-model="username" autocomplete="username" />
+        <small class="hint">必填，最多 50 字，不能有空格</small>
       </label>
 
       <label class="field">
         <span>密码</span>
         <input v-model="password" type="password" autocomplete="new-password" />
+        <small class="hint">必填，至少 8 位</small>
       </label>
 
       <label class="field">
         <span>电话</span>
         <input v-model="phone" inputmode="tel" />
+        <small class="hint">必填，7~20 位数字，可含短横（如 13800138000）</small>
       </label>
 
       <label class="field">
-        <span>默认交易地点（可不填）</span>
+        <span>默认交易地点</span>
         <input v-model="location" />
+        <small class="hint">可不填，最多 50 字</small>
       </label>
 
       <p v-if="errorText" class="error">{{ errorText }}</p>
@@ -94,6 +133,13 @@ async function onSubmit() {
 .field span {
   display: block;
   margin-bottom: 4px;
+  color: var(--color-text-weak);
+}
+
+.hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
   color: var(--color-text-weak);
 }
 </style>

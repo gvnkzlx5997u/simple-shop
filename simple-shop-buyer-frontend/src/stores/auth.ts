@@ -62,7 +62,10 @@ export const useAuthStore = defineStore('auth', () => {
   return { token, username, isLoggedIn, login, registerAndLogin, logout, clearSession }
 })
 
-/** 把 ApiError 翻译成界面能显示的中文；后端 message 一律不直接展示。 */
+/**
+ * 把 ApiError 翻译成界面能显示的中文；后端 message 一律不直接展示。
+ * 这里的每条文案都对应后端 ErrorCode 的一个具体码，不要合并成笼统的"操作失败"。
+ */
 export function describeError(err: unknown): string {
   if (err instanceof ApiError) {
     switch (err.code) {
@@ -70,6 +73,16 @@ export function describeError(err: unknown): string {
         return '用户名或密码不正确'
       case ApiCode.SESSION_INVALID:
         return '登录已失效，请重新登录'
+      case ApiCode.PASSWORD_INVALID:
+        return '密码不符合要求：至少 8 位'
+      case ApiCode.USERNAME_TAKEN:
+        return '这个用户名已经被注册了，换一个试试'
+      case ApiCode.USERNAME_INVALID:
+        return '用户名不符合要求：不能为空，不能含空格或尖括号，最长 50 字'
+      case ApiCode.PHONE_INVALID:
+        return '电话格式不对：请填 7~20 位数字，可含短横'
+      case ApiCode.DEFAULT_LOCATION_INVALID:
+        return '默认交易地点不符合要求：最多 50 字，不能含换行'
       case ApiCode.TOO_MANY_REQUESTS:
         return '操作太频繁了，请稍后再试'
       case ApiCode.PARAM_INVALID:

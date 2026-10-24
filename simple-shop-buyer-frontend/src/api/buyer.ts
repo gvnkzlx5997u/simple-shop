@@ -4,6 +4,7 @@ import type {
   CategoryNode,
   GoodsDetail,
   GoodsSummary,
+  IntentionAccepted,
   LoginData,
   LoginRequest,
   PageData,
@@ -52,10 +53,10 @@ export function logout(): Promise<null> {
 
 /**
  * 提交购买意向：请求体只有 goods_id，不需要任何表单。
- * 回执不含排队位次，界面不得展示位置。
+ * 响应只含意向 id 与创建时间，**不含排队位次**，界面不得展示位置。
  */
-export function submitIntention(goodsId: string): Promise<null> {
-  return post<null>('/buyer/intentions', { goods_id: goodsId })
+export function submitIntention(goodsId: string): Promise<IntentionAccepted> {
+  return post<IntentionAccepted>('/buyer/intentions', { goods_id: goodsId })
 }
 
 /** 我的历史：只含已结束的记录，按下单时间倒序。 */
