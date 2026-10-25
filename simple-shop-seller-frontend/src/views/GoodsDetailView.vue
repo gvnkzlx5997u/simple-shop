@@ -20,7 +20,7 @@ import DescriptionBlocks from '../components/goods/DescriptionBlocks.vue'
 import IntentionTable from '../components/intention/IntentionTable.vue'
 import TradeFailureDialog from '../components/intention/TradeFailureDialog.vue'
 import { GOODS_STATUS_LABELS, INTENTION_STATUS_LABELS } from '../constants/labels'
-import { apiCodeMessage, M10 } from '../constants/messages'
+import { M10 } from '../constants/messages'
 import { useToast } from '../composables/useToast'
 import { errorMessage } from '../utils/error'
 import { formatDateTime, formatPrice } from '../utils/format'
@@ -230,7 +230,8 @@ function startStockEdit(): void {
 async function saveStock(): Promise<void> {
   const result = validateAdjustStock(stockInput.value)
   if (!result.ok) {
-    toast.error(apiCodeMessage(result.code))
+    // 同一业务码 20015 在发布(≥1)与调整(≥0)语境文案不同,这里按调整口径直接取文案。
+    toast.error(M10.adjustStockInvalid)
     return
   }
   busy.value = true
@@ -260,8 +261,12 @@ function startCategoryEdit(): void {
 }
 
 async function saveCategory(): Promise<void> {
+  if (!categoryL1.value) {
+    toast.error(M10.categoryL1Required)
+    return
+  }
   if (!categoryL2.value) {
-    toast.error(M10.categoryRequired)
+    toast.error(M10.categoryL2Required)
     return
   }
   busy.value = true
