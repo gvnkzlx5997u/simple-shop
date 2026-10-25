@@ -23,7 +23,11 @@ spring:
     properties:
       hibernate:
         jdbc:
-          time_zone: UTC
+          # 库内时间 = UTC 的成立条件（回归测试 StorageTimeZoneTest 守门）：
+          # 1) 实体时间字段一律标注 @JdbcTypeCode(SqlTypes.LOCAL_DATE_TIME)，setObject 字面量直传，
+          #    与 JVM/会话时区无关；漏标注会退回 setTimestamp 绑定，库内时间静默偏移一个时区差。
+          # 2) 应用入口把 JVM 默认时区钉为 UTC、连接串 connectionTimeZone=UTC 钉住会话时区，作漏标注时的兜底。
+          # 3) 此处不配 hibernate.jdbc.time_zone：它改变不了默认绑定的会话时区渲染行为，曾掩盖问题定位。
           batch_size: 50
         default_batch_fetch_size: 50
 

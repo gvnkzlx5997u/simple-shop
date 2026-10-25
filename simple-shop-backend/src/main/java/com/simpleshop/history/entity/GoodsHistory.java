@@ -56,9 +56,11 @@ public class GoodsHistory {
     private String imagesSnapshot;
 
     @Column(name = "create_at", nullable = false)
+    @JdbcTypeCode(SqlTypes.LOCAL_DATE_TIME)
     private LocalDateTime createAt;
 
     @Column(name = "archived_at", nullable = false)
+    @JdbcTypeCode(SqlTypes.LOCAL_DATE_TIME)
     private LocalDateTime archivedAt;
 
     protected GoodsHistory() {

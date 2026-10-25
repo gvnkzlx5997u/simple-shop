@@ -131,7 +131,9 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <argLine>-javaagent:${net.bytebuddy:byte-buddy-agent:jar}</argLine>
+                    <!-- -Duser.timezone=UTC 与应用入口钉定的时区一致，兜底未来漏标注
+                         @JdbcTypeCode 的新字段；值级与结构级门禁见 StorageTimeZoneTest。 -->
+                    <argLine>-javaagent:${net.bytebuddy:byte-buddy-agent:jar} -Duser.timezone=UTC</argLine>
                 </configuration>
             </plugin>
         </plugins>

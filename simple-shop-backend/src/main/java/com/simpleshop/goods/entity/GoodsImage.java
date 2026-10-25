@@ -12,6 +12,9 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import com.simpleshop.common.id.Ids;
 import com.simpleshop.common.time.DatabaseTimeProvider;
 
@@ -44,6 +47,7 @@ public class GoodsImage {
     private int sortNo;
 
     @Column(name = "create_at", nullable = false)
+    @JdbcTypeCode(SqlTypes.LOCAL_DATE_TIME)
     private LocalDateTime createAt;
 
     protected GoodsImage() {

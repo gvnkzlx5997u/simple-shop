@@ -15,6 +15,9 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import com.simpleshop.account.entity.BuyerAccount;
 import com.simpleshop.common.id.Ids;
 import com.simpleshop.common.time.DatabaseTimeProvider;
@@ -48,6 +51,7 @@ public class Intention {
     private long queueOrder;
 
     @Column(name = "create_at", nullable = false)
+    @JdbcTypeCode(SqlTypes.LOCAL_DATE_TIME)
     private LocalDateTime createAt;
 
     @Enumerated(EnumType.STRING)
@@ -59,6 +63,7 @@ public class Intention {
     private FailType failType;
 
     @Column(name = "finish_at")
+    @JdbcTypeCode(SqlTypes.LOCAL_DATE_TIME)
     private LocalDateTime finishAt;
 
     protected Intention() {

@@ -13,6 +13,9 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import com.simpleshop.common.time.DatabaseTimeProvider;
 import com.simpleshop.history.enums.IntentionResult;
 import com.simpleshop.intention.enums.FailType;
@@ -45,6 +48,7 @@ public class IntentionHistory {
     private String buyerPhone;
 
     @Column(name = "create_at", nullable = false)
+    @JdbcTypeCode(SqlTypes.LOCAL_DATE_TIME)
     private LocalDateTime createAt;
 
     @Enumerated(EnumType.STRING)
@@ -56,9 +60,11 @@ public class IntentionHistory {
     private FailType failType;
 
     @Column(name = "finish_at", nullable = false)
+    @JdbcTypeCode(SqlTypes.LOCAL_DATE_TIME)
     private LocalDateTime finishAt;
 
     @Column(name = "archived_at", nullable = false)
+    @JdbcTypeCode(SqlTypes.LOCAL_DATE_TIME)
     private LocalDateTime archivedAt;
 
     protected IntentionHistory() {
