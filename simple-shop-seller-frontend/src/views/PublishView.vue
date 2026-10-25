@@ -71,7 +71,11 @@ function onSubmit(): void {
         ? M10.priceRequired
         : apiCodeMessage(priceResult.code),
     stock: stockResult.ok ? undefined : apiCodeMessage(stockResult.code),
-    category: categoryL2.value ? undefined : M10.categoryRequired,
+    category: categoryL1.value
+      ? categoryL2.value
+        ? undefined
+        : M10.categoryL2Required
+      : M10.categoryL1Required,
   }
   if (!nameResult.ok || !priceResult.ok || !stockResult.ok || !categoryL2.value) {
     return
