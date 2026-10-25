@@ -8,6 +8,9 @@ import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
 import com.simpleshop.common.id.Ids;
 import com.simpleshop.common.time.DatabaseTimeProvider;
 
@@ -35,6 +38,7 @@ public class BuyerAccount {
     private String defaultLocation;
 
     @Column(name = "create_at", nullable = false)
+    @JdbcTypeCode(SqlTypes.LOCAL_DATE_TIME)
     private LocalDateTime createAt;
 
     protected BuyerAccount() {

@@ -57,15 +57,17 @@ class AccountRulesTest {
     }
 
     @Test
-    @DisplayName("电话只允许 7~20 位数字与 -")
+    @DisplayName("电话只允许 7~20 位数字与 -，且数字至少 7 位")
     void validatesPhone() {
         assertThat(AccountRules.phone(" 010-12345678 ")).isEqualTo("010-12345678");
-        assertThat(AccountRules.phone("-------")).isEqualTo("-------");
+        assertThat(AccountRules.phone("1234567")).isEqualTo("1234567");
 
         assertInvalid(() -> AccountRules.phone(null), ErrorCode.PHONE_INVALID);
         assertInvalid(() -> AccountRules.phone("12345"), ErrorCode.PHONE_INVALID);
         assertInvalid(() -> AccountRules.phone("12345678a"), ErrorCode.PHONE_INVALID);
         assertInvalid(() -> AccountRules.phone("1".repeat(21)), ErrorCode.PHONE_INVALID);
+        assertInvalid(() -> AccountRules.phone("-------"), ErrorCode.PHONE_INVALID);
+        assertInvalid(() -> AccountRules.phone("123456-"), ErrorCode.PHONE_INVALID);
     }
 
     @Test
