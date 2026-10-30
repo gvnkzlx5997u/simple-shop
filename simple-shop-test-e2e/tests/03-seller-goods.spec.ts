@@ -228,4 +228,30 @@ test.describe('03 卖家商品与库存', () => {
     const after = await getSellerGoods(ctx, sellerToken, goods.id);
     expect(after.status).toBe('ON_SALE');
   });
+  test('T03-11 类别管理页：手工新增一级与二级类别', async ({ page }) => {
+    const tag = uniqueName('界面类');
+    const l1Name = `界面一级-${tag}`;
+    const l2Name = `界面二级-${tag}`;
+
+    await sellerLoginUi(page);
+    await page.goto(`${SELLER_URL}/categories`);
+    await expect(page.getByRole('heading', { name: '类别管理' })).toBeVisible();
+
+    // 新增一级
+    await page.getByPlaceholder('新一级类别名称').fill(l1Name);
+    await page.getByRole('button', { name: '添加一级类别' }).click();
+    const section = page.locator('section.l1').filter({ hasText: l1Name });
+    await expect(section).toBeVisible();
+
+    // 在这一级下新增二级
+    await section.getByPlaceholder('新二级类别名称').fill(l2Name);
+    await section.getByRole('button', { name: '添加二级类别' }).click();
+    await expect(section.locator('.l2__name').filter({ hasText: l2Name })).toBeVisible();
+
+    // 服务端确认树结构
+    const tree = await categoryTree(ctx);
+    const node = tree.find((item) => item.name === l1Name);
+    expect(node, '新建的一级类别应出现在类别树里').toBeTruthy();
+    expect(node!.children.map((child) => child.name)).toContain(l2Name);
+  });
 });
