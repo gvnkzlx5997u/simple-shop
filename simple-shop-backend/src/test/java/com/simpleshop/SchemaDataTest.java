@@ -23,12 +23,31 @@ class SchemaDataTest extends DataLayerTestBase {
                 "simpleshop_seller_account",
                 "simpleshop_buyer_account",
                 "simpleshop_goods",
+                "simpleshop_goods_stock",
                 "simpleshop_goods_image",
                 "simpleshop_goods_content_block",
                 "simpleshop_goods_history",
                 "simpleshop_goods_queue_sequence",
                 "simpleshop_intention",
                 "simpleshop_intention_history");
+    }
+
+    @Test
+    @DisplayName("库存已拆到独立表，商品表不再有 stock 列")
+    void stockIsSeparateTable() {
+        Long stockColumn = jdbcTemplate.queryForObject(
+                "select count(*) from information_schema.columns "
+                        + "where table_schema = database() "
+                        + "and table_name = 'simpleshop_goods' and column_name = 'stock'",
+                Long.class);
+        assertThat(stockColumn).isZero();
+
+        Long availableColumn = jdbcTemplate.queryForObject(
+                "select count(*) from information_schema.columns "
+                        + "where table_schema = database() "
+                        + "and table_name = 'simpleshop_goods_stock' and column_name = 'available'",
+                Long.class);
+        assertThat(availableColumn).isEqualTo(1);
     }
 
     @Test

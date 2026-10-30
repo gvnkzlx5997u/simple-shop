@@ -19,6 +19,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 
 import com.simpleshop.account.entity.BuyerAccount;
 import com.simpleshop.account.repository.BuyerAccountRepository;
@@ -32,7 +34,6 @@ import com.simpleshop.goods.entity.Goods;
 import com.simpleshop.goods.repository.GoodsContentBlockRepository;
 import com.simpleshop.goods.repository.GoodsImageRepository;
 import com.simpleshop.goods.repository.GoodsRepository;
-import com.simpleshop.goods.service.GoodsTradeSupport;
 import com.simpleshop.history.repository.GoodsHistoryRepository;
 import com.simpleshop.history.repository.IntentionHistoryRepository;
 import com.simpleshop.intention.entity.GoodsQueueSequence;
@@ -40,6 +41,8 @@ import com.simpleshop.intention.repository.GoodsQueueSequenceRepository;
 import com.simpleshop.intention.repository.IntentionRepository;
 import com.simpleshop.intention.service.BuyerIntentionService;
 import com.simpleshop.intention.service.SellerTradeService;
+import com.simpleshop.inventory.entity.GoodsStock;
+import com.simpleshop.inventory.repository.GoodsStockRepository;
 
 /**
  * 并发测试基类：无外层测试事务，被测服务在每个线程内开启并提交独立事务。
@@ -50,6 +53,11 @@ import com.simpleshop.intention.service.SellerTradeService;
 @ActiveProfiles("test")
 public abstract class ConcurrencyTestBase {
 
+    @DynamicPropertySource
+    static void databaseProperties(DynamicPropertyRegistry registry) {
+        TestDatabase.register(registry);
+    }
+
     @Autowired protected CategoryL1Repository categoryL1s;
     @Autowired protected CategoryL2Repository categoryL2s;
     @Autowired protected GoodsRepository goodsRepository;
@@ -57,11 +65,11 @@ public abstract class ConcurrencyTestBase {
     @Autowired protected GoodsContentBlockRepository contentBlocks;
     @Autowired protected GoodsQueueSequenceRepository queueSequences;
     @Autowired protected IntentionRepository intentions;
+    @Autowired protected GoodsStockRepository stockItems;
     @Autowired protected GoodsHistoryRepository goodsHistories;
     @Autowired protected IntentionHistoryRepository intentionHistories;
     @Autowired protected BuyerAccountRepository buyerAccounts;
     @Autowired protected BuyerAuthService accounts;
-    @Autowired protected GoodsTradeSupport goodsTradeSupport;
     @Autowired protected BuyerIntentionService buyerIntentionService;
     @Autowired protected SellerTradeService tradeService;
 
@@ -73,6 +81,7 @@ public abstract class ConcurrencyTestBase {
         queueSequences.deleteAllInBatch();
         contentBlocks.deleteAllInBatch();
         goodsImages.deleteAllInBatch();
+        stockItems.deleteAllInBatch();
         goodsRepository.deleteAllInBatch();
         buyerAccounts.deleteAllInBatch();
         categoryL2s.deleteAllInBatch();
@@ -97,9 +106,17 @@ public abstract class ConcurrencyTestBase {
     /** 建在售商品并初始化队列序号行，等价于发布服务的完整副作用。 */
     protected Goods publishedGoods(int stock) {
         Goods goods = goodsRepository.saveAndFlush(
-                Goods.publish(unique("商品-"), new BigDecimal("99.99"), stock, createCategory()));
+                Goods.publish(unique("商品-"), new BigDecimal("99.99"), createCategory()));
+        stockItems.saveAndFlush(GoodsStock.initialize(goods.getId(), stock));
         queueSequences.saveAndFlush(GoodsQueueSequence.forGoods(goods.getId()));
         return goods;
+    }
+
+    protected void setStock(Goods goods, int available) {
+        GoodsStock stock = stockItems.findById(goods.getId())
+                .orElseThrow(() -> new IllegalStateException("stock row missing"));
+        stock.setAvailable(available);
+        stockItems.saveAndFlush(stock);
     }
 
     /** 并发执行：所有线程在闩锁处同时起跑，返回按线程序的结果。 */

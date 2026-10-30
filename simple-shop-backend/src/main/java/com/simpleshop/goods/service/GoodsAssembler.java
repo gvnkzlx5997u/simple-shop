@@ -30,12 +30,12 @@ public class GoodsAssembler {
                 goods.getCategory().getName());
     }
 
-    public GoodsSummaryData summary(Goods goods, String mainImageUrl) {
+    public GoodsSummaryData summary(Goods goods, String mainImageUrl, int stock) {
         return new GoodsSummaryData(
                 goods.getId(),
                 goods.getName(),
                 goods.getPrice(),
-                goods.getStock(),
+                stock,
                 goods.getStatus(),
                 mainImageUrl,
                 category(goods),
@@ -44,7 +44,7 @@ public class GoodsAssembler {
     }
 
     public GoodsDetailData detail(
-            Goods goods, List<GoodsImage> images, List<GoodsContentBlock> blocks) {
+            Goods goods, List<GoodsImage> images, List<GoodsContentBlock> blocks, int stock) {
         List<GoodsImage> safeImages = images == null ? List.of() : images;
         List<GoodsContentBlock> safeBlocks = blocks == null ? List.of() : blocks;
         List<GoodsImageData> imageData = new ArrayList<>(safeImages.size());
@@ -66,7 +66,7 @@ public class GoodsAssembler {
                 goods.getId(),
                 goods.getName(),
                 goods.getPrice(),
-                goods.getStock(),
+                stock,
                 goods.getStatus(),
                 category(goods),
                 mainImageUrl,
@@ -74,6 +74,6 @@ public class GoodsAssembler {
                 description,
                 UtcIso8601.of(goods.getCreateAt()),
                 UtcIso8601.of(goods.getUpdateAt()),
-                goods.getStatus() == GoodsStatus.ON_SALE && goods.getStock() > 0);
+                goods.getStatus() == GoodsStatus.ON_SALE && stock > 0);
     }
 }

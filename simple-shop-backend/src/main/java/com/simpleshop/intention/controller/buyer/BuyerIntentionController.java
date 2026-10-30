@@ -1,6 +1,7 @@
 package com.simpleshop.intention.controller.buyer;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -36,7 +37,7 @@ public class BuyerIntentionController {
     @PostMapping
     @Operation(summary = "提交购买意向；回执不含排队位次")
     public ApiResponse<IntentionAcceptedData> submit(
-            @RequestBody SubmitIntentionRequest request, HttpServletRequest httpRequest) {
+            @Valid @RequestBody SubmitIntentionRequest request, HttpServletRequest httpRequest) {
         return ApiResponse.ok(intentionService.submit(
                 request, CurrentUser.require(httpRequest), ClientIp.of(httpRequest)));
     }

@@ -1,5 +1,7 @@
 package com.simpleshop.intention.controller.seller;
 
+import jakarta.validation.Valid;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -16,6 +18,7 @@ import com.simpleshop.common.api.PageResponse;
 import com.simpleshop.intention.dto.IntentionEntryData;
 import com.simpleshop.intention.dto.TradeFailureRequest;
 import com.simpleshop.intention.dto.TradeResultData;
+import com.simpleshop.intention.enums.IntentionStatus;
 import com.simpleshop.intention.service.SellerIntentionQueryService;
 import com.simpleshop.intention.service.SellerTradeService;
 
@@ -40,7 +43,7 @@ public class SellerIntentionController {
     @Operation(summary = "意向名单；按队列序号升序分页，可按状态筛选")
     public ApiResponse<PageResponse<IntentionEntryData>> list(
             @PathVariable String goodsId,
-            @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "status", required = false) IntentionStatus status,
             @RequestParam(name = "page", required = false) Integer page,
             @RequestParam(name = "page_size", required = false) Integer pageSize) {
         return ApiResponse.ok(queryService.list(goodsId, status, page, pageSize));
@@ -61,7 +64,7 @@ public class SellerIntentionController {
     @PostMapping("/api/seller/intentions/{id}/failure")
     @Operation(summary = "标记交易失败并裁决：作废，或重新排队到队尾；商品回在售，库存不变")
     public ApiResponse<TradeResultData> markFailure(
-            @PathVariable String id, @RequestBody TradeFailureRequest request) {
+            @PathVariable String id, @Valid @RequestBody TradeFailureRequest request) {
         return ApiResponse.ok(tradeService.markFailure(id, request));
     }
 }

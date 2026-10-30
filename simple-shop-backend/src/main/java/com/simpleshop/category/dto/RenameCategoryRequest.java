@@ -1,9 +1,16 @@
 package com.simpleshop.category.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.simpleshop.common.validation.CodePointLength;
+
+import jakarta.validation.constraints.NotBlank;
 
 /**
  * 类别重命名。
  */
-public record RenameCategoryRequest(@JsonProperty("name") String name) {
+public record RenameCategoryRequest(
+        @JsonProperty("name")
+        @NotBlank(message = "must not be blank")
+        @CodePointLength(max = 50)
+        String name) {
 }
