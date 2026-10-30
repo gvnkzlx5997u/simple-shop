@@ -128,8 +128,8 @@ class SellerCategoryApiTest extends ApiTestBase {
     void rejectsInvalidCategoryInput() throws Exception {
         String token = loginSeller("Abcd@1234");
 
-        assertApiCode(createL1(token, "  "), 20003);
-        assertApiCode(createL1(token, "类".repeat(51)), 20003);
+        assertApiFieldError(createL1(token, "  "), "name");
+        assertApiFieldError(createL1(token, "类".repeat(51)), "name");
         assertApiCode(createL1(token, "<类别>"), 20003);
         assertApiStatusAndCode(createL2(token, "C1-not-exist", unique("二级-")), 404, 20001);
         assertApiStatusAndCode(renameL1(token, "C1-not-exist", unique("改名-")), 404, 20001);

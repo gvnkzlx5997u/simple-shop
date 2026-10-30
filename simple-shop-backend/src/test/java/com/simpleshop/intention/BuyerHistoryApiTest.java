@@ -30,10 +30,10 @@ class BuyerHistoryApiTest extends ApiTestBase {
         Goods firstGoods = publishedGoods();
         Intention succeeded = terminalIntention(firstGoods, buyer, 1);
         Goods secondGoods = publishedGoods();
-        intentions.saveAndFlush(Intention.submit(secondGoods, buyer, 1));
+        intentions.saveAndFlush(Intention.submit(secondGoods.getId(), buyer, 1));
         BuyerAccount other = createBuyer();
         Intention failedByOther = intentions.saveAndFlush(
-                Intention.submit(secondGoods, other, 2));
+                Intention.submit(secondGoods.getId(), other, 2));
         failedByOther.markFailed(FailType.SELLER_VOIDED);
         intentions.saveAndFlush(failedByOther);
         String token = loginBuyer(buyer.getUsername(), "Buyer@1234");
@@ -56,8 +56,7 @@ class BuyerHistoryApiTest extends ApiTestBase {
     @DisplayName("历史并集当前表终态与归档后的历史意向")
     void unionsCurrentAndArchivedIntentions() throws Exception {
         Goods soldOut = publishedGoods();
-        soldOut.changeStock(1);
-        goodsRepository.saveAndFlush(soldOut);
+        setStock(soldOut, 1);
         BuyerAccount buyer = createBuyer();
         Intention archived = enterTrade(soldOut, submit(soldOut, buyer, 1));
         String sellerToken = loginSeller("Abcd@1234");
@@ -141,7 +140,7 @@ class BuyerHistoryApiTest extends ApiTestBase {
     }
 
     private Intention submit(Goods goods, BuyerAccount buyer, long queueOrder) {
-        return intentions.saveAndFlush(Intention.submit(goods, buyer, queueOrder));
+        return intentions.saveAndFlush(Intention.submit(goods.getId(), buyer, queueOrder));
     }
 
     private Intention terminalIntention(Goods goods, BuyerAccount buyer, long queueOrder) {

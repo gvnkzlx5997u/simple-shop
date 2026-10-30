@@ -2,6 +2,8 @@ package com.simpleshop.category.controller.seller;
 
 import java.util.List;
 
+import jakarta.validation.Valid;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -46,14 +48,14 @@ public class SellerCategoryController {
 
     @PostMapping("/l1")
     @Operation(summary = "新增一级类别")
-    public ApiResponse<CategoryData> createL1(@RequestBody CreateCategoryL1Request request) {
+    public ApiResponse<CategoryData> createL1(@Valid @RequestBody CreateCategoryL1Request request) {
         return ApiResponse.ok(categoryService.createL1(request.name()));
     }
 
     @PutMapping("/l1/{id}")
     @Operation(summary = "重命名一级类别")
     public ApiResponse<CategoryData> renameL1(
-            @PathVariable String id, @RequestBody RenameCategoryRequest request) {
+            @PathVariable String id, @Valid @RequestBody RenameCategoryRequest request) {
         return ApiResponse.ok(categoryService.renameL1(id, request.name()));
     }
 
@@ -66,14 +68,14 @@ public class SellerCategoryController {
 
     @PostMapping("/l2")
     @Operation(summary = "新增二级类别")
-    public ApiResponse<CategoryData> createL2(@RequestBody CreateCategoryL2Request request) {
+    public ApiResponse<CategoryData> createL2(@Valid @RequestBody CreateCategoryL2Request request) {
         return ApiResponse.ok(categoryService.createL2(request.l1Id(), request.name()));
     }
 
     @PutMapping("/l2/{id}")
     @Operation(summary = "重命名二级类别")
     public ApiResponse<CategoryData> renameL2(
-            @PathVariable String id, @RequestBody RenameCategoryRequest request) {
+            @PathVariable String id, @Valid @RequestBody RenameCategoryRequest request) {
         return ApiResponse.ok(categoryService.renameL2(id, request.name()));
     }
 

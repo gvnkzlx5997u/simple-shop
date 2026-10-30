@@ -1,0 +1,20 @@
+# 前端组合镜像的构建上下文是仓库根目录；这里排除源码之外的大目录与机密。
+.git
+.gitignore
+.tmp
+.idea
+.vscode
+**/node_modules
+**/dist
+**/.vite
+**/coverage
+**/target
+**/.m2
+**/data
+**/logs
+simple-shop-backend
+simple-shop-test-e2e
+simple-shop-doc
+deploy-cloud
+deploy/.env
+deploy-cloud/.env

@@ -1,5 +1,7 @@
 package com.simpleshop.goods.controller.seller;
 
+import jakarta.validation.Valid;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -55,7 +57,7 @@ public class SellerGoodsController {
 
     @PostMapping
     @Operation(summary = "发布商品；图片 URL 先通过 /api/seller/media 上传")
-    public ApiResponse<GoodsDetailData> publish(@RequestBody GoodsPublishRequest request) {
+    public ApiResponse<GoodsDetailData> publish(@Valid @RequestBody GoodsPublishRequest request) {
         return ApiResponse.ok(goodsService.publish(request));
     }
 
@@ -68,7 +70,7 @@ public class SellerGoodsController {
     @PutMapping("/{id}/stock")
     @Operation(summary = "修改库存；在售改 0 触发库存清零下架，清零下架改大于 0 自动上架")
     public ApiResponse<GoodsDetailData> updateStock(
-            @PathVariable String id, @RequestBody GoodsStockRequest request) {
+            @PathVariable String id, @Valid @RequestBody GoodsStockRequest request) {
         return ApiResponse.ok(goodsService.updateStock(id, request.stock()));
     }
 
@@ -82,14 +84,14 @@ public class SellerGoodsController {
     @Operation(summary = "手动下架后重新上架；必须显式确认")
     public ApiResponse<GoodsDetailData> reList(
             @PathVariable String id,
-            @RequestBody(required = false) ReListRequest request) {
+            @Valid @RequestBody(required = false) ReListRequest request) {
         return ApiResponse.ok(goodsService.reList(id, request));
     }
 
     @PutMapping("/{id}/category")
     @Operation(summary = "商品改挂二级类别；交易中禁止")
     public ApiResponse<GoodsDetailData> changeCategory(
-            @PathVariable String id, @RequestBody GoodsCategoryRequest request) {
+            @PathVariable String id, @Valid @RequestBody GoodsCategoryRequest request) {
         return ApiResponse.ok(goodsService.changeCategory(id, request.categoryId()));
     }
 }

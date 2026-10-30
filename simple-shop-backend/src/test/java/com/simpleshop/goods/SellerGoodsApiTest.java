@@ -69,8 +69,8 @@ class SellerGoodsApiTest extends ApiTestBase {
         assertThat(data.path("purchasable").asBoolean()).isTrue();
         assertThat(data.path("create_at").isNull()).isFalse();
         assertThat(data.path("update_at").isNull()).isFalse();
-        assertThat(queueSequences.findWithLockByGoodsId(id)).isPresent();
-        assertThat(queueSequences.findWithLockByGoodsId(id).orElseThrow().getCurrentValue()).isZero();
+        // 队列序号改为首次提交时惰性创建，发布后不应有行
+        assertThat(queueSequences.findById(id)).isEmpty();
 
         assertThat(data.path("images").size()).isEqualTo(2);
         assertThat(data.path("images").get(0).path("is_main").asBoolean()).isTrue();
@@ -110,13 +110,13 @@ class SellerGoodsApiTest extends ApiTestBase {
         CategoryL2 category = createCategory();
 
         Map<String, Object> blankName = goodsBody("  ", "99.99", 1, category.getId());
-        assertApiCode(publish(token, blankName), 20012);
+        assertApiFieldError(publish(token, blankName), "name");
 
         Map<String, Object> zeroPrice = goodsBody(unique("商品-"), "0", 1, category.getId());
-        assertApiCode(publish(token, zeroPrice), 20014);
+        assertApiFieldError(publish(token, zeroPrice), "price");
 
         Map<String, Object> zeroStock = goodsBody(unique("商品-"), "99.99", 0, category.getId());
-        assertApiCode(publish(token, zeroStock), 20015);
+        assertApiFieldError(publish(token, zeroStock), "stock");
 
         Map<String, Object> l1Category = goodsBody(
                 unique("商品-"), "99.99", 1, category.getL1().getId());
@@ -125,6 +125,31 @@ class SellerGoodsApiTest extends ApiTestBase {
         Map<String, Object> unknownCategory = goodsBody(
                 unique("商品-"), "99.99", 1, "C2-not-exist");
         assertApiStatusAndCode(publish(token, unknownCategory), 404, 20001);
+    }
+
+    @Test
+    @DisplayName("请求体校验一次列出全部字段错误，嵌套描述块带路径")
+    void reportsAllFieldErrors() throws Exception {
+        String token = loginSeller(SELLER_PASSWORD);
+        Map<String, Object> body = new HashMap<>();
+        body.put("name", " ");
+        body.put("price", null);
+        body.put("stock", 0);
+        body.put("category_id", "");
+        body.put("description", List.of(Map.of("type", " ", "text", "x")));
+
+        MvcResult invalid = publish(token, body);
+        assertApiStatusAndCode(invalid, 400, 50002);
+        JsonNode errors = objectMapper.readTree(
+                invalid.getResponse().getContentAsString()).path("errors");
+        assertThat(errors.findValuesAsText("field")).contains(
+                "name", "price", "stock", "category_id", "description[0].type");
+
+        CategoryL2 category = createCategory();
+        MvcResult valid = publish(token, goodsBody(unique("校验-"), "10", 1, category.getId()));
+        assertApiCode(valid, 0);
+        assertThat(objectMapper.readTree(valid.getResponse().getContentAsString()).has("errors"))
+                .isFalse();
     }
 
     @Test
@@ -298,7 +323,7 @@ class SellerGoodsApiTest extends ApiTestBase {
         assertThat(data(restocked).path("stock").asInt()).isEqualTo(2);
 
         MvcResult negative = updateStock(token, id, -1);
-        assertApiCode(negative, 20015);
+        assertApiFieldError(negative, "stock");
     }
 
     @Test
@@ -575,7 +600,7 @@ class SellerGoodsApiTest extends ApiTestBase {
     private void addQueuedIntention(String goodsId) {
         Goods goods = goodsRepository.findById(goodsId).orElseThrow();
         BuyerAccount buyer = createBuyer();
-        intentions.saveAndFlush(Intention.submit(goods, buyer, 1));
+        intentions.saveAndFlush(Intention.submit(goods.getId(), buyer, 1));
     }
 
     private void setStatus(String goodsId, GoodsStatus status) {

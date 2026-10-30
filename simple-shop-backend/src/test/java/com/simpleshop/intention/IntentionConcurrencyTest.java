@@ -39,7 +39,7 @@ class IntentionConcurrencyTest extends ConcurrencyTestBase {
 
         assertThat(results).allMatch(Attempt::ok);
         List<Intention> queued = intentions
-                .findByGoods_IdAndStatusOrderByQueueOrderAsc(goods.getId(), IntentionStatus.QUEUED);
+                .findByGoodsIdAndStatusOrderByQueueOrderAsc(goods.getId(), IntentionStatus.QUEUED);
         assertThat(queued).hasSize(threads);
         Set<Long> orders = queued.stream().map(Intention::getQueueOrder).collect(Collectors.toSet());
         assertThat(orders).hasSize(threads);
@@ -66,7 +66,7 @@ class IntentionConcurrencyTest extends ConcurrencyTestBase {
                 && (result.code() == 30002 || result.code() == 30004));
         assertThat(goodsRepository.findById(goods.getId()).orElseThrow().getStatus())
                 .isEqualTo(GoodsStatus.FROZEN);
-        assertThat(intentions.findByGoods_IdAndStatusOrderByQueueOrderAsc(
+        assertThat(intentions.findByGoodsIdAndStatusOrderByQueueOrderAsc(
                 goods.getId(), IntentionStatus.TRADING)).hasSize(1);
         assertThat(intentions.findById(first.getId()).orElseThrow().getStatus())
                 .isEqualTo(IntentionStatus.TRADING);

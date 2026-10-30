@@ -44,7 +44,7 @@ class GoodsDataTest extends DataLayerTestBase {
         Goods loaded = goodsRepository.findById(goods.getId()).orElseThrow();
         assertThat(loaded.getName()).isEqualTo(goods.getName());
         assertThat(loaded.getPrice()).isEqualByComparingTo(new BigDecimal("99.99"));
-        assertThat(loaded.getStock()).isEqualTo(3);
+        assertThat(stockItems.findById(goods.getId()).orElseThrow().getAvailable()).isEqualTo(3);
         assertThat(loaded.getStatus()).isEqualTo(GoodsStatus.ON_SALE);
         assertThat(loaded.getCategory().getId()).isEqualTo(category.getId());
 

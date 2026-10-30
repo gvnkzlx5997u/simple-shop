@@ -1,6 +1,7 @@
 package com.simpleshop.account.controller.seller;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -44,7 +45,7 @@ public class SellerAuthController {
     @PostMapping("/session")
     @Operation(summary = "卖家登录")
     public ApiResponse<AuthTokenData> login(
-            @RequestBody SellerLoginRequest request, HttpServletRequest httpRequest) {
+            @Valid @RequestBody SellerLoginRequest request, HttpServletRequest httpRequest) {
         SessionStore.Session session = authService.login(request, ClientIp.of(httpRequest));
         return ApiResponse.ok(token(session));
     }
@@ -63,7 +64,7 @@ public class SellerAuthController {
     @Operation(summary = "卖家修改密码；成功后全部卖家会话失效")
     @SecurityRequirement(name = "bearerAuth")
     public ApiResponse<Void> changePassword(
-            @RequestBody ChangePasswordRequest request, HttpServletRequest httpRequest) {
+            @Valid @RequestBody ChangePasswordRequest request, HttpServletRequest httpRequest) {
         AuthPrincipal principal = CurrentUser.require(httpRequest);
         authService.changePassword(principal, request);
         return ApiResponse.ok();

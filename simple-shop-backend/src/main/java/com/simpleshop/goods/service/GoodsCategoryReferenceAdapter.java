@@ -2,7 +2,7 @@ package com.simpleshop.goods.service;
 
 import org.springframework.stereotype.Component;
 
-import com.simpleshop.category.service.CategoryGoodsReferencePort;
+import com.simpleshop.category.api.CategoryGoodsReferencePort;
 import com.simpleshop.goods.repository.GoodsRepository;
 
 /**

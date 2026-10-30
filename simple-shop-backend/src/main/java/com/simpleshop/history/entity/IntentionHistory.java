@@ -18,7 +18,7 @@ import org.hibernate.type.SqlTypes;
 
 import com.simpleshop.common.time.DatabaseTimeProvider;
 import com.simpleshop.history.enums.IntentionResult;
-import com.simpleshop.intention.enums.FailType;
+import com.simpleshop.history.enums.FailType;
 
 /**
  * 历史意向。买家用户名、电话、商品名是归档时的字符串快照，不保存队列序号。

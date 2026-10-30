@@ -211,4 +211,4 @@ validation/ 按域拆分(login/goods/category/intention),规则与后端一致:�
 | 商品内容不可改 | 阶段二契约:发布后名称/价格/描述/图片不可修改,仅库存与类别可调             |
 | 孤立媒体文件   | 上传成功但发布失败/放弃时产生,系统不做清理                                |
 | 描述编辑器     | 已实现并接入发布页;媒体行的拖拽排序等增强不做                             |
-| 部署配置       | Dockerfile/nginx.conf 仍是阶段一口径(/images 反代、无 /buyer),待 S6 与买家端、后端部署脚本一起收口,本轮不动 |
+| 部署配置       | 正式部署使用 `deploy/frontend` 组合镜像（同时托管买家 `/` 与卖家 `/seller/`）；本工程 Dockerfile/nginx.conf 仅用于卖家独立预览。 |

@@ -143,7 +143,7 @@ class SellerIntentionApiTest extends ApiTestBase {
     }
 
     private Intention submit(Goods goods, BuyerAccount buyer, long queueOrder) {
-        return intentions.saveAndFlush(Intention.submit(goods, buyer, queueOrder));
+        return intentions.saveAndFlush(Intention.submit(goods.getId(), buyer, queueOrder));
     }
 
     private String buyerToken() throws Exception {

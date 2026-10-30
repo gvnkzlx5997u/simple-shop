@@ -47,16 +47,16 @@ class IntentionDataTest extends DataLayerTestBase {
     void submitsIntentionAndFindsQueueHead() {
         Goods goods = createGoods(createCategory());
         BuyerAccount buyer = createBuyer();
-        Intention intention = intentions.saveAndFlush(Intention.submit(goods, buyer, 1));
+        Intention intention = intentions.saveAndFlush(Intention.submit(goods.getId(), buyer, 1));
 
         flushAndClear();
 
-        assertThat(intentions.findFirstByGoods_IdAndStatusOrderByQueueOrderAsc(
+        assertThat(intentions.findFirstByGoodsIdAndStatusOrderByQueueOrderAsc(
                 goods.getId(), IntentionStatus.QUEUED))
                 .get()
                 .extracting(Intention::getId)
                 .isEqualTo(intention.getId());
-        assertThat(intentions.countByGoods_IdAndStatusIn(
+        assertThat(intentions.countByGoodsIdAndStatusIn(
                 goods.getId(), List.of(IntentionStatus.QUEUED, IntentionStatus.TRADING)))
                 .isEqualTo(1);
     }
@@ -66,9 +66,9 @@ class IntentionDataTest extends DataLayerTestBase {
     void rejectsDuplicateQueueOrderForSameGoods() {
         Goods goods = createGoods(createCategory());
         BuyerAccount buyer = createBuyer();
-        intentions.saveAndFlush(Intention.submit(goods, buyer, 1));
+        intentions.saveAndFlush(Intention.submit(goods.getId(), buyer, 1));
 
-        assertThatThrownBy(() -> intentions.saveAndFlush(Intention.submit(goods, buyer, 1)))
+        assertThatThrownBy(() -> intentions.saveAndFlush(Intention.submit(goods.getId(), buyer, 1)))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
@@ -79,8 +79,8 @@ class IntentionDataTest extends DataLayerTestBase {
         Goods first = createGoods(createCategory());
         Goods second = createGoods(createCategory());
 
-        intentions.saveAndFlush(Intention.submit(first, buyer, 1));
-        intentions.saveAndFlush(Intention.submit(second, buyer, 1));
+        intentions.saveAndFlush(Intention.submit(first.getId(), buyer, 1));
+        intentions.saveAndFlush(Intention.submit(second.getId(), buyer, 1));
 
         assertThat(intentions.count()).isEqualTo(2);
     }
@@ -90,7 +90,7 @@ class IntentionDataTest extends DataLayerTestBase {
     void transitionsIntentionToTerminalState() {
         Goods goods = createGoods(createCategory());
         BuyerAccount buyer = createBuyer();
-        Intention intention = intentions.saveAndFlush(Intention.submit(goods, buyer, 1));
+        Intention intention = intentions.saveAndFlush(Intention.submit(goods.getId(), buyer, 1));
 
         intention.enterTrade();
         intentions.saveAndFlush(intention);
@@ -140,7 +140,7 @@ class IntentionDataTest extends DataLayerTestBase {
                 buyer.getPhone(),
                 now.minusMinutes(5),
                 IntentionResult.FAILED,
-                FailType.SOLD_OUT,
+                com.simpleshop.history.enums.FailType.SOLD_OUT,
                 now);
 
         intentionHistories.saveAndFlush(history);
@@ -151,7 +151,7 @@ class IntentionDataTest extends DataLayerTestBase {
         assertThat(loaded.getBuyerPhone()).isEqualTo(buyer.getPhone());
         assertThat(loaded.getGoodsName()).isEqualTo(goods.getName());
         assertThat(loaded.getResult()).isEqualTo(IntentionResult.FAILED);
-        assertThat(loaded.getFailType()).isEqualTo(FailType.SOLD_OUT);
+        assertThat(loaded.getFailType()).isEqualTo(com.simpleshop.history.enums.FailType.SOLD_OUT);
 
         Integer queueOrderColumns = jdbcTemplate.queryForObject(
                 "select count(*) from information_schema.columns "

@@ -21,7 +21,7 @@ import com.simpleshop.history.entity.GoodsHistory;
 import com.simpleshop.history.entity.IntentionHistory;
 import com.simpleshop.history.enums.IntentionResult;
 import com.simpleshop.intention.entity.Intention;
-import com.simpleshop.intention.enums.FailType;
+import com.simpleshop.history.enums.FailType;
 import com.simpleshop.testing.ApiTestBase;
 
 class SellerCustomerApiTest extends ApiTestBase {
@@ -88,7 +88,7 @@ class SellerCustomerApiTest extends ApiTestBase {
         BuyerAccount buyer = createBuyer();
         Goods activeGoods = createGoods(createCategory());
         Intention current = intentions.saveAndFlush(
-                Intention.submit(activeGoods, buyer, 1));
+                Intention.submit(activeGoods.getId(), buyer, 1));
         current.markSucceeded();
         intentions.saveAndFlush(current);
         GoodsHistory soldOut = goodsHistories.saveAndFlush(GoodsHistory.archive(
@@ -138,7 +138,7 @@ class SellerCustomerApiTest extends ApiTestBase {
         Goods goods = createGoods(createCategory());
         for (int order = 1; order <= 2; order++) {
             Intention intention = intentions.saveAndFlush(
-                    Intention.submit(goods, buyer, order));
+                    Intention.submit(goods.getId(), buyer, order));
             intention.markSucceeded();
             intentions.saveAndFlush(intention);
         }

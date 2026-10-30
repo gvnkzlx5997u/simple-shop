@@ -12,6 +12,8 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,12 +34,19 @@ import com.simpleshop.history.repository.GoodsHistoryRepository;
 import com.simpleshop.history.repository.IntentionHistoryRepository;
 import com.simpleshop.intention.repository.GoodsQueueSequenceRepository;
 import com.simpleshop.intention.repository.IntentionRepository;
+import com.simpleshop.inventory.entity.GoodsStock;
+import com.simpleshop.inventory.repository.GoodsStockRepository;
 
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Transactional
 public abstract class DataLayerTestBase {
+
+    @DynamicPropertySource
+    static void databaseProperties(DynamicPropertyRegistry registry) {
+        TestDatabase.register(registry);
+    }
 
     @Autowired protected SellerAccountRepository sellerAccounts;
     @Autowired protected BuyerAccountRepository buyerAccounts;
@@ -49,6 +58,7 @@ public abstract class DataLayerTestBase {
     @Autowired protected GoodsHistoryRepository goodsHistories;
     @Autowired protected GoodsQueueSequenceRepository queueSequences;
     @Autowired protected IntentionRepository intentions;
+    @Autowired protected GoodsStockRepository stockItems;
     @Autowired protected IntentionHistoryRepository intentionHistories;
     @Autowired protected EntityManager entityManager;
     @Autowired protected JdbcTemplate jdbcTemplate;
@@ -72,8 +82,17 @@ public abstract class DataLayerTestBase {
     }
 
     protected Goods createGoods(CategoryL2 category) {
-        Goods goods = Goods.publish(unique("商品-"), new BigDecimal("99.99"), 3, category);
-        return goodsRepository.saveAndFlush(goods);
+        Goods goods = goodsRepository.saveAndFlush(
+                Goods.publish(unique("商品-"), new BigDecimal("99.99"), category));
+        stockItems.saveAndFlush(GoodsStock.initialize(goods.getId(), 3));
+        return goods;
+    }
+
+    protected void setStock(Goods goods, int available) {
+        GoodsStock stock = stockItems.findById(goods.getId())
+                .orElseThrow(() -> new IllegalStateException("stock row missing"));
+        stock.setAvailable(available);
+        stockItems.saveAndFlush(stock);
     }
 
     protected void flushAndClear() {
