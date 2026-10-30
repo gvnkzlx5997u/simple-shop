@@ -1,124 +1,317 @@
 /**
- * 接口辅助 —— 用于「前置准备」与「绕过前端的负向调用」（验收方式 V-02）
+ * 阶段二接口封装。
  *
- * 说明：这里发的是真的 HTTP 请求，不是"点页面"。
- * 它有两个用途：
- *   ① 前置准备：确保测试库里有在售商品（否则买家端用例跑不动）
- *   ② 负向验证：规格书 §13.2.2 明确要求"必须包含绕过前端的直接调用"
+ * 两个用途（与阶段一思路一致，接口换成阶段二的）：
+ *   ① 前置造数：建类别、发商品、造意向——比点页面快且稳；
+ *   ② 负向验证：绕过前端直接调用，验证服务端拦截（交接文档 §2.3 INT-12/13）。
+ *
+ * 约定：响应外壳 {code, message, data}；业务错误多数是 HTTP 200 + 非 0 code，
+ * 参数错误是 HTTP 400 + 50002 + errors[]。这里统一抛 ApiError，调用方按需断言。
  */
 import { request, type APIRequestContext } from '@playwright/test';
+
 import { API_URL, SELLER_ACCOUNT, SELLER_PASSWORD } from './config';
 
-export async function newApi(): Promise<APIRequestContext> {
-  return request.newContext({
-    baseURL: API_URL,
-    extraHTTPHeaders: { 'Content-Type': 'application/json' },
-  });
+export interface Envelope<T> {
+  code: number;
+  message: string;
+  data: T;
+  errors?: Array<{ field: string; message: string }>;
 }
 
-/** I11-01 卖家登录 → token */
-export async function sellerLogin(ctx: APIRequestContext): Promise<string> {
-  const res = await ctx.post('/api/seller/session', {
-    data: { account: SELLER_ACCOUNT, password: SELLER_PASSWORD },
-  });
-  const body = await res.json();
-  if (body.code !== 0) throw new Error(`卖家登录失败: ${JSON.stringify(body)}`);
-  return body.data.token as string;
-}
-
-/** I11-04 查询当前商品 → 商品对象或 null */
-export async function currentProduct(ctx: APIRequestContext, token: string) {
-  const res = await ctx.get('/api/seller/product', {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  const body = await res.json();
-  // 无商品时约定 code=0 且 data 为 null（也可能是 20004，两种都当"没有"处理）
-  if (body.code !== 0) return null;
-  return body.data ?? null;
-}
-
-/** I11-06 发布商品 */
-export async function publishProduct(
-  ctx: APIRequestContext,
-  token: string,
-  data: { name: string; description?: string; price: string },
-) {
-  const res = await ctx.post('/api/seller/product', {
-    data,
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  return { status: res.status(), body: await res.json() };
-}
-
-/**
- * 确保测试库里有「在售」商品。
- * 测试库是空库 ⇒ 第一次跑会发布一件；已下架归档后再次跑也会重新发布。
- * 返回：{ product, published } —— published=true 表示本次是新发布的
- */
-export async function ensureOnSaleProduct(ctx: APIRequestContext) {
-  const token = await sellerLogin(ctx);
-  const cur = await currentProduct(ctx, token);
-
-  if (cur && cur.status === 'on_sale') {
-    return { token, product: cur, published: false };
+export class ApiError extends Error {
+  constructor(
+    readonly status: number,
+    readonly code: number,
+    message: string,
+    readonly errors: Array<{ field: string; message: string }> = [],
+  ) {
+    super(`HTTP ${status} / code ${code}: ${message}`);
+    this.name = 'ApiError';
   }
-  if (cur && cur.status === 'frozen') {
-    // 冻结态不自动处理（那会改变被测状态），交由用例自行决定
-    return { token, product: cur, published: false };
-  }
-
-  const stamp = new Date().toISOString().slice(0, 19).replace('T', ' ');
-  const { body } = await publishProduct(ctx, token, {
-    name: `E2E测试商品 ${stamp}`,
-    description: '由自动化验收测试创建，用于验证买家端与卖家端流程',
-    price: '199.00',
-  });
-  if (body.code !== 0) throw new Error(`发布商品失败: ${JSON.stringify(body)}`);
-
-  const after = await currentProduct(ctx, token);
-  return { token, product: after, published: true };
 }
 
-/** 通用：带 token 的请求（负向用例直接调用接口时用） */
-export async function apiPost(
+export interface CallOptions {
+  token?: string;
+  /** multipart 上传时传 FormData，此时不要带 json */
+  form?: FormData;
+}
+
+/** 发一次请求并返回 { status, body }；不抛业务错误，交给调用方断言。 */
+export async function call<T = unknown>(
   ctx: APIRequestContext,
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   path: string,
-  token: string | null,
-  data?: unknown,
-) {
-  const res = await ctx.post(path, {
-    data: data ?? {},
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  json?: unknown,
+  options: CallOptions = {},
+): Promise<{ status: number; body: Envelope<T> }> {
+  const headers: Record<string, string> = {};
+  if (options.token) headers.Authorization = `Bearer ${options.token}`;
+
+  const res = await ctx.fetch(path, {
+    method,
+    headers,
+    data: options.form ?? (json === undefined ? undefined : JSON.stringify(json)),
+    ...(options.form
+      ? {}
+      : { headers: { ...headers, 'Content-Type': 'application/json' } }),
   });
-  let body: any = null;
+
+  const text = await res.text();
+  let body: Envelope<T>;
   try {
-    body = await res.json();
+    body = JSON.parse(text) as Envelope<T>;
   } catch {
-    /* 非 JSON 响应 */
+    throw new Error(`${method} ${path} 返回非 JSON：HTTP ${res.status()} ${text.slice(0, 200)}`);
   }
   return { status: res.status(), body };
 }
 
-/**
- * 买家端提交意向（页面端点 POST /intent，表单编码）→ 从返回 HTML 里取口令码。
- * 用途：卖家端剧本的「造数据」前置。注意 Content-Type 必须是表单编码，不能带 JSON 头。
- */
-export async function apiSubmitIntention(name: string, tel: string): Promise<string> {
-  const html = await apiPostForm('/intent', { name, tel });
-  const m = html.match(/id="tokenCode"[^>]*>\s*([A-Z0-9]{12})\s*</);
-  if (!m) {
-    throw new Error(`提交意向失败：未能从成功页取到口令码。响应片段：\n${html.slice(0, 500)}`);
-  }
-  return m[1];
+/** 发请求并要求 code === 0，否则抛 ApiError。 */
+export async function ok<T = unknown>(
+  ctx: APIRequestContext,
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+  path: string,
+  json?: unknown,
+  options: CallOptions = {},
+): Promise<T> {
+  const { status, body } = await call<T>(ctx, method, path, json, options);
+  if (body.code !== 0) throw new ApiError(status, body.code, body.message, body.errors);
+  return body.data;
 }
 
-/** 以【表单编码】提交并取回响应文本（买家端端点是表单，不能用 JSON 头） */
-export async function apiPostForm(path: string, form: Record<string, string>): Promise<string> {
-  const ctx = await request.newContext({ baseURL: API_URL });
-  try {
-    const res = await ctx.post(path, { form });
-    return await res.text();
-  } finally {
-    await ctx.dispose();
-  }
+export async function newApi(): Promise<APIRequestContext> {
+  return request.newContext({ baseURL: API_URL, timeout: 20_000 });
+}
+
+// ---------- 账号 ----------
+
+export async function sellerLogin(ctx: APIRequestContext): Promise<string> {
+  const data = await ok<{ token: string }>(ctx, 'POST', '/api/seller/auth/session', {
+    account: SELLER_ACCOUNT,
+    password: SELLER_PASSWORD,
+  });
+  return data.token;
+}
+
+export interface BuyerInput {
+  username: string;
+  password: string;
+  phone: string;
+  default_location?: string;
+}
+
+export async function buyerRegister(ctx: APIRequestContext, input: BuyerInput) {
+  return ok<{ id: string; username: string }>(ctx, 'POST', '/api/buyer/auth/register', input);
+}
+
+export async function buyerLogin(ctx: APIRequestContext, username: string, password: string) {
+  const data = await ok<{ token: string }>(ctx, 'POST', '/api/buyer/auth/session', {
+    username,
+    password,
+  });
+  return data.token;
+}
+
+/** 注册并登录，返回 token（E2E 造买家账号的常用组合）。 */
+export async function newBuyer(ctx: APIRequestContext, input: BuyerInput): Promise<string> {
+  await buyerRegister(ctx, input);
+  return buyerLogin(ctx, input.username, input.password);
+}
+
+// ---------- 类别 ----------
+
+export async function createL1(ctx: APIRequestContext, token: string, name: string) {
+  return ok<{ id: string; name: string }>(ctx, 'POST', '/api/seller/categories/l1', { name }, { token });
+}
+
+export async function createL2(ctx: APIRequestContext, token: string, l1Id: string, name: string) {
+  return ok<{ id: string; name: string }>(
+    ctx,
+    'POST',
+    '/api/seller/categories/l2',
+    { l1_id: l1Id, name },
+    { token },
+  );
+}
+
+export async function categoryTree(ctx: APIRequestContext) {
+  return ok<Array<{ id: string; name: string; children: Array<{ id: string; name: string }> }>>(
+    ctx,
+    'GET',
+    '/api/public/categories',
+  );
+}
+
+// ---------- 商品 ----------
+
+export interface PublishInput {
+  name: string;
+  price: string | number;
+  stock: number;
+  category_id: string;
+  description?: Array<{ type: 'TEXT' | 'IMAGE' | 'VIDEO'; text?: string; url?: string }>;
+  main_image?: string;
+  gallery_images?: string[];
+}
+
+export async function publishGoods(ctx: APIRequestContext, token: string, input: PublishInput) {
+  return ok<{ id: string; name: string; status: string; stock: number }>(
+    ctx,
+    'POST',
+    '/api/seller/goods',
+    input,
+    { token },
+  );
+}
+
+export async function getSellerGoods(ctx: APIRequestContext, token: string, id: string) {
+  return ok<{ id: string; name: string; status: string; stock: number }>(
+    ctx,
+    'GET',
+    `/api/seller/goods/${id}`,
+    undefined,
+    { token },
+  );
+}
+
+export async function updateStock(ctx: APIRequestContext, token: string, id: string, stock: number) {
+  return ok(ctx, 'PUT', `/api/seller/goods/${id}/stock`, { stock }, { token });
+}
+
+export async function offShelf(ctx: APIRequestContext, token: string, id: string) {
+  return ok(ctx, 'POST', `/api/seller/goods/${id}/off-shelf`, {}, { token });
+}
+
+export async function reList(ctx: APIRequestContext, token: string, id: string, confirm = true) {
+  return ok(ctx, 'POST', `/api/seller/goods/${id}/re-list`, { confirm }, { token });
+}
+
+/** 买家侧公共列表（匿名可访问） */
+export async function publicGoods(
+  ctx: APIRequestContext,
+  query: Record<string, string | number> = {},
+) {
+  const search = new URLSearchParams(
+    Object.entries(query).map(([k, v]) => [k, String(v)]),
+  ).toString();
+  return ok<{
+    items: Array<{ id: string; name: string; price: string; stock: number }>;
+    page: number;
+    page_size: number;
+    total: number;
+  }>(ctx, 'GET', `/api/public/goods${search ? `?${search}` : ''}`);
+}
+
+// ---------- 意向与交易 ----------
+
+export async function submitIntention(ctx: APIRequestContext, buyerToken: string, goodsId: string) {
+  return ok(ctx, 'POST', '/api/buyer/intentions', { goods_id: goodsId }, { token: buyerToken });
+}
+
+export interface IntentionEntry {
+  id: string;
+  buyer_name?: string;
+  status: 'QUEUED' | 'TRADING' | 'SUCCEEDED' | 'FAILED';
+  queue_order: number;
+  create_at: string;
+}
+
+export async function listIntentions(
+  ctx: APIRequestContext,
+  sellerToken: string,
+  goodsId: string,
+) {
+  return ok<{ items: IntentionEntry[] }>(
+    ctx,
+    'GET',
+    `/api/seller/goods/${goodsId}/intentions`,
+    undefined,
+    { token: sellerToken },
+  );
+}
+
+export async function enterTrade(ctx: APIRequestContext, sellerToken: string, intentionId: string) {
+  return ok(ctx, 'POST', `/api/seller/intentions/${intentionId}/trade`, {}, { token: sellerToken });
+}
+
+export async function markSuccess(ctx: APIRequestContext, sellerToken: string, intentionId: string) {
+  return ok<{ goods_status: 'ON_SALE' | 'ARCHIVED' }>(
+    ctx,
+    'POST',
+    `/api/seller/intentions/${intentionId}/success`,
+    {},
+    { token: sellerToken },
+  );
+}
+
+export async function markFailure(
+  ctx: APIRequestContext,
+  sellerToken: string,
+  intentionId: string,
+  disposal: 'VOIDED' | 'REQUEUED',
+) {
+  return ok<{ goods_status: 'ON_SALE' | 'ARCHIVED' }>(
+    ctx,
+    'POST',
+    `/api/seller/intentions/${intentionId}/failure`,
+    { disposal },
+    { token: sellerToken },
+  );
+}
+
+// ---------- 历史与客户 ----------
+
+export async function buyerHistory(ctx: APIRequestContext, buyerToken: string) {
+  return ok<{ items: Array<Record<string, unknown>>; total: number }>(
+    ctx,
+    'GET',
+    '/api/buyer/history?page=1&page_size=50',
+    undefined,
+    { token: buyerToken },
+  );
+}
+
+export async function sellerHistory(ctx: APIRequestContext, token: string) {
+  return ok<{ items: Array<Record<string, unknown>>; total: number }>(
+    ctx,
+    'GET',
+    '/api/seller/history/goods?page=1&page_size=50',
+    undefined,
+    { token },
+  );
+}
+
+export async function sellerHistoryDetail(ctx: APIRequestContext, token: string, goodsId: string) {
+  return ok<Record<string, unknown>>(ctx, 'GET', `/api/seller/history/goods/${goodsId}`, undefined, {
+    token,
+  });
+}
+
+export async function customers(ctx: APIRequestContext, token: string) {
+  return ok<{ items: Array<Record<string, unknown>>; total: number }>(
+    ctx,
+    'GET',
+    '/api/seller/customers?page=1&page_size=50',
+    undefined,
+    { token },
+  );
+}
+
+export async function customerDetail(ctx: APIRequestContext, token: string, id: string) {
+  return ok<Record<string, unknown>>(ctx, 'GET', `/api/seller/customers/${id}`, undefined, { token });
+}
+
+// ---------- 改密 ----------
+
+export async function changePassword(
+  ctx: APIRequestContext,
+  token: string,
+  oldPassword: string,
+  newPassword: string,
+) {
+  return ok(ctx, 'PUT', '/api/seller/auth/password', {
+    old_password: oldPassword,
+    new_password: newPassword,
+  }, { token });
 }

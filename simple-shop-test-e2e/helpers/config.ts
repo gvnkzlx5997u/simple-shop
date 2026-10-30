@@ -1,34 +1,32 @@
 /**
- * 全局配置 —— 两个地址 + 卖家账号
- * 想改地址/账号，只改这里（或设同名环境变量），不用动用例。
+ * 全局配置：三个地址 + 卖家账号。
+ *
+ * 为什么全走环境变量：
+ *  - 本地开发是「后端 8080 + 买家 5174 + 卖家 5173」三个地址；
+ *  - 将来用 deploy/ 的 Compose 跑时，是 nginx 一个入口（买家 `/`、卖家 `/seller/`）；
+ *  - 两种形态只改环境变量，不改用例。
  */
 
-/** 买家端（后端直出 JSP） */
-export const BUYER_URL = process.env.BUYER_URL || 'http://localhost:8080';
+/** 后端 REST 地址（浏览器请求经 Vite 代理到同一个后端） */
+export const API_URL = process.env.API_URL || 'http://localhost:8080';
 
-/** 卖家端（vite dev server）
- *  ⚠️ 必须写 localhost：dev server 只监听 IPv6 [::1]，写 127.0.0.1 连不上 */
+/** 买家 SPA。⚠️ 用 localhost，不要写 127.0.0.1（Vite dev 只监听 [::1]） */
+export const BUYER_URL = process.env.BUYER_URL || 'http://localhost:5174';
+
+/** 卖家 SPA。生产挂在 /seller/，本地开发是根路径 */
 export const SELLER_URL = process.env.SELLER_URL || 'http://localhost:5173';
 
-/** 卖家端 REST 接口在与买家端同一个后端（/api/seller/**） */
-export const API_URL = process.env.API_URL || BUYER_URL;
-
-/** 卖家账号（种子数据；口令只存在于本地，不进版本库） */
+/** 种子卖家账号（V2 迁移写入） */
 export const SELLER_ACCOUNT = process.env.SELLER_ACCOUNT || 'seller';
-/**
- * 卖家口令。**不写默认值**——避免真实口令进版本库（DEC-DB-12③）。
- * 由启动脚本（local-config.bat，已 git-ignore）注入；
- * 若直接跑 npx playwright test，需自行 set SELLER_PASSWORD。
- */
-export const SELLER_PASSWORD =
-  process.env.SELLER_PASSWORD ||
-  (() => {
-    throw new Error(
-      '[E2E] 环境变量 SELLER_PASSWORD 未设置。\n' +
-      '      请通过 2-跑验收测试.bat 启动（它读 local-config.bat），\n' +
-      '      或先复制 local-config.example.bat 为 local-config.bat 并填好口令。'
-    );
-  })();
 
-/** 口令码格式（C-16） */
-export const TOKEN_RE = /^[A-Z0-9]{12}$/;
+/**
+ * 种子卖家口令。
+ *
+ * 这是 `V2__seed_initial_data.sql` 写入的公开种子口令，已在
+ * `simple-shop-doc/阶段二/阶段二剩余事项交接.md` 明文写出，不属于机密。
+ * 指向其他环境时用环境变量覆盖；**真实口令不要写进本文件**。
+ */
+export const SELLER_PASSWORD = process.env.SELLER_PASSWORD || 'Abcd@1234';
+
+/** 本次运行的数据后缀：所有账号/商品都带它，避免历史残留互相干扰 */
+export const RUN_ID = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
