@@ -2,6 +2,7 @@ import { expect, test, type APIRequestContext } from '@playwright/test';
 
 import {
   call,
+  categoryTree,
   createL1,
   createL2,
   getSellerGoods,
@@ -176,5 +177,55 @@ test.describe('03 卖家商品与库存', () => {
       token: sellerToken,
     });
     expect(result.body.code).not.toBe(0);
+  });
+  test('T03-08 商品列表按状态筛选「已售罄」只出该类商品', async ({ page }) => {
+    const saleName = uniqueName('筛在售');
+    const zeroName = uniqueName('筛售罄');
+    await publishGoods(ctx, sellerToken, goodsFixture(saleName, l2Id, { stock: 3 }));
+    const zero = await publishGoods(ctx, sellerToken, goodsFixture(zeroName, l2Id, { stock: 3 }));
+    await updateStock(ctx, sellerToken, zero.id, 0);
+
+    await sellerLoginUi(page);
+    await page.goto(`${SELLER_URL}/`);
+    await page.getByLabel('状态筛选').selectOption({ label: '已售罄' });
+    await page.getByRole('button', { name: '搜索' }).click();
+
+    await expect(goodsCard(page, zeroName)).toHaveCount(1);
+    await expect(goodsCard(page, saleName)).toHaveCount(0);
+  });
+
+  test('T03-09 类别可改名，空类别可删除', async () => {
+    const tag = uniqueName('类改');
+    const l1 = await createL1(ctx, sellerToken, `改名一级-${tag}`);
+    const l2 = await createL2(ctx, sellerToken, l1.id, `改名二级-${tag}`);
+
+    const renamed = await call(ctx, 'PUT', `/api/seller/categories/l2/${l2.id}`, {
+      name: `已改名-${tag}`,
+    }, { token: sellerToken });
+    expect(renamed.body.code).toBe(0);
+
+    const tree = await categoryTree(ctx);
+    const found = tree.find((node) => node.id === l1.id);
+    expect(found?.children.map((child) => child.name)).toContain(`已改名-${tag}`);
+
+    const removed = await call(ctx, 'DELETE', `/api/seller/categories/l2/${l2.id}`, undefined, {
+      token: sellerToken,
+    });
+    expect(removed.body.code).toBe(0);
+  });
+  test('T03-10 重新上架必须显式 confirm（缺省 → 20028）', async () => {
+    const name = uniqueName('确认上架');
+    const goods = await publishGoods(ctx, sellerToken, goodsFixture(name, l2Id, { stock: 2 }));
+    await offShelf(ctx, sellerToken, goods.id);
+
+    const result = await call(ctx, 'POST', `/api/seller/goods/${goods.id}/re-list`, {}, {
+      token: sellerToken,
+    });
+    expect(result.body.code).toBe(20028);
+
+    // 补上 confirm 才成功
+    await reList(ctx, sellerToken, goods.id, true);
+    const after = await getSellerGoods(ctx, sellerToken, goods.id);
+    expect(after.status).toBe('ON_SALE');
   });
 });

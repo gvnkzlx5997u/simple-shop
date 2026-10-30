@@ -133,4 +133,75 @@ test.describe('05 契约与参数校验', () => {
     expect(result.body.data.page_size).toBe(10);
     expect(result.body.data.page).toBe(1);
   });
+  test('T05-11 媒体超限：>5MB 商品图被拒（20016）', async () => {
+    // 造一个 6MB 的伪 PNG（只测大小校验，不关心内容是否真能解析）
+    const size = 6 * 1024 * 1024;
+    const buffer = Buffer.alloc(size, 0);
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(buffer, 0);
+
+    const res = await ctx.post('/api/seller/media', {
+      headers: { Authorization: `Bearer ${sellerToken}` },
+      multipart: {
+        purpose: 'GOODS_IMAGE',
+        file: { name: 'too-large.png', mimeType: 'image/png', buffer },
+      },
+    });
+    const body = (await res.json()) as { code: number; message: string };
+    expect(body.code, `期望 20016，实际 ${body.code} ${body.message}`).toBe(20016);
+  });
+  /** 合成一个"看起来是 MP4"的缓冲：偏移 4 起 ftyp，偏移 8 起 isom 品牌 */
+  function fakeMp4(bytes: number): Buffer {
+    const buffer = Buffer.alloc(bytes, 0);
+    buffer.write('ftyp', 4, 'ascii');
+    buffer.write('isom', 8, 'ascii');
+    return buffer;
+  }
+
+  async function uploadMedia(buffer: Buffer, name: string, mimeType: string, purpose: string) {
+    const res = await ctx.post('/api/seller/media', {
+      headers: { Authorization: `Bearer ${sellerToken}` },
+      multipart: { purpose, file: { name, mimeType, buffer } },
+    });
+    const body = (await res.json()) as { code: number; message: string; data?: { url?: string } };
+    return { status: res.status(), body };
+  }
+
+  test('T05-12 视频正好 20MB → 允许上传（边界）', async () => {
+    const limit = 20 * 1024 * 1024;
+    const result = await uploadMedia(fakeMp4(limit), 'edge.mp4', 'video/mp4', 'DESCRIPTION_MEDIA');
+    expect(result.body.code, `期望成功，实际 ${result.body.code} ${result.body.message}`).toBe(0);
+    expect(result.body.data?.url ?? '').toMatch(/\.mp4$/);
+  });
+
+  test('T05-13 视频超过 20MB → 拒绝（实际是 20026，不是 20025）', async () => {
+    const result = await uploadMedia(
+      fakeMp4(21 * 1024 * 1024),
+      'too-big.mp4',
+      'video/mp4',
+      'DESCRIPTION_MEDIA',
+    );
+    // 口径差异：ErrorCode.VIDEO_INVALID(20025) 实际不可达 ——
+    // multipart 上限与业务上限同为 20MB，超限在容器层就被拦成 MEDIA_INVALID(20026)。
+    expect(result.body.code).toBe(20026);
+  });
+
+  test('T05-14 视频用于商品图用途 → 类型不允许（20027）', async () => {
+    const result = await uploadMedia(
+      fakeMp4(512 * 1024),
+      'not-image.mp4',
+      'video/mp4',
+      'GOODS_IMAGE',
+    );
+    expect(result.body.code).toBe(20027);
+  });
+
+  test('T05-15 文本文件当商品图 → 内容非法（20016）', async () => {
+    const result = await uploadMedia(
+      Buffer.from('this is definitely not an image', 'utf-8'),
+      'fake.png',
+      'image/png',
+      'GOODS_IMAGE',
+    );
+    expect(result.body.code).toBe(20016);
+  });
 });
