@@ -47,7 +47,7 @@ class BuyerIntentionApiTest extends ApiTestBase {
                 intentions.findById(body.path("data").path("id").asText()).orElseThrow();
         assertThat(intention.getStatus()).isEqualTo(IntentionStatus.QUEUED);
         assertThat(intention.getQueueOrder()).isEqualTo(1);
-        assertThat(intention.getGoods().getId()).isEqualTo(goods.getId());
+        assertThat(intention.getGoodsId()).isEqualTo(goods.getId());
         assertThat(intention.getBuyer().getUsername()).isEqualTo(buyer);
     }
 
@@ -71,7 +71,7 @@ class BuyerIntentionApiTest extends ApiTestBase {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(0));
 
-        List<Intention> queued = intentions.findByGoods_IdAndStatusOrderByQueueOrderAsc(
+        List<Intention> queued = intentions.findByGoodsIdAndStatusOrderByQueueOrderAsc(
                 goods.getId(), IntentionStatus.QUEUED);
         assertThat(queued).hasSize(2);
         assertThat(queued.get(0).getQueueOrder()).isEqualTo(1);
@@ -108,7 +108,7 @@ class BuyerIntentionApiTest extends ApiTestBase {
     }
 
     @Test
-    @DisplayName("商品不存在或 ID 为空返回 404")
+    @DisplayName("商品不存在返回 404，ID 为空返回字段级参数错误")
     void rejectsUnknownOrBlankGoods() throws Exception {
         String token = loginBuyer(registerBuyerAndLogin(), BUYER_PASSWORD);
 
@@ -124,7 +124,7 @@ class BuyerIntentionApiTest extends ApiTestBase {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(Map.of("goods_id", " "))))
                 .andReturn();
-        assertApiStatusAndCode(blank, 404, 20011);
+        assertApiFieldError(blank, "goods_id");
     }
 
     @Test

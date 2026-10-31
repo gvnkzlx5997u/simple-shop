@@ -1,19 +1,17 @@
 # =============================================================================
-# simple-shop 单机容器化部署（Docker Compose）使用云端镜像
-# 依据：安装与部署手册 v1.0（2026-10-13）
-#   方案乙：买家端在 /（后端 JSP），卖家 SPA 在 /seller/（nginx 静态）
-#   D-3：只有 nginx 暴露宿主端口 80；backend 与 mysql 不映射任何宿主端口
-#   D-4：MySQL 容器只建库，建表与种子数据由后端启动时的 Flyway 完成
-#   D-5：应用用最小权限账号 simpleshop；口令全部来自 deploy-cloud/.env（不提交）
-# 用法：cd deploy-cloud && cp .env.example .env && 填口令 && docker compose pull && docker compose up -d
+# simple-shop 阶段二单机容器化部署（Docker Compose，云端镜像）
+#   · 买家 SPA 在 /，卖家 SPA 在 /seller/，后端只提供 REST 与 /media
+#   · 镜像需由构建方用 deploy/ 的同源 Dockerfile 构建并推送；
+#     阶段一的 frontend 镜像只含卖家端，不能用于本编排
+#   · 只有 nginx 暴露宿主端口 80；backend 与 mysql 不映射宿主端口
+#
+# 用法：cd deploy-cloud && cp .env.example .env && 填口令
+#       docker compose pull && docker compose up -d
 # =============================================================================
 name: simple-shop
 
 services:
 
-  # ---------------------------------------------------------------------------
-  # MySQL 8（独立容器，数据落命名卷）
-  # ---------------------------------------------------------------------------
   mysql:
     image: mysql:8.0
     command:
@@ -27,7 +25,6 @@ services:
       TZ: UTC
     volumes:
       - mysql-data:/var/lib/mysql
-      # 只在数据目录为空（首次初始化）时执行
       - ./mysql/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
@@ -41,24 +38,16 @@ services:
       options: { max-size: "10m", max-file: "3" }
     networks: [shop-net]
 
-  # ---------------------------------------------------------------------------
-  # 后端（可执行 war + JRE21；同时提供卖家 REST 与买家 JSP）
-  # ---------------------------------------------------------------------------
   backend:
-    image: lrhg173c/simple-shop:backend
+    image: ${BACKEND_IMAGE:-lrhg173c/simple-shop:backend}
     environment:
-      # 保留 connectionTimeZone=UTC 与 characterEncoding=UTF-8；建库交给 mysql 初始化脚本
       DB_URL: "jdbc:mysql://mysql:3306/simple_shop?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&connectionTimeZone=UTC&rewriteBatchedStatements=true"
       DB_USERNAME: ${DB_USERNAME:-simpleshop}
-      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in deploy/.env}
-      IMAGE_DIR: /app/data/images
+      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in deploy-cloud/.env}
+      MEDIA_DIR: /app/data/images
       TZ: UTC
-      # 审计日志目录：Dockerfile 里以 -DAUDIT_LOG_PATH 系统属性注入 JVM
-      AUDIT_LOG_PATH: /var/log/simple-shop
     volumes:
-      # ⚠️ 商品图片必须持久化：归档不搬迁图片文件（DEC-09）
       - backend-images:/app/data/images
-      # 审计日志保留 3 个月（C-18 / 12-P7）
       - backend-logs:/var/log/simple-shop
     depends_on:
       mysql:
@@ -69,16 +58,19 @@ services:
       options: { max-size: "10m", max-file: "3" }
     networks: [shop-net]
 
-  # ---------------------------------------------------------------------------
-  # 前端 + 反向代理（nginx：/seller/ 静态 SPA，其余代理到后端）
-  # ---------------------------------------------------------------------------
   frontend:
-    image: lrhg173c/simple-shop:frontend
+    image: ${FRONTEND_IMAGE:-lrhg173c/simple-shop:frontend}
     ports:
       - "80:80"
     depends_on:
       backend:
         condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     restart: unless-stopped
     logging:
       driver: json-file

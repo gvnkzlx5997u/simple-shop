@@ -2,6 +2,7 @@ package com.simpleshop.account.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import com.simpleshop.account.api.CustomerPurchaseEntryData;
 import com.simpleshop.common.api.PageResponse;
 
 /**

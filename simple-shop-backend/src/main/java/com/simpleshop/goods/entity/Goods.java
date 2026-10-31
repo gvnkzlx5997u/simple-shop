@@ -40,9 +40,6 @@ public class Goods {
     @Column(nullable = false, precision = 8, scale = 2)
     private BigDecimal price;
 
-    @Column(nullable = false)
-    private int stock;
-
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "fk_category_id", nullable = false)
     private CategoryL2 category;
@@ -62,25 +59,14 @@ public class Goods {
     protected Goods() {
     }
 
-    public static Goods publish(String name, BigDecimal price, int stock, CategoryL2 category) {
-        if (stock < 1) {
-            throw new IllegalArgumentException("published goods stock must be at least 1");
-        }
+    public static Goods publish(String name, BigDecimal price, CategoryL2 category) {
         Goods value = new Goods();
         value.id = Ids.next("G");
         value.name = name;
         value.price = price;
-        value.stock = stock;
         value.category = category;
         value.status = GoodsStatus.ON_SALE;
         return value;
-    }
-
-    public void changeStock(int stock) {
-        if (stock < 0) {
-            throw new IllegalArgumentException("stock must not be negative");
-        }
-        this.stock = stock;
     }
 
     public void changeStatus(GoodsStatus status) {
@@ -121,10 +107,6 @@ public class Goods {
 
     public BigDecimal getPrice() {
         return price;
-    }
-
-    public int getStock() {
-        return stock;
     }
 
     public CategoryL2 getCategory() {

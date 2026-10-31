@@ -21,7 +21,6 @@ import org.hibernate.type.SqlTypes;
 import com.simpleshop.account.entity.BuyerAccount;
 import com.simpleshop.common.id.Ids;
 import com.simpleshop.common.time.DatabaseTimeProvider;
-import com.simpleshop.goods.entity.Goods;
 import com.simpleshop.intention.enums.FailType;
 import com.simpleshop.intention.enums.IntentionStatus;
 
@@ -39,9 +38,8 @@ public class Intention {
     @Column(length = 50)
     private String id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "fk_goods_id", nullable = false)
-    private Goods goods;
+    @Column(name = "fk_goods_id", nullable = false, length = 50)
+    private String goodsId;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "fk_buyer_id", nullable = false)
@@ -69,13 +67,13 @@ public class Intention {
     protected Intention() {
     }
 
-    public static Intention submit(Goods goods, BuyerAccount buyer, long queueOrder) {
+    public static Intention submit(String goodsId, BuyerAccount buyer, long queueOrder) {
         if (queueOrder < 1) {
             throw new IllegalArgumentException("queue_order must be at least 1");
         }
         Intention value = new Intention();
         value.id = Ids.next("I");
-        value.goods = goods;
+        value.goodsId = goodsId;
         value.buyer = buyer;
         value.queueOrder = queueOrder;
         value.createAt = DatabaseTimeProvider.utcNow();
@@ -122,8 +120,8 @@ public class Intention {
         return id;
     }
 
-    public Goods getGoods() {
-        return goods;
+    public String getGoodsId() {
+        return goodsId;
     }
 
     public BuyerAccount getBuyer() {

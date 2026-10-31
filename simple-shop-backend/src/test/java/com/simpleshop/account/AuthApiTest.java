@@ -41,10 +41,12 @@ class AuthApiTest extends ApiTestBase {
     @Test
     @DisplayName("买家注册校验用户名、密码、电话、默认地点与用户名唯一")
     void buyerRegistrationValidatesFields() throws Exception {
-        assertApiCode(registerBuyer(unique("buyer-"), "short", "13800000000", null), 10004);
+        assertApiFieldError(registerBuyer(unique("buyer-"), "short", "13800000000", null), "password");
         assertApiCode(registerBuyer(unique("buyer-"), BUYER_PASSWORD, "12345", null), 10007);
-        assertApiCode(registerBuyer("", BUYER_PASSWORD, "13800000000", null), 10006);
-        assertApiCode(registerBuyer(unique("buyer-"), BUYER_PASSWORD, "13800000000", "a".repeat(51)), 10008);
+        assertApiFieldError(registerBuyer("", BUYER_PASSWORD, "13800000000", null), "username");
+        assertApiFieldError(
+                registerBuyer(unique("buyer-"), BUYER_PASSWORD, "13800000000", "a".repeat(51)),
+                "default_location");
 
         String username = unique("buyer-");
         assertApiCode(registerBuyer(username, BUYER_PASSWORD, "13800000000", null), 0);
@@ -86,6 +88,7 @@ class AuthApiTest extends ApiTestBase {
 
         MvcResult changed = changePassword(token, "Abcd@1234", "NewPass@1234");
         assertApiCode(changed, 0);
+        runAfterCommit();
 
         MvcResult oldToken = changePassword(token, "NewPass@1234", "Another@1234");
         assertApiStatusAndCode(oldToken, 401, 10002);
@@ -116,13 +119,13 @@ class AuthApiTest extends ApiTestBase {
     }
 
     @Test
-    @DisplayName("卖家改密时新密码过短返回 10004")
+    @DisplayName("卖家改密时新密码过短返回字段级参数错误")
     void sellerChangePasswordRejectsShortNewPassword() throws Exception {
         String token = loginSeller("Abcd@1234");
 
         MvcResult result = changePassword(token, "Abcd@1234", "short");
 
-        assertApiCode(result, 10004);
+        assertApiFieldError(result, "new_password");
     }
 
     @Test

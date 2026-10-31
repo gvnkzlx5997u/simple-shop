@@ -34,6 +34,7 @@ src/main/java/com/simpleshop/
   account/     账号 entity、repository、service、controller、dto、support
   category/    一级/二级类别 entity、repository、service、controller、dto
   goods/       商品、图片、描述块 entity、repository、enums、support、service、controller、dto
+  inventory/   商品库存 entity、repository、service（独立聚合，商品只存展示属性）
   intention/   意向、队列序号 entity、repository、enums、队列端口、service、controller、dto
   history/     历史商品、历史意向 entity、repository、enums、service（归档写入与卖家历史查询）
 src/main/resources/
@@ -45,6 +46,8 @@ db/legacy/     阶段一脚本与数据库备份（不参与运行）
 scripts/       注释编号门禁
 ```
 
+功能包内 `service/` 放接口、`service/impl/` 放实现；跨功能只允许依赖对方的 `api/` 端口，Controller 与测试注入接口。
+
 `account`、`category`、`goods`、`intention`、`history` 五个功能包已建立 entity、repository、enums；S2 已补 `account` 的 service/controller/dto/support 与 `goods` 的媒体上传；S3 已补 `category` 的完整两级类别能力，以及 `goods` 的发布、查询、库存、上下架与改挂；S4 已补 `intention` 的提交/队列/裁决/买家历史与 `history` 的归档写入。controller 下按 seller/buyer 区分，公共查询放在 `controller/publicapi`。
 
 ## 构建与运行
@@ -52,15 +55,25 @@ scripts/       注释编号门禁
 在 `simple-shop-backend/` 目录执行：
 
 ```bash
-mvn clean compile      # 仅编译，不需要数据库
-mvn test               # 数据层 + API 测试，需要 MySQL；默认使用 simple_shop_test
-mvn clean verify       # 编译 + 全部测试
-mvn spring-boot:run    # 启动，需要 MySQL；默认使用 simple_shop
+mvn clean compile              # 仅编译，不需要数据库或 Docker
+mvn test                       # 默认用 Testcontainers 启动一次性 MySQL；需要 Docker
+mvn -Plocal-mysql test         # 改用本机 simple_shop_test；不需要 Docker
+mvn clean verify               # 默认同上，含迁移测试与 ArchUnit
+mvn -Plocal-mysql clean verify # 本机 MySQL 兜底路径
+mvn spring-boot:run            # 启动，需要 MySQL；默认使用 simple_shop
 ```
 
-应用启动时由 Flyway 自动执行 `V1__baseline_schema.sql` 与 `V2__seed_initial_data.sql`，随后由 `ddl-auto=validate` 校验实体与表结构。
+- 默认测试镜像为 `mysql:8.0`，与部署使用的 MySQL 8.0 保持同一 tag；容器只存在于测试 JVM。
+  首次运行需要拉取 `mysql:8.0` 与 `testcontainers/ryuk`，之后走本机 Docker 镜像缓存。
+- `-Plocal-mysql` 使用 `TEST_DB_URL`（默认 `jdbc:mysql://localhost:3306/simple_shop_test`）；
+  迁移测试会在本机创建随机命名临时库并删除；账号取 `TEST_DB_USERNAME`/`TEST_DB_PASSWORD`，
+  缺省回退 `DB_USERNAME`/`DB_PASSWORD`（root/123456）。
+- Testcontainers/JUnit/ArchUnit 都是 `test` scope，不会进入 `target/simple-shop.war`，生产部署无需 Docker。
+- 应用启动时由 Flyway 自动执行 `V1__baseline_schema.sql` 与 `V2__seed_initial_data.sql`，随后由 `ddl-auto=validate` 校验实体与表结构。
 
 构建产物为 `target/simple-shop.war`，可用 `java -jar` 启动。
+容器部署由仓库根目录的 [`deploy/docker-compose.yml`](../deploy/docker-compose.yml) 编排；
+本工程 [`Dockerfile`](./Dockerfile) 负责构建只含 REST 与 `/media` 的后端镜像。
 
 ## 配置
 
@@ -161,7 +174,7 @@ Spring 的 multipart 上限已调到 20MB/25MB，图片的 5MB 由 Service 按�
 ## 数据库
 
 - 阶段二使用全新基线，不迁移阶段一数据；阶段一旧库与旧测试库已删除，备份在 `db/legacy/backup.sql`、`db/legacy/test_db_backup.sql`。
-- 活动迁移脚本是 `src/main/resources/db/migration/V1__baseline_schema.sql`（11 张表）与 `V2__seed_initial_data.sql`（卖家种子账号）。
+- 活动迁移脚本是 `src/main/resources/db/migration/V1__baseline_schema.sql`（12 张表）与 `V2__seed_initial_data.sql`（卖家种子账号）。
 - `db/draft/` 保留设计草案供对照，不参与运行；`db/legacy/` 的旧脚本不会被 Flyway 加载。
 - 种子卖家：账号 `seller`，初始口令 `Abcd@1234`，首次登录后请修改。
 - 测试库默认 `simple_shop_test`，可通过 `TEST_DB_URL` 覆盖；测试会自动建库并跑 Flyway。
@@ -172,13 +185,15 @@ Spring 的 multipart 上限已调到 20MB/25MB，图片的 5MB 由 Service 按�
 - 时间写入统一使用 `DatabaseTimeProvider`，库内一律 UTC。
 - 会话区分买家与卖家角色，令牌不能互用。
 - 商品图片只接受 JPG/PNG；描述媒体接受 JPG/PNG 和 MP4。文件名由服务端生成，数据库只存相对 URL，并做用途与目录穿越校验。
-- 账号字段在 Service 层校验：用户名/账号 1~50 字符且不含空白/控制字符/尖括号；密码至少 8 字符且 UTF-8 不超过 72 字节；电话为 7~20 位数字与 `-`；默认交易地点可空、最多 50 字符。
+- 请求 DTO 在边界做存在性、长度与上下界校验（`@Valid` + Bean Validation），失败返回 HTTP 400 + 50002，并附 `errors: [{field, message}]`；字段名使用请求体 JSON 键（如 `category_id`、`description[0].type`）。
+- 账号字段的语义校验仍在 Service 层：用户名/账号 1~50 字符且不含空白/控制字符/尖括号；密码至少 8 字符且 UTF-8 不超过 72 字节；电话为 7~20 位数字与 `-`；默认交易地点可空、最多 50 字符。
 - 类别名、商品名去首尾空白后 1~50 字符，拒绝控制字符、换行与尖括号；商品价格必须大于 0、不超过 999999.99 且最多两位小数；发布库存至少为 1。
 - 商品图片与描述图片使用独立配置项；当前都限 5MB，但后续可以分别调整。
 - 描述内容块按 `sort_no` 保存纯文本、图片、视频的混排顺序；纯文本整段 1000 字符上限由应用层校验，单个文本块在数据层也按 1000 字符预留。
 - 商品媒体 URL 必须指向 `/media/goods/` 或 `/media/description/` 下已落盘的文件；发布时按用途、扩展名和文件存在性回验，拒绝外链和目录穿越。
 - 注释只保留职责与非显然约束，不引用文档编号；可用 `pwsh -File scripts/check-comment-refs.ps1` 检查。
 - 控制器只调用本功能 Service，跨功能读取走 Service 或只读端口。
+- 事务内不可回滚的副作用（审计日志、改密后的会话撤销）统一经 `AfterCommit` 推迟到提交成功之后；事务回滚时不会执行。
 
 ## 当前状态
 
@@ -189,12 +204,18 @@ Spring 的 multipart 上限已调到 20MB/25MB，图片的 5MB 由 Service 按�
 - 删除阶段一实体、仓储、枚举、业务 Service、卖家 Controller 与请求/响应 DTO（这些将按阶段二模型重写）。
 - 旧迁移脚本移出活动目录；旧测试仅保留与业务模型无关的纯单元测试。
 - 建立 `common` 包并完成角色化会话、双角色鉴权、图片/视频媒体存储、文本、审计、限流、错误码与健康检查。
-- 增加类别、商品、账号与意向域 11 张表的阶段二基线，以及卖家种子账号。
-- 建立 11 个实体、11 个仓储与 6 个枚举；完成 JSON 快照、主图唯一、队列序号唯一、状态/失败原因约束等数据层测试。
+- 增加类别、商品、库存、账号与意向域 12 张表的阶段二基线，以及卖家种子账号。
+- 建立 12 个实体、12 个仓储与 6 个枚举；完成 JSON 快照、主图唯一、队列序号唯一、状态/失败原因约束等数据层测试。
 - S2 落地双角色会话与鉴权、买家注册/登录/退出、卖家登录/退出/改密、媒体上传、springdoc，以及账号字段的业务校验。
 - S3 落地两级类别新增/重命名/删除与删除前置、商品发布/列表/详情/搜索、主图/图集、TEXT/IMAGE/VIDEO 描述块、库存调整、手动上下架、库存清零下架与改挂类别。
 - S4 落地买家提交意向（限流/队列上限/重复提交）、卖家意向名单（分页/状态筛选）、进入交易（队首/唯一交易守卫）、标记成功（库存扣减、售罄同事务归档）、标记失败（作废/重排队）、买家历史 union，以及并发不变量测试（序号唯一、唯一交易、不超卖、归档一致性）。
 - S5 落地卖家历史商品列表/详情（快照解析、历史意向名单）与客户管理（注册客户列表、客户详情 + 购买历史并集，经跨包端口读取）。
-- 全部 190 个用例全绿（S0~S4 遗留 180 个，S5 新增 10 个：卖家历史 4、客户管理 6）；开发库与测试库均通过 Flyway 与 `ddl-auto=validate`。S4、S5 期间数据库零变更，V1/V2 未动。
+- 全部 212 个用例全绿（含架构改造新增的 6 个包依赖用例与库存拆表用例）；开发库与测试库均通过 Flyway 与 `ddl-auto=validate`。S4～S6 期间数据库零变更，V1/V2 未动。
+- 架构改造 S1 完成：13 个 Service 接口化、`api` 端口（商品查询/队列活跃度/归档/类别引用）、history 与 intention 解环、队列序号惰性创建、买家历史读模型迁入 history、ArchUnit 包依赖门禁（S3 后为 6 条）。
+- 架构改造 S2 完成：V1 基线重建，库存拆到 `simpleshop_goods_stock` 与 `inventory` 模块；商品实体不再有 `stock`，发布/改库存/成交扣减都走 `StockPort`；交易中唯一性由 `trading_flag` 唯一索引兜底。
+- 架构改造 S3 完成：新增 `GoodsLifecyclePort`，intention 不再操作商品实体；`Intention.goods` 改为 `goodsId` 列；删除 `GoodsTradeSupport`；ArchUnit 增加 intention/goods 双向边界规则。
+- 架构改造 S4 完成：`TradeDisposal`、`TradeGoodsStatus` 与意向状态/失败原因改为 Java 枚举；请求体加 `@Valid` 与字段约束；参数错误返回字段级 `errors`；文本长度用 `@CodePointLength` 按码点计数；OpenAPI 快照已重新导出（30 个路径 / 59 个 schema）。
+- 架构改造 S5 完成：`AfterCommit` 统一推迟不可回滚副作用；审计日志改为提交后写入，回滚不留假记录；改密后的会话撤销移到提交后，事务回滚不再误踢会话。
+- 架构改造 S6 完成：默认用 Testcontainers `mysql:8.0` 跑全量测试，`-Plocal-mysql` 回退本机库；新增空库 V1→V2 迁移 + Hibernate validate 测试；WAR 不含任何测试依赖。
 
-下一步是 S6：收口与联调（springdoc 文档收口、卖家/买家前端联调、E2E、性能、部署与文档）。
+下一步：最终联调、部署验收与演示准备。

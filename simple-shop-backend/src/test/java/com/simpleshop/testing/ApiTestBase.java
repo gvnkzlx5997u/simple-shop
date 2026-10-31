@@ -12,6 +12,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * API 测试辅助：注册、登录、构造 Bearer 头。
@@ -28,6 +30,23 @@ public abstract class ApiTestBase extends DataLayerTestBase {
         assertThat(result.getResponse().getStatus()).isEqualTo(httpStatus);
         JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
         assertThat(body.path("code").asInt()).isEqualTo(code);
+    }
+
+    /** 参数校验失败：HTTP 400 + 50002，且 errors 列表包含指定字段。 */
+    protected void assertApiFieldError(MvcResult result, String field) throws Exception {
+        assertApiStatusAndCode(result, 400, 50002);
+        JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
+        assertThat(body.path("errors").isArray()).isTrue();
+        assertThat(body.path("errors").findValuesAsText("field")).contains(field);
+    }
+
+    /**
+     * 测试类默认包在回滚事务里，afterCommit 不会自动触发；需要观察提交后副作用的用例
+     * 显式调用本方法，模拟真实提交。测试结束仍会回滚业务数据。
+     */
+    protected void runAfterCommit() {
+        TransactionSynchronizationManager.getSynchronizations()
+                .forEach(TransactionSynchronization::afterCommit);
     }
 
     protected String json(Object value) throws Exception {

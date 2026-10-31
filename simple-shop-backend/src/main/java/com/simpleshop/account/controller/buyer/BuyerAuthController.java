@@ -1,6 +1,7 @@
 package com.simpleshop.account.controller.buyer;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -40,7 +41,7 @@ public class BuyerAuthController {
     @PostMapping("/register")
     @Operation(summary = "买家注册")
     public ApiResponse<Void> register(
-            @RequestBody BuyerRegisterRequest request, HttpServletRequest httpRequest) {
+            @Valid @RequestBody BuyerRegisterRequest request, HttpServletRequest httpRequest) {
         authService.register(request, ClientIp.of(httpRequest));
         return ApiResponse.ok();
     }
@@ -48,7 +49,7 @@ public class BuyerAuthController {
     @PostMapping("/session")
     @Operation(summary = "买家登录")
     public ApiResponse<AuthTokenData> login(
-            @RequestBody BuyerLoginRequest request, HttpServletRequest httpRequest) {
+            @Valid @RequestBody BuyerLoginRequest request, HttpServletRequest httpRequest) {
         SessionStore.Session session = authService.login(request, ClientIp.of(httpRequest));
         return ApiResponse.ok(token(session));
     }

@@ -1,6 +1,6 @@
 # =============================================================================
-# simple-shop 卖家前端镜像（Vite 构建 SPA + nginx 托管与反向代理）
-# 依据：安装与部署手册 v1.0 §5.3（方案乙：SPA 挂在 /seller/）
+# simple-shop 卖家前端**独立预览**镜像（Vite 构建 SPA + nginx 托管与反向代理）
+# 正式部署使用 deploy/frontend 的组合镜像（同时托管买家 / 与卖家 /seller/）
 #   · 构建期显式 --base=/seller/，只影响构建，不影响本地 npm run dev
 #   · 用 Debian 版 node（不用 alpine），避开 rolldown/lightningcss 等原生依赖的 musl 兼容问题
 # 镜像源：默认走轩辕镜像免费版（记录日期 2026-10-13），回退官方源用

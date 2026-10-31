@@ -19,7 +19,7 @@ import com.simpleshop.common.time.DatabaseTimeProvider;
 import com.simpleshop.history.entity.GoodsHistory;
 import com.simpleshop.history.entity.IntentionHistory;
 import com.simpleshop.history.enums.IntentionResult;
-import com.simpleshop.intention.enums.FailType;
+import com.simpleshop.history.enums.FailType;
 import com.simpleshop.testing.ApiTestBase;
 
 class SellerHistoryApiTest extends ApiTestBase {

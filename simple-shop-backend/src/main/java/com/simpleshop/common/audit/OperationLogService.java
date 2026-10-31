@@ -10,11 +10,13 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 import com.simpleshop.common.auth.AuthInterceptor;
 import com.simpleshop.common.auth.AuthPrincipal;
+import com.simpleshop.common.tx.AfterCommit;
 
 /**
  * 关键操作日志。
  *
  * <p>通过独立 logger 输出到单独文件，不写入业务表，也不参与事务：日志失败不影响业务。
+ * 在事务内调用时推迟到提交成功后写入，回滚不会留下与数据不一致的审计记录。
  * 记录操作类型、目标对象与操作者，不记录密码、令牌或用户输入的原文。
  */
 @Service
@@ -46,14 +48,37 @@ public class OperationLogService {
     public static final String TARGET_ACCOUNT = "ACCOUNT";
 
     public void log(String operation, String targetType, String targetId) {
-        AUDIT.info("operation={} targetType={} targetId={} operator={}",
-                operation, targetType, targetId, currentOperator());
+        logDeferred(operation, targetType, targetId, null);
     }
 
     /** {@code detail} 只放裁决方式之类的枚举值，不得包含密码、令牌或用户输入原文。 */
     public void log(String operation, String targetType, String targetId, String detail) {
-        AUDIT.info("operation={} targetType={} targetId={} operator={} detail={}",
-                operation, targetType, targetId, currentOperator(), detail);
+        logDeferred(operation, targetType, targetId, detail);
+    }
+
+    private void logDeferred(String operation, String targetType, String targetId, String detail) {
+        try {
+            // 操作者必须在请求线程内捕获；afterCommit 回调执行时请求上下文可能已经变化。
+            String operator = currentOperator();
+            AfterCommit.run(() -> write(operation, targetType, targetId, operator, detail));
+        } catch (RuntimeException ignored) {
+            // 审计失败不影响业务
+        }
+    }
+
+    private static void write(
+            String operation, String targetType, String targetId, String operator, String detail) {
+        try {
+            if (detail == null) {
+                AUDIT.info("operation={} targetType={} targetId={} operator={}",
+                        operation, targetType, targetId, operator);
+            } else {
+                AUDIT.info("operation={} targetType={} targetId={} operator={} detail={}",
+                        operation, targetType, targetId, operator, detail);
+            }
+        } catch (RuntimeException ignored) {
+            // 审计失败不影响业务
+        }
     }
 
     private String currentOperator() {

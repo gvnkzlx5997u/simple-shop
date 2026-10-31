@@ -138,9 +138,9 @@ class SellerTradeApiTest extends ApiTestBase {
                 .andReturn();
 
         assertThat(result.getResponse().getStatus()).isEqualTo(200);
-        assertThat(goodsRepository.findById(goods.getId()).orElseThrow())
-                .extracting(Goods::getStatus, Goods::getStock)
-                .containsExactly(GoodsStatus.ON_SALE, 2);
+        assertThat(goodsRepository.findById(goods.getId()).orElseThrow().getStatus())
+                .isEqualTo(GoodsStatus.ON_SALE);
+        assertThat(stockItems.findById(goods.getId()).orElseThrow().getAvailable()).isEqualTo(2);
         assertThat(intentions.findById(head.getId()).orElseThrow().getStatus())
                 .isEqualTo(IntentionStatus.SUCCEEDED);
         assertThat(intentions.findById(head.getId()).orElseThrow().getFinishAt()).isNotNull();
@@ -154,8 +154,7 @@ class SellerTradeApiTest extends ApiTestBase {
         CategoryL2 category = createCategory();
         String l1Name = category.getL1().getName();
         Goods goods = createGoods(category);
-        goods.changeStock(1);
-        goodsRepository.saveAndFlush(goods);
+        setStock(goods, 1);
         queueSequences.saveAndFlush(GoodsQueueSequence.forGoods(goods.getId()));
         BuyerAccount firstBuyer = createBuyer();
         Intention head = enterTrade(goods, submit(goods, firstBuyer, 1));
@@ -196,15 +195,15 @@ class SellerTradeApiTest extends ApiTestBase {
         IntentionHistory queuedHistory = intentionHistories.stream()
                 .filter(item -> item.getId().equals(queued.getId())).findFirst().orElseThrow();
         assertThat(queuedHistory.getResult()).isEqualTo(IntentionResult.FAILED);
-        assertThat(queuedHistory.getFailType()).isEqualTo(FailType.SOLD_OUT);
+        assertThat(queuedHistory.getFailType())
+                .isEqualTo(com.simpleshop.history.enums.FailType.SOLD_OUT);
     }
 
     @Test
     @DisplayName("归档包含商品名下全部意向，含先前已终态的记录")
     void archivesAllTerminalIntentions() throws Exception {
         Goods goods = publishedGoods();
-        goods.changeStock(1);
-        goodsRepository.saveAndFlush(goods);
+        setStock(goods, 1);
         Intention earlier = submit(goods, createBuyer(), 1);
         earlier.markSucceeded();
         intentions.saveAndFlush(earlier);
@@ -286,9 +285,9 @@ class SellerTradeApiTest extends ApiTestBase {
                 .andReturn();
 
         assertThat(result.getResponse().getStatus()).isEqualTo(200);
-        assertThat(goodsRepository.findById(goods.getId()).orElseThrow())
-                .extracting(Goods::getStatus, Goods::getStock)
-                .containsExactly(GoodsStatus.ON_SALE, 3);
+        assertThat(goodsRepository.findById(goods.getId()).orElseThrow().getStatus())
+                .isEqualTo(GoodsStatus.ON_SALE);
+        assertThat(stockItems.findById(goods.getId()).orElseThrow().getAvailable()).isEqualTo(3);
         assertThat(intentions.findById(head.getId()).orElseThrow().getStatus())
                 .isEqualTo(IntentionStatus.FAILED);
         assertThat(intentions.findById(head.getId()).orElseThrow().getFinishAt()).isNotNull();
@@ -326,7 +325,7 @@ class SellerTradeApiTest extends ApiTestBase {
         assertThat(after.getCreateAt()).isEqualTo(createdAt);
         assertThat(goodsRepository.findById(goods.getId()).orElseThrow().getStatus())
                 .isEqualTo(GoodsStatus.ON_SALE);
-        assertThat(intentions.findFirstByGoods_IdAndStatusOrderByQueueOrderAsc(
+        assertThat(intentions.findFirstByGoodsIdAndStatusOrderByQueueOrderAsc(
                         goods.getId(), IntentionStatus.QUEUED)
                 .orElseThrow().getQueueOrder()).isEqualTo(2);
     }
@@ -343,14 +342,22 @@ class SellerTradeApiTest extends ApiTestBase {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andReturn();
-        assertApiCode(missing, 30006);
+        assertApiFieldError(missing, "disposal");
 
         MvcResult invalid = mockMvc.perform(post("/api/seller/intentions/{id}/failure", head.getId())
                         .header("Authorization", token)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(java.util.Map.of("disposal", "CANCELLED"))))
                 .andReturn();
-        assertApiCode(invalid, 30006);
+        assertApiFieldError(invalid, "disposal");
+
+        MvcResult lowercase = mockMvc.perform(
+                        post("/api/seller/intentions/{id}/failure", head.getId())
+                                .header("Authorization", token)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(json(java.util.Map.of("disposal", "voided"))))
+                .andReturn();
+        assertApiFieldError(lowercase, "disposal");
 
         assertThat(intentions.findById(head.getId()).orElseThrow().getStatus())
                 .isEqualTo(IntentionStatus.TRADING);
@@ -417,7 +424,7 @@ class SellerTradeApiTest extends ApiTestBase {
     }
 
     private Intention submit(Goods goods, BuyerAccount buyer, long queueOrder) {
-        return intentions.saveAndFlush(Intention.submit(goods, buyer, queueOrder));
+        return intentions.saveAndFlush(Intention.submit(goods.getId(), buyer, queueOrder));
     }
 
     private Goods publishedGoods() {

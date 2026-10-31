@@ -2,10 +2,12 @@
 -- simple-shop 阶段二 · 基线建表脚本
 --
 -- 由 db/draft/ 下的类别、商品、账号、意向草案合并而成。
+-- 重建版本（架构改造 S2/S3）：库存拆到 simpleshop_goods_stock；
+-- 交易中唯一性由 simpleshop_intention.trading_flag 唯一索引保证。
 -- Flyway 只执行一次；已发布后不得修改，后续变更追加新的版本脚本。
 --
 -- 建表顺序：
---   category_l1 → category_l2 → goods → goods_image → goods_content_block
+--   category_l1 → category_l2 → goods → goods_stock → goods_image → goods_content_block
 --   → goods_history → seller_account → buyer_account
 --   → goods_queue_sequence → intention → intention_history
 --
@@ -56,7 +58,6 @@ CREATE TABLE `simpleshop_goods` (
   `id`             varchar(50)  NOT NULL COMMENT '商品 ID：G + UUID',
   `name`           varchar(50)  NOT NULL COMMENT '名称，<=50 字符',
   `price`          decimal(8,2) NOT NULL COMMENT '价格，0 < price <= 999999.99',
-  `stock`          int          NOT NULL COMMENT '库存，>=0；成交时扣减',
   `fk_category_id` varchar(50)  NOT NULL COMMENT '所属二级类别 ID，引用 simpleshop_category_l2',
   `status`         varchar(20)  NOT NULL COMMENT 'ON_SALE / FROZEN / OFF_MANUAL / OFF_ZERO',
   `create_at`       datetime     NOT NULL COMMENT '发布时间（UTC）',
@@ -66,16 +67,31 @@ CREATE TABLE `simpleshop_goods` (
   KEY `idx_goods_category` (`fk_category_id`),
   KEY `idx_goods_create_at` (`create_at`),
   CONSTRAINT `ck_goods_price` CHECK (`price` > 0),
-  CONSTRAINT `ck_goods_stock` CHECK (`stock` >= 0),
   CONSTRAINT `ck_goods_status` CHECK (`status` IN ('ON_SALE', 'FROZEN', 'OFF_MANUAL', 'OFF_ZERO')),
   CONSTRAINT `fkey_goods_category` FOREIGN KEY (`fk_category_id`)
       REFERENCES `simpleshop_category_l2` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='商品表：当前在售/交易中/下架商品，不含已归档商品';
+  COMMENT='商品表：只存展示属性与上下架语义；库存见 simpleshop_goods_stock';
+
+-- -----------------------------------------------------------------------------
+-- 2 / 5　商品库存表
+--   与商品一对一，主键即商品 ID；独立行锁，库存变更不再更新商品行。
+--   库存归零由应用触发下架；商品归档删除时随外键级联删除。
+-- -----------------------------------------------------------------------------
+CREATE TABLE `simpleshop_goods_stock` (
+  `fk_goods_id`  varchar(50) NOT NULL COMMENT '商品 ID，与商品一对一',
+  `available`    int         NOT NULL COMMENT '可售库存，>= 0',
+  `update_at`    datetime    NOT NULL COMMENT '最后变更时间（UTC）',
+  PRIMARY KEY (`fk_goods_id`),
+  CONSTRAINT `ck_goods_stock_available` CHECK (`available` >= 0),
+  CONSTRAINT `fkey_goods_stock_goods` FOREIGN KEY (`fk_goods_id`)
+      REFERENCES `simpleshop_goods` (`id`) ON DELETE CASCADE ON UPDATE RESTRICT
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  COMMENT='商品库存表：与商品一对一，独立行锁；库存归零由应用触发下架';
 
 
 -- -----------------------------------------------------------------------------
--- 2 / 4　商品图片表（主图 + 图集）
+-- 3 / 5　商品图片表（主图 + 图集）
 --   只允许图片；商品图与描述媒体是不同限制，故不共用描述内容块表。
 --   is_main 标记主图；main_flag 生成列 + 唯一索引保证每件商品至多一张主图。
 --   MySQL 唯一索引允许多个 NULL，因此非主图行不会互相冲突。
@@ -102,7 +118,7 @@ CREATE TABLE `simpleshop_goods_image` (
 
 
 -- -----------------------------------------------------------------------------
--- 3 / 4　商品描述内容块表
+-- 4 / 5　商品描述内容块表
 --   描述是 TEXT / IMAGE / VIDEO 的有序块列表，不存 HTML。
 --   TEXT 块写 text_content、media_url 为空；IMAGE/VIDEO 块写 media_url、text_content 为空。
 --   纯文本允许换行；整段文本总长度 1000 字符由应用层校验，单块列宽按 1000 预留。
@@ -132,7 +148,7 @@ CREATE TABLE `simpleshop_goods_content_block` (
 
 
 -- -----------------------------------------------------------------------------
--- 4 / 4　历史商品表
+-- 5 / 5　历史商品表
 --   沿用原商品 ID，永久保留；当前表归档后删除对应商品。
 --   描述与图片均存 JSON 快照，历史查询不再依赖当前商品/图片/描述表。
 --   媒体文件保留在原目录，不随归档搬迁；快照中存相对 URL。
@@ -240,8 +256,11 @@ CREATE TABLE `simpleshop_intention` (
   `status`        varchar(20) NOT NULL COMMENT 'QUEUED / TRADING / SUCCEEDED / FAILED',
   `fail_type`     varchar(20) DEFAULT NULL COMMENT 'SOLD_OUT / SELLER_VOIDED；仅 FAILED 时非空',
   `finish_at`     datetime    DEFAULT NULL COMMENT '进入终态的时间（UTC）；非终态为空',
+  `trading_flag`  tinyint GENERATED ALWAYS AS (CASE WHEN `status` = 'TRADING' THEN 1 ELSE NULL END) STORED
+      COMMENT '交易中唯一性辅助列：TRADING 为 1，其余为 NULL',
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_intention_goods_queue_order` (`fk_goods_id`, `queue_order`),
+  UNIQUE KEY `uk_intention_trading` (`fk_goods_id`, `trading_flag`),
   KEY `idx_intention_goods_status_order` (`fk_goods_id`, `status`, `queue_order`),
   KEY `idx_intention_buyer_status_create` (`fk_buyer_id`, `status`, `create_at`),
   CONSTRAINT `ck_intention_queue_order` CHECK (`queue_order` > 0),
@@ -260,7 +279,7 @@ CREATE TABLE `simpleshop_intention` (
   CONSTRAINT `fkey_intention_buyer` FOREIGN KEY (`fk_buyer_id`)
       REFERENCES `simpleshop_buyer_account` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-  COMMENT='当前意向表：引用买家账号，按商品独立排队';
+  COMMENT='当前意向表：引用买家账号，按商品独立排队；一商品至多一条 TRADING';
 
 
 -- -----------------------------------------------------------------------------

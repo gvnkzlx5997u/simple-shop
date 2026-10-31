@@ -32,6 +32,10 @@ public interface GoodsRepository extends JpaRepository<Goods, String> {
     @Query("select g from Goods g where g.id = :id")
     Optional<Goods> findWithLockById(@Param("id") String id);
 
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("select g from Goods g where g.id = :id")
+    Optional<Goods> findWithSharedLockById(@Param("id") String id);
+
     /**
      * 直接删除当前商品行，绕过一级缓存（实体引用会阻断 em.remove 的 flush）。
      * 归档流程专用：意向外键 RESTRICT，必须先删该商品全部意向行；
