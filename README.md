@@ -23,7 +23,7 @@ simple-shop 是一个单卖家的在线购物系统：卖家发布多件商品�
 simple-shop/
 ├─ simple-shop-backend/            后端（Spring Boot，REST + 媒体文件）
 ├─ simple-shop-seller-frontend/    卖家端 SPA（阶段二形态）
-├─ simple-shop-test-e2e/           Playwright 端到端测试（阶段一用例，待重写）
+├─ simple-shop-test-e2e/           Playwright 端到端测试（阶段二 7 spec / 57 条）
 ├─ deploy/                         本地构建部署（Docker Compose，阶段一口径）
 ├─ deploy-cloud/                   云端镜像部署（阶段一口径）
 └─ simple-shop-doc/                阶段一与阶段二文档
@@ -46,9 +46,14 @@ simple-shop/
 - 页面全部就位：商品列表（宫格 + 状态/类别/关键字筛选）、发布（媒体发布时统一上传 + 描述块行流编辑器）、商品详情（图集切换、改库存/改挂/上下架）、意向名单与交易裁决（进入交易/成功/失败裁决）、类别管理、客户管理（详情内嵌购买历史）、历史记录（归档快照 + 意向名单）；登录与改密沿用阶段一骨架。
 - `npm run type-check` / `npm run build` / `npm test` 全绿；发布→意向→裁决→归档→历史/客户主流程已手工验证通过。
 
+**E2E 验收（阶段二重写完成）**
+
+- `simple-shop-test-e2e` 已重写为 7 spec / 57 条，覆盖登录鉴权、买家浏览与意向、卖家商品管理、交易裁决、接口契约、安全、客户与历史；全量跑约 23 秒，详见该目录 README。
+- 阶段一的 36 条旧用例已移入 `simple-shop-test-e2e/tests/archive/`，**不要放回 `tests/`**。
+
 **待办（S6，依赖买家前端就绪）**
 
-- 两端联调修复、Playwright E2E 重写（`simple-shop-test-e2e` 仍为阶段一用例）、性能测试。
+- 两端联调修复、性能测试。
 - 部署收口：Docker / nginx / Compose 更新（`/media` 反代、托管 `/seller` 与 `/buyer`）；当前 `deploy/`、`deploy-cloud/` 与卖家前端内的 Dockerfile / nginx.conf 仍为阶段一口径。
 
 ## 文档
