@@ -24,7 +24,7 @@ simple-shop/
 ├─ simple-shop-backend/            后端（Spring Boot，REST + 媒体文件）
 ├─ simple-shop-buyer-frontend/     买家端 SPA
 ├─ simple-shop-seller-frontend/    卖家端 SPA
-├─ simple-shop-test-e2e/           Playwright 端到端测试（阶段一用例，待重写）
+├─ simple-shop-test-e2e/           Playwright 端到端测试（阶段二 7 spec / 57 条）
 ├─ deploy/                         本地构建部署（Docker Compose，阶段二口径）
 ├─ deploy-cloud/                   云端镜像部署（阶段二口径，需重新推送镜像）
 └─ simple-shop-doc/                阶段一与阶段二文档
@@ -55,10 +55,14 @@ simple-shop/
 - 后端镜像 `simple-shop-backend/Dockerfile` 已按阶段二收口（只提供 REST 与 `/media`，无 JSP）。
 - ⚠️ 从阶段一升级：V1 基线已重建，不能复用旧 `simple-shop_mysql-data`；先备份并 `docker compose down -v`（或换项目名/卷名）再启动。
 
+**E2E 验收（阶段二重写完成）**
+
+- `simple-shop-test-e2e` 已重写为 7 spec / 57 条：登录鉴权、买家浏览与意向、卖家商品管理、交易裁决、接口契约、安全、客户与历史；全量跑约 23 秒，详见该目录 README。
+- 阶段一的 36 条旧用例已移入 `simple-shop-test-e2e/tests/archive/`，**不要放回 `tests/`**，否则会被 `playwright test` 误跑。
+
 **待办**（详见 [阶段二剩余事项交接](./simple-shop-doc/阶段二/阶段二剩余事项交接.md)）
 
 - 两端联调与 P0 缺陷修复；
-- Playwright E2E 重写（`simple-shop-test-e2e` 仍为阶段一用例）；
 - 目标机/云端镜像的最终部署验收；
 - 性能测试可选，不作为发布门禁。
 
