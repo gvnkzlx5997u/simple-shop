@@ -39,7 +39,7 @@ services:
     networks: [shop-net]
 
   backend:
-    image: ${BACKEND_IMAGE:-lrhg173c/simple-shop:backend}
+    image: ${BACKEND_IMAGE:-lrhg173c/simple-shop:backend-1.0}
     environment:
       DB_URL: "jdbc:mysql://mysql:3306/simple_shop?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&connectionTimeZone=UTC&rewriteBatchedStatements=true"
       DB_USERNAME: ${DB_USERNAME:-simpleshop}
@@ -59,7 +59,7 @@ services:
     networks: [shop-net]
 
   frontend:
-    image: ${FRONTEND_IMAGE:-lrhg173c/simple-shop:frontend}
+    image: ${FRONTEND_IMAGE:-lrhg173c/simple-shop:frontend-1.0}
     ports:
       - "80:80"
     depends_on:
