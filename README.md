@@ -1,6 +1,6 @@
 # simple-shop 在线购物系统
 
-> 阶段二重构进行中。业务口径以 [阶段二文档](./simple-shop-doc/阶段二/README.md) 为准，实施顺序见 [后端开发计划](./simple-shop-doc/阶段二/后端开发计划.md)。阶段一文档仅作历史参考。
+> 阶段二开发已完成，部署已收口到本地构建与云端镜像推送。业务口径以 [阶段二文档](./simple-shop-doc/阶段二/阶段二目录.md) 为准，实施顺序见 [后端开发计划](./simple-shop-doc/阶段二/后端开发计划.md)。阶段一文档仅作历史参考。
 
 ## 项目定位
 
@@ -26,7 +26,7 @@ simple-shop/
 ├─ simple-shop-seller-frontend/    卖家端 SPA
 ├─ simple-shop-test-e2e/           Playwright 端到端测试（阶段二 7 spec / 57 条）
 ├─ deploy/                         本地构建部署（Docker Compose，阶段二口径）
-├─ deploy-cloud/                   云端镜像部署（阶段二口径，需重新推送镜像）
+├─ deploy-cloud/                   云端镜像部署（backend-1.0 / frontend-1.0 已推送）
 └─ simple-shop-doc/                阶段一与阶段二文档
 ```
 
@@ -48,38 +48,38 @@ simple-shop/
 - 页面全部就位：商品列表（宫格 + 状态/类别/关键字筛选）、发布（媒体发布时统一上传 + 描述块行流编辑器）、商品详情（图集切换、改库存/改挂/上下架）、意向名单与交易裁决（进入交易/成功/失败裁决）、类别管理、客户管理（详情内嵌购买历史）、历史记录（归档快照 + 意向名单）；登录与改密沿用阶段一骨架。
 - `npm run type-check` / `npm run build` / `npm test` 全绿；发布→意向→裁决→归档→历史/客户主流程已手工验证通过。
 
-**部署（阶段二口径）**
+**买家前端（阶段二新建）**
 
-- `deploy/docker-compose.yml`：三容器（mysql / backend / frontend），frontend 用 `deploy/frontend` 组合镜像同时托管买家 `/` 与卖家 `/seller/`，并反代 `/api`、`/media`。
-- `deploy-cloud/docker-compose.yml`：同拓扑的云端镜像版；阶段二镜像需重新构建推送，旧 frontend 镜像只含卖家端，不能直接用。
+- 工程 `simple-shop-buyer-frontend`：注册/登录、商品列表与详情、提交购买意向、我的历史；与卖家端共用同一套 REST 契约。
+- 生产构建产物由 `deploy/frontend` 组合镜像托管在 `/`，开发端口 5174。
+
+**部署（阶段二口径，2026-11-03 收口）**
+
+- `deploy/docker-compose.yml`：三容器（mysql / backend / frontend），frontend 用 `deploy/frontend` 组合镜像同时托管买家 `/` 与卖家 `/seller/`，并反代 `/api`、`/media`；基础镜像统一 Docker Hub 官方源，后端 apt 层在基础镜像自带 curl 时跳过。
+- `deploy-cloud/docker-compose.yml`：同拓扑的云端镜像版，使用 `lrhg173c/simple-shop:backend-1.0` 与 `:frontend-1.0`；镜像已于 2026-11-03 推送，目标机按 `pull + up` 验收。
+- 本地构建：`cd deploy && docker compose up -d --build`；云端：`cd deploy-cloud && docker compose pull && docker compose up -d`。
 - 后端镜像 `simple-shop-backend/Dockerfile` 已按阶段二收口（只提供 REST 与 `/media`，无 JSP）。
 - ⚠️ 从阶段一升级：V1 基线已重建，不能复用旧 `simple-shop_mysql-data`；先备份并 `docker compose down -v`（或换项目名/卷名）再启动。
 
 **E2E 验收（阶段二重写完成）**
 
-- `simple-shop-test-e2e` 已重写为 7 spec / 57 条：登录鉴权、买家浏览与意向、卖家商品管理、交易裁决、接口契约、安全、客户与历史；全量跑约 23 秒，详见该目录 README。
-- 阶段一的 36 条旧用例已移入 `simple-shop-test-e2e/tests/archive/`，**不要放回 `tests/`**，否则会被 `playwright test` 误跑。
-
-**待办**（详见 [阶段二剩余事项交接](./simple-shop-doc/阶段二/阶段二剩余事项交接.md)）
-
-- 两端联调与 P0 缺陷修复；
-- 目标机/云端镜像的最终部署验收；
-- 性能测试可选，不作为发布门禁。
+- `simple-shop-test-e2e` 已重写为 7 spec / 57 条：登录鉴权、买家浏览与意向、卖家商品管理、交易裁决、接口契约、安全、客户与历史；全量跑约 23 秒，已在本地部署环境执行，详见该目录 README。
+- 阶段一的 36 条旧用例已移入 `simple-shop-test-e2e/archive/`，**不要放回 `tests/`**，否则会被 `playwright test` 误跑。
 
 ## 文档
 
 | 内容 | 位置 |
 | --- | --- |
-| 阶段二总览 | [阶段二 README](./simple-shop-doc/阶段二/README.md) |
+| 阶段二总览 | [阶段二目录](./simple-shop-doc/阶段二/阶段二目录.md) |
 | 升级需求 | [升级需求A](./simple-shop-doc/阶段二/升级需求A.md) |
 | 状态模型 | [状态模型设计](./simple-shop-doc/阶段二/状态模型设计.md) |
 | 后端实施 | [后端开发计划](./simple-shop-doc/阶段二/后端开发计划.md) |
 | 前端交接与 API 契约 | [前端交接文档](./simple-shop-doc/阶段二/前端交接文档.md)、[openapi.json](./simple-shop-doc/阶段二/openapi.json) |
 | 后端构建与运行 | [simple-shop-backend/README.md](./simple-shop-backend/README.md) |
 | 卖家前端说明 | [simple-shop-seller-frontend/README.md](./simple-shop-seller-frontend/README.md) |
-| 阶段二部署手册 | [安装与部署手册](./simple-shop-doc/阶段二/安装与部署手册.md) |
+| 阶段二部署手册（v2.0 定稿） | [安装与部署手册](./simple-shop-doc/阶段二/安装与部署手册.md) |
 | 剩余事项交接 | [阶段二剩余事项交接](./simple-shop-doc/阶段二/阶段二剩余事项交接.md) |
-| 阶段一文档（历史） | [阶段一 README](./simple-shop-doc/阶段一/README.md) |
+| 阶段一文档（历史） | [阶段一 README](./simple-shop-doc/阶段一/阶段一目录.md) |
 
 ## 构建与验证
 

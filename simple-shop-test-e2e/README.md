@@ -31,7 +31,11 @@ java -Dserver.port=8080 \
      -jar target/simple-shop.war
 ```
 
-> ⚠️ 限流阈值用**系统属性**（`-Dsimple-shop.rate-limit.xxx`）最稳。写成环境变量容易踩「短横线转义」的坑。
+后端添加了环境变量配置，可以通过环境变量一行启动：
+```powershell
+$env:RATE_LIMIT_REGISTER=1000;$env:RATE_LIMIT_LOGIN=1000;$env:RATE_LIMIT_SUBMIT=1000;$env.DB_PASSWORD=<你的 MySQL 口令>;$env.DB_URL="jdbc:mysql://localhost:3306/simple_shop_e2e?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&connectionTimeZone=UTC&rewriteBatchedStatements=true";java -jar .\target\simple-shop.war
+```
+
 
 ### 2. E2E 库跑前重建（保证可重复）
 

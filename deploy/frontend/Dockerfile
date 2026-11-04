@@ -5,12 +5,10 @@
 #   · 卖家 SPA 构建到 /seller/（vite --base=/seller/）
 #   · nginx 同时托管两个 SPA，并把 /api、/media 反代到 backend
 # =============================================================================
-ARG REGISTRY=docker.xuanyuan.me/library/
-
 # ---------------------------------------------------------------------------
 # 买家端
 # ---------------------------------------------------------------------------
-FROM ${REGISTRY}node:24-bookworm-slim AS buyer-build
+FROM node:24-bookworm-slim AS buyer-build
 
 WORKDIR /build/buyer
 
@@ -23,7 +21,7 @@ RUN npm run build
 # ---------------------------------------------------------------------------
 # 卖家端
 # ---------------------------------------------------------------------------
-FROM ${REGISTRY}node:24-bookworm-slim AS seller-build
+FROM node:24-bookworm-slim AS seller-build
 
 WORKDIR /build/seller
 
@@ -36,7 +34,7 @@ RUN npm run type-check && ./node_modules/.bin/vite build --base=/seller/
 # ---------------------------------------------------------------------------
 # 运行阶段：一个 nginx 同时托管 / 与 /seller/
 # ---------------------------------------------------------------------------
-FROM ${REGISTRY}nginx:1.27-alpine
+FROM nginx:1.27-alpine
 
 COPY deploy/frontend/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=buyer-build /build/buyer/dist /usr/share/nginx/html

@@ -58,9 +58,9 @@ simple-shop:
     max-size: 1000
 
   rate-limit:
-    register-per-minute: 10
-    login-per-minute: 10
-    submit-intention-per-minute: 10
+    register-per-minute: ${RATE_LIMIT_REGISTER:10}
+    login-per-minute: ${RATE_LIMIT_LOGIN:10}
+    submit-intention-per-minute: ${RATE_LIMIT_SUBMIT:10}
 
   pagination:
     default-size: 10

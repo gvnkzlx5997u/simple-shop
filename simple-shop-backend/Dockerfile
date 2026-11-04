@@ -1,8 +1,6 @@
 # simple-shop backend image: Maven build + JRE21 running an executable war.
 # The application exposes REST APIs under /api and media under /media; it serves no HTML.
-ARG REGISTRY=docker.xuanyuan.me/library/
-
-FROM ${REGISTRY}maven:3.10.0-eclipse-temurin-21-noble AS build
+FROM maven:3.10.0-eclipse-temurin-21-noble AS build
 
 WORKDIR /build
 
@@ -18,15 +16,18 @@ RUN --mount=type=cache,target=/root/.m2/repository \
         -Dmaven.test.skip=true \
         clean package
 
-FROM ${REGISTRY}eclipse-temurin:21-jre AS runtime
+FROM eclipse-temurin:21-jre AS runtime
 
 ENV TZ=UTC \
     AUDIT_LOG_PATH=/var/log/simple-shop \
     JAVA_OPTS=""
 
-RUN apt-get update \
- && apt-get install -y --no-install-recommends curl \
- && rm -rf /var/lib/apt/lists/* \
+# curl 仅用于下方的 HEALTHCHECK；基础镜像已自带时跳过 apt，避免冷构建重新拉取索引。
+RUN if ! command -v curl >/dev/null 2>&1; then \
+        apt-get update \
+     && apt-get install -y --no-install-recommends curl \
+     && rm -rf /var/lib/apt/lists/*; \
+    fi \
  && useradd --create-home --uid 10001 --shell /usr/sbin/nologin appuser \
  && mkdir -p /app/data/media /app/data/images /var/log/simple-shop \
  && chown -R appuser:appuser /app /var/log/simple-shop

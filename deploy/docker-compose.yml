@@ -6,7 +6,7 @@
 #   · 应用用最小权限账号 simpleshop；口令全部来自 deploy/.env（不提交）
 #
 # 用法：cd deploy && cp .env.example .env && 填口令 && docker compose up -d --build
-# 前置：Docker 23+ / Compose v2；后端镜像构建需要能访问 Maven 源
+# 前置：Docker 23+ / Compose v2；构建需要能访问 Docker Hub 与 Maven 源
 #
 # ⚠️ 从阶段一升级：V1 基线已重建，不能复用旧 simple-shop_mysql-data。
 #    先备份，再 docker compose down -v（或换项目名/卷名）后首次启动。
@@ -19,8 +19,7 @@ services:
   # MySQL 8（独立容器，数据落命名卷）
   # ---------------------------------------------------------------------------
   mysql:
-    # 回退官方源：把 .env 里的 IMAGE_PREFIX 设为空即可
-    image: ${IMAGE_PREFIX-docker.xuanyuan.me/library/}mysql:8.0
+    image: mysql:8.0
     command:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
@@ -52,8 +51,6 @@ services:
   backend:
     build:
       context: ../simple-shop-backend
-      args:
-        REGISTRY: ${IMAGE_PREFIX-docker.xuanyuan.me/library/}
     environment:
       # 保留 connectionTimeZone=UTC 与 characterEncoding=UTF-8；建库交给 mysql 初始化脚本
       DB_URL: "jdbc:mysql://mysql:3306/simple_shop?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&connectionTimeZone=UTC&rewriteBatchedStatements=true"
@@ -82,8 +79,6 @@ services:
     build:
       context: ..
       dockerfile: deploy/frontend/Dockerfile
-      args:
-        REGISTRY: ${IMAGE_PREFIX-docker.xuanyuan.me/library/}
     ports:
       - "80:80"
     depends_on:

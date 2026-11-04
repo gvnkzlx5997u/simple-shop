@@ -1,8 +1,6 @@
 # simple-shop 后端
 
-阶段二重构中的后端工程。当前完成 **S0 清理与骨架**、**S1 数据层**、**S2 公共能力与账号**、**S3 类别与商品**、**S4 意向与交易** 与 **S5 归档与历史**：V1/V2 数据库基线、实体/仓储、双角色会话与鉴权、买家注册/登录、卖家登录/改密、媒体上传、两级类别、商品发布/查询/库存/上下架/改挂、买家提交意向、按商品队列、卖家交易裁决、成交售罄归档、买家历史 union、卖家历史查询与客户管理已落地。
-
-业务口径以 [阶段二文档](../simple-shop-doc/阶段二/README.md) 为准，实施顺序见 [后端开发计划](../simple-shop-doc/阶段二/后端开发计划.md)。
+simple-shop阶段二后端工程。
 
 ## 技术基线
 
@@ -85,6 +83,9 @@ mvn spring-boot:run            # 启动，需要 MySQL；默认使用 simple_sho
 | `MEDIA_DIR` | `./data/media` | 媒体根目录；兼容阶段一的 `IMAGE_DIR`，容器部署时必须挂持久卷 |
 | `AUDIT_LOG_PATH` | `logs` | 审计日志目录，保留 90 天 |
 | `SPRINGDOC_ENABLED` | `true` | 是否开放 `/v3/api-docs` 与 Swagger UI；生产建议设为 `false` |
+| `RATE_LIMIT_REGISTER` | 10 | 注册每分钟限流 |
+| `RATE_LIMIT_LOGIN` | 10 | 登录每分钟限流 |
+|  `RATE_LIMIT_SUBMIT` | 10 | 提交意向每分钟限流 |
 
 媒体限制在 `application.yml` 的 `simple-shop.media` 下配置：
 
@@ -217,5 +218,4 @@ Spring 的 multipart 上限已调到 20MB/25MB，图片的 5MB 由 Service 按�
 - 架构改造 S4 完成：`TradeDisposal`、`TradeGoodsStatus` 与意向状态/失败原因改为 Java 枚举；请求体加 `@Valid` 与字段约束；参数错误返回字段级 `errors`；文本长度用 `@CodePointLength` 按码点计数；OpenAPI 快照已重新导出（30 个路径 / 59 个 schema）。
 - 架构改造 S5 完成：`AfterCommit` 统一推迟不可回滚副作用；审计日志改为提交后写入，回滚不留假记录；改密后的会话撤销移到提交后，事务回滚不再误踢会话。
 - 架构改造 S6 完成：默认用 Testcontainers `mysql:8.0` 跑全量测试，`-Plocal-mysql` 回退本机库；新增空库 V1→V2 迁移 + Hibernate validate 测试；WAR 不含任何测试依赖。
-
-下一步：最终联调、部署验收与演示准备。
+- 最终连调、部署已全部完成（2026-11-3），性能测试确认本阶段不做。
