@@ -1,9 +1,9 @@
 package com.simpleshop.goods.enums;
 
-/** 当前商品状态。已归档只出现在历史表。 */
+/**
+ * 商品状态。只有两态：在售与已下架；下架的具体原因记在 {@link OffShelfReason}。
+ */
 public enum GoodsStatus {
     ON_SALE,
-    FROZEN,
-    OFF_MANUAL,
-    OFF_ZERO
+    OFF_SHELF
 }

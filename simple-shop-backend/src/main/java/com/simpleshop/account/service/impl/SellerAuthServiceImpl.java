@@ -44,7 +44,7 @@ public class SellerAuthServiceImpl implements SellerAuthService {
 
     @Transactional(readOnly = true)
     public SessionStore.Session login(SellerLoginRequest request, String clientKey) {
-        requireRateLimit(clientKey);
+        requireRateLimit(RateLimiter.loginKey(request.account(), clientKey));
         String account = AccountRules.account(request.account());
         String password = AccountRules.loginPassword(request.password());
 

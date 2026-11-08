@@ -21,11 +21,9 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MvcResult;
 
-import com.simpleshop.account.entity.BuyerAccount;
 import com.simpleshop.category.entity.CategoryL2;
 import com.simpleshop.goods.entity.Goods;
-import com.simpleshop.goods.enums.GoodsStatus;
-import com.simpleshop.intention.entity.Intention;
+import com.simpleshop.goods.enums.OffShelfReason;
 import com.simpleshop.testing.ApiTestBase;
 
 class SellerGoodsApiTest extends ApiTestBase {
@@ -62,6 +60,8 @@ class SellerGoodsApiTest extends ApiTestBase {
         assertThat(data.path("price").decimalValue()).isEqualByComparingTo("99.99");
         assertThat(data.path("stock").asInt()).isEqualTo(3);
         assertThat(data.path("status").asText()).isEqualTo("ON_SALE");
+        assertThat(data.path("off_shelf_reason").isNull()).isTrue();
+        assertThat(data.path("off_shelf_at").isNull()).isTrue();
         assertThat(data.path("category").path("l1_id").asText())
                 .isEqualTo(category.getL1().getId());
         assertThat(data.path("category").path("l2_id").asText()).isEqualTo(category.getId());
@@ -69,8 +69,6 @@ class SellerGoodsApiTest extends ApiTestBase {
         assertThat(data.path("purchasable").asBoolean()).isTrue();
         assertThat(data.path("create_at").isNull()).isFalse();
         assertThat(data.path("update_at").isNull()).isFalse();
-        // 队列序号改为首次提交时惰性创建，发布后不应有行
-        assertThat(queueSequences.findById(id)).isEmpty();
 
         assertThat(data.path("images").size()).isEqualTo(2);
         assertThat(data.path("images").get(0).path("is_main").asBoolean()).isTrue();
@@ -247,21 +245,21 @@ class SellerGoodsApiTest extends ApiTestBase {
     }
 
     @Test
-    @DisplayName("卖家列表按状态、一级/二级类别筛选")
-    void sellerListFiltersByStatusAndCategory() throws Exception {
+    @DisplayName("卖家列表按状态、下架原因、类别筛选；原因只能与已下架组合")
+    void sellerListFiltersByStatusReasonAndCategory() throws Exception {
         String token = loginSeller(SELLER_PASSWORD);
         CategoryL2 categoryA = createCategory();
         CategoryL2 categoryB = createCategory();
 
         String a1 = data(publish(token, goodsBody(unique("A1-"), "10", 1, categoryA.getId())))
                 .path("id").asText();
-        String a2 = data(publish(token, goodsBody(unique("A2-"), "10", 1, categoryA.getId())))
+        String a2 = data(publish(token, goodsBody(unique("A2-"), "10", 2, categoryA.getId())))
                 .path("id").asText();
         String b1 = data(publish(token, goodsBody(unique("B1-"), "10", 1, categoryB.getId())))
                 .path("id").asText();
 
-        assertApiCode(mockMvc.perform(post("/api/seller/goods/{id}/off-shelf", a2)
-                .header("Authorization", bearer(token))).andReturn(), 0);
+        assertApiCode(postWithoutBody("/api/seller/goods/" + a2 + "/off-shelf", token), 0);
+        goodsOffShelf(b1, OffShelfReason.STOCK_ZERO);
 
         MvcResult onSaleUnderL1 = mockMvc.perform(get("/api/seller/goods")
                         .param("status", "ON_SALE")
@@ -272,13 +270,24 @@ class SellerGoodsApiTest extends ApiTestBase {
         assertThat(data(onSaleUnderL1).path("total").asLong()).isEqualTo(1);
         assertThat(data(onSaleUnderL1).path("items").get(0).path("id").asText()).isEqualTo(a1);
 
-        MvcResult offManual = mockMvc.perform(get("/api/seller/goods")
-                        .param("status", "OFF_MANUAL")
+        MvcResult manual = mockMvc.perform(get("/api/seller/goods")
+                        .param("status", "OFF_SHELF")
+                        .param("off_shelf_reason", "MANUAL")
                         .header("Authorization", bearer(token)))
                 .andReturn();
-        assertApiCode(offManual, 0);
-        assertThat(data(offManual).path("total").asLong()).isEqualTo(1);
-        assertThat(data(offManual).path("items").get(0).path("id").asText()).isEqualTo(a2);
+        assertApiCode(manual, 0);
+        assertThat(data(manual).path("total").asLong()).isEqualTo(1);
+        assertThat(data(manual).path("items").get(0).path("id").asText()).isEqualTo(a2);
+        assertThat(data(manual).path("items").get(0).path("off_shelf_reason").asText())
+                .isEqualTo("MANUAL");
+        assertThat(data(manual).path("items").get(0).path("off_shelf_at").asText()).endsWith("Z");
+
+        MvcResult offShelfAll = mockMvc.perform(get("/api/seller/goods")
+                        .param("status", "OFF_SHELF")
+                        .header("Authorization", bearer(token)))
+                .andReturn();
+        assertApiCode(offShelfAll, 0);
+        assertThat(data(offShelfAll).path("total").asLong()).isEqualTo(2);
 
         MvcResult underL2 = mockMvc.perform(get("/api/seller/goods")
                         .param("category_id", categoryB.getId())
@@ -293,10 +302,24 @@ class SellerGoodsApiTest extends ApiTestBase {
                 .andReturn();
         assertApiCode(all, 0);
         assertThat(data(all).path("total").asLong()).isEqualTo(3);
+
+        assertApiStatusAndCode(
+                mockMvc.perform(get("/api/seller/goods")
+                        .param("off_shelf_reason", "MANUAL")
+                        .header("Authorization", bearer(token)))
+                        .andReturn(),
+                400, 50002);
+        assertApiStatusAndCode(
+                mockMvc.perform(get("/api/seller/goods")
+                        .param("status", "ON_SALE")
+                        .param("off_shelf_reason", "MANUAL")
+                        .header("Authorization", bearer(token)))
+                        .andReturn(),
+                400, 50002);
     }
 
     @Test
-    @DisplayName("库存调整：在售改 0 自动下架，清零下架改大于 0 自动上架")
+    @DisplayName("库存调整：在售改 0 触发库存耗尽下架，补货自动上架并清空原因")
     void updatesStockAndTriggersOffShelfTransitions() throws Exception {
         String token = loginSeller(SELLER_PASSWORD);
         CategoryL2 category = createCategory();
@@ -310,8 +333,11 @@ class SellerGoodsApiTest extends ApiTestBase {
 
         MvcResult toZero = updateStock(token, id, 0);
         assertApiCode(toZero, 0);
-        assertThat(data(toZero).path("status").asText()).isEqualTo("OFF_ZERO");
+        assertThat(data(toZero).path("status").asText()).isEqualTo("OFF_SHELF");
+        assertThat(data(toZero).path("off_shelf_reason").asText()).isEqualTo("STOCK_ZERO");
+        assertThat(data(toZero).path("off_shelf_at").isNull()).isFalse();
         assertThat(data(toZero).path("stock").asInt()).isZero();
+        assertThat(data(toZero).path("purchasable").asBoolean()).isFalse();
         assertApiCode(updateStock(token, id, 0), 20015);
 
         MvcResult publicAfterZero = mockMvc.perform(get("/api/public/goods/{id}", id)).andReturn();
@@ -320,6 +346,8 @@ class SellerGoodsApiTest extends ApiTestBase {
         MvcResult restocked = updateStock(token, id, 2);
         assertApiCode(restocked, 0);
         assertThat(data(restocked).path("status").asText()).isEqualTo("ON_SALE");
+        assertThat(data(restocked).path("off_shelf_reason").isNull()).isTrue();
+        assertThat(data(restocked).path("off_shelf_at").isNull()).isTrue();
         assertThat(data(restocked).path("stock").asInt()).isEqualTo(2);
 
         MvcResult negative = updateStock(token, id, -1);
@@ -327,21 +355,8 @@ class SellerGoodsApiTest extends ApiTestBase {
     }
 
     @Test
-    @DisplayName("队列非空时不能把库存改为 0，也不能手动下架")
-    void rejectsLeavingSaleWithActiveQueue() throws Exception {
-        String token = loginSeller(SELLER_PASSWORD);
-        CategoryL2 category = createCategory();
-        String id = data(publish(token, goodsBody(unique("排队-"), "10", 3, category.getId())))
-                .path("id").asText();
-        addQueuedIntention(id);
-
-        assertApiCode(updateStock(token, id, 0), 20022);
-        assertApiCode(postWithoutBody("/api/seller/goods/" + id + "/off-shelf", token), 20022);
-    }
-
-    @Test
-    @DisplayName("手动下架后可重新上架，重新上架必须显式确认")
-    void manuallyOffShelvesAndRelists() throws Exception {
+    @DisplayName("手动下架是终态：库存只读、没有重新上架接口")
+    void manualOffShelfIsTerminal() throws Exception {
         String token = loginSeller(SELLER_PASSWORD);
         CategoryL2 category = createCategory();
         String id = data(publish(token, goodsBody(unique("下架-"), "10", 2, category.getId())))
@@ -349,7 +364,8 @@ class SellerGoodsApiTest extends ApiTestBase {
 
         MvcResult offShelf = postWithoutBody("/api/seller/goods/" + id + "/off-shelf", token);
         assertApiCode(offShelf, 0);
-        assertThat(data(offShelf).path("status").asText()).isEqualTo("OFF_MANUAL");
+        assertThat(data(offShelf).path("status").asText()).isEqualTo("OFF_SHELF");
+        assertThat(data(offShelf).path("off_shelf_reason").asText()).isEqualTo("MANUAL");
         assertThat(data(offShelf).path("stock").asInt()).isEqualTo(2);
 
         assertApiStatusAndCode(
@@ -357,31 +373,15 @@ class SellerGoodsApiTest extends ApiTestBase {
         assertApiCode(postWithoutBody("/api/seller/goods/" + id + "/off-shelf", token), 20019);
         assertApiCode(updateStock(token, id, 3), 20023);
 
-        MvcResult noConfirm = mockMvc.perform(post("/api/seller/goods/{id}/re-list", id)
+        MvcResult reList = mockMvc.perform(post("/api/seller/goods/{id}/re-list", id)
                         .header("Authorization", bearer(token)))
                 .andReturn();
-        assertApiCode(noConfirm, 20028);
-
-        MvcResult falseConfirm = mockMvc.perform(post("/api/seller/goods/{id}/re-list", id)
-                        .header("Authorization", bearer(token))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("confirm", false))))
-                .andReturn();
-        assertApiCode(falseConfirm, 20028);
-
-        MvcResult reListed = mockMvc.perform(post("/api/seller/goods/{id}/re-list", id)
-                        .header("Authorization", bearer(token))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("confirm", true))))
-                .andReturn();
-        assertApiCode(reListed, 0);
-        assertThat(data(reListed).path("status").asText()).isEqualTo("ON_SALE");
-        assertThat(data(reListed).path("stock").asInt()).isEqualTo(2);
+        assertThat(reList.getResponse().getStatus()).isEqualTo(404);
     }
 
     @Test
-    @DisplayName("商品可以改挂二级类别，交易中禁止")
-    void changesCategoryUnlessFrozen() throws Exception {
+    @DisplayName("商品在所有状态下都能改挂类别，手动下架也不例外")
+    void changesCategoryInEveryStatus() throws Exception {
         String token = loginSeller(SELLER_PASSWORD);
         CategoryL2 first = createCategory();
         CategoryL2 second = createCategory();
@@ -393,21 +393,25 @@ class SellerGoodsApiTest extends ApiTestBase {
         assertThat(data(changed).path("category").path("l2_id").asText())
                 .isEqualTo(second.getId());
 
-        setStatus(id, GoodsStatus.FROZEN);
-        assertApiCode(changeCategory(token, id, first.getId()), 20021);
-
-        setStatus(id, GoodsStatus.OFF_MANUAL);
-        MvcResult offShelfChanged = changeCategory(token, id, first.getId());
-        assertApiCode(offShelfChanged, 0);
-        assertThat(data(offShelfChanged).path("category").path("l2_id").asText())
+        assertApiCode(updateStock(token, id, 0), 0);
+        MvcResult fromStockZero = changeCategory(token, id, first.getId());
+        assertApiCode(fromStockZero, 0);
+        assertThat(data(fromStockZero).path("category").path("l2_id").asText())
                 .isEqualTo(first.getId());
+
+        assertApiCode(updateStock(token, id, 1), 0);
+        assertApiCode(postWithoutBody("/api/seller/goods/" + id + "/off-shelf", token), 0);
+        MvcResult fromManual = changeCategory(token, id, second.getId());
+        assertApiCode(fromManual, 0);
+        assertThat(data(fromManual).path("category").path("l2_id").asText())
+                .isEqualTo(second.getId());
 
         assertApiStatusAndCode(changeCategory(token, id, "C2-not-exist"), 404, 20001);
         assertApiCode(changeCategory(token, id, first.getL1().getId()), 20002);
     }
 
     @Test
-    @DisplayName("公共列表只展示在售，交易中详情可直链只读，下架后详情不可打开")
+    @DisplayName("公共列表与详情只放行在售商品，已下架对买家不可见")
     void enforcesPublicVisibilityMatrix() throws Exception {
         String token = loginSeller(SELLER_PASSWORD);
         CategoryL2 category = createCategory();
@@ -419,28 +423,23 @@ class SellerGoodsApiTest extends ApiTestBase {
         assertApiCode(listOnSale, 0);
         assertThat(containsGoods(data(listOnSale), id)).isTrue();
 
-        setStatus(id, GoodsStatus.FROZEN);
-        MvcResult listFrozen = mockMvc.perform(get("/api/public/goods").param("page_size", "100"))
+        goodsOffShelf(id, OffShelfReason.SOLD_OUT);
+
+        MvcResult listOffShelf = mockMvc.perform(get("/api/public/goods").param("page_size", "100"))
                 .andReturn();
-        assertApiCode(listFrozen, 0);
-        assertThat(containsGoods(data(listFrozen), id)).isFalse();
+        assertApiCode(listOffShelf, 0);
+        assertThat(containsGoods(data(listOffShelf), id)).isFalse();
 
-        MvcResult frozenDetail = mockMvc.perform(get("/api/public/goods/{id}", id)).andReturn();
-        assertApiCode(frozenDetail, 0);
-        assertThat(data(frozenDetail).path("status").asText()).isEqualTo("FROZEN");
-        assertThat(data(frozenDetail).path("purchasable").asBoolean()).isFalse();
-        assertApiCode(updateStock(token, id, 2), 20021);
-        assertApiCode(postWithoutBody("/api/seller/goods/" + id + "/off-shelf", token), 20021);
-
-        setStatus(id, GoodsStatus.OFF_MANUAL);
-        assertApiStatusAndCode(
-                mockMvc.perform(get("/api/public/goods/{id}", id)).andReturn(), 404, 20011);
+        MvcResult offShelfDetail = mockMvc.perform(get("/api/public/goods/{id}", id)).andReturn();
+        assertApiStatusAndCode(offShelfDetail, 404, 20011);
 
         MvcResult sellerDetail = mockMvc.perform(get("/api/seller/goods/{id}", id)
                         .header("Authorization", bearer(token)))
                 .andReturn();
         assertApiCode(sellerDetail, 0);
-        assertThat(data(sellerDetail).path("status").asText()).isEqualTo("OFF_MANUAL");
+        assertThat(data(sellerDetail).path("status").asText()).isEqualTo("OFF_SHELF");
+        assertThat(data(sellerDetail).path("off_shelf_reason").asText()).isEqualTo("SOLD_OUT");
+        assertThat(data(sellerDetail).path("purchasable").asBoolean()).isFalse();
     }
 
     @Test
@@ -597,15 +596,13 @@ class SellerGoodsApiTest extends ApiTestBase {
         return data(result).path("url").asText();
     }
 
-    private void addQueuedIntention(String goodsId) {
+    /** 直接通过实体改状态，模拟由交易完成触发的自动下架；库存耗尽类原因同时把库存置 0。 */
+    private void goodsOffShelf(String goodsId, OffShelfReason reason) {
         Goods goods = goodsRepository.findById(goodsId).orElseThrow();
-        BuyerAccount buyer = createBuyer();
-        intentions.saveAndFlush(Intention.submit(goods.getId(), buyer, 1));
-    }
-
-    private void setStatus(String goodsId, GoodsStatus status) {
-        Goods goods = goodsRepository.findById(goodsId).orElseThrow();
-        goods.changeStatus(status);
+        if (reason != OffShelfReason.MANUAL) {
+            setStock(goods, 0);
+        }
+        goods.offShelf(reason);
         goodsRepository.saveAndFlush(goods);
     }
 

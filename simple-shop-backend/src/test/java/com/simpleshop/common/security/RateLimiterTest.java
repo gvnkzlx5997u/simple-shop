@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 
 class RateLimiterTest {
 
-    private static final RateLimiter.Scope SCOPE = RateLimiter.Scope.SUBMIT_INTENTION;
+    private static final RateLimiter.Scope SCOPE = RateLimiter.Scope.REGISTER;
 
     @Test
     @DisplayName("窗口内放行到上限，之后拒绝")
@@ -73,6 +73,35 @@ class RateLimiterTest {
 
         assertThat(limiter.purgeExpiredWindows()).isEqualTo(1);
         assertThat(limiter.trackedKeyCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("总开关关闭时一律放行，也不留下计数")
+    void disabledSwitchAllowsEverything() {
+        RateLimiter limiter = RateLimiter.disabled(new MutableClock());
+
+        for (int attempt = 0; attempt < 100; attempt++) {
+            assertThat(limiter.tryAcquire(RateLimiter.Scope.LOGIN, "1.1.1.1")).isTrue();
+        }
+        assertThat(limiter.trackedKeyCount()).isZero();
+    }
+
+    @Test
+    @DisplayName("登录键由账号与地址组成，同一地址的不同账号分开计数")
+    void loginKeyCombinesAccountAndClient() {
+        assertThat(RateLimiter.loginKey(" Alice ", "1.1.1.1")).isEqualTo("alice@1.1.1.1");
+        assertThat(RateLimiter.loginKey("alice", null)).isEqualTo("alice@");
+        assertThat(RateLimiter.loginKey(null, "1.1.1.1")).isEqualTo("@1.1.1.1");
+        assertThat(RateLimiter.loginKey("  ", " ")).isNull();
+
+        RateLimiter limiter = RateLimiter.withClock(
+                Map.of(RateLimiter.Scope.LOGIN, 1), new MutableClock());
+        assertThat(limiter.tryAcquire(
+                RateLimiter.Scope.LOGIN, RateLimiter.loginKey("alice", "1.1.1.1"))).isTrue();
+        assertThat(limiter.tryAcquire(
+                RateLimiter.Scope.LOGIN, RateLimiter.loginKey("bob", "1.1.1.1"))).isTrue();
+        assertThat(limiter.tryAcquire(
+                RateLimiter.Scope.LOGIN, RateLimiter.loginKey("alice", "1.1.1.1"))).isFalse();
     }
 
     private static final class MutableClock extends Clock {

@@ -24,7 +24,6 @@ import org.springframework.test.context.DynamicPropertySource;
 
 import com.simpleshop.account.entity.BuyerAccount;
 import com.simpleshop.account.repository.BuyerAccountRepository;
-import com.simpleshop.account.service.BuyerAuthService;
 import com.simpleshop.category.entity.CategoryL1;
 import com.simpleshop.category.entity.CategoryL2;
 import com.simpleshop.category.repository.CategoryL1Repository;
@@ -34,13 +33,6 @@ import com.simpleshop.goods.entity.Goods;
 import com.simpleshop.goods.repository.GoodsContentBlockRepository;
 import com.simpleshop.goods.repository.GoodsImageRepository;
 import com.simpleshop.goods.repository.GoodsRepository;
-import com.simpleshop.history.repository.GoodsHistoryRepository;
-import com.simpleshop.history.repository.IntentionHistoryRepository;
-import com.simpleshop.intention.entity.GoodsQueueSequence;
-import com.simpleshop.intention.repository.GoodsQueueSequenceRepository;
-import com.simpleshop.intention.repository.IntentionRepository;
-import com.simpleshop.intention.service.BuyerIntentionService;
-import com.simpleshop.intention.service.SellerTradeService;
 import com.simpleshop.inventory.entity.GoodsStock;
 import com.simpleshop.inventory.repository.GoodsStockRepository;
 
@@ -63,22 +55,11 @@ public abstract class ConcurrencyTestBase {
     @Autowired protected GoodsRepository goodsRepository;
     @Autowired protected GoodsImageRepository goodsImages;
     @Autowired protected GoodsContentBlockRepository contentBlocks;
-    @Autowired protected GoodsQueueSequenceRepository queueSequences;
-    @Autowired protected IntentionRepository intentions;
     @Autowired protected GoodsStockRepository stockItems;
-    @Autowired protected GoodsHistoryRepository goodsHistories;
-    @Autowired protected IntentionHistoryRepository intentionHistories;
     @Autowired protected BuyerAccountRepository buyerAccounts;
-    @Autowired protected BuyerAuthService accounts;
-    @Autowired protected BuyerIntentionService buyerIntentionService;
-    @Autowired protected SellerTradeService tradeService;
 
     @AfterEach
     void cleanBusinessTables() {
-        intentionHistories.deleteAllInBatch();
-        goodsHistories.deleteAllInBatch();
-        intentions.deleteAllInBatch();
-        queueSequences.deleteAllInBatch();
         contentBlocks.deleteAllInBatch();
         goodsImages.deleteAllInBatch();
         stockItems.deleteAllInBatch();
@@ -103,12 +84,10 @@ public abstract class ConcurrencyTestBase {
         return buyerAccounts.saveAndFlush(buyer);
     }
 
-    /** 建在售商品并初始化队列序号行，等价于发布服务的完整副作用。 */
     protected Goods publishedGoods(int stock) {
         Goods goods = goodsRepository.saveAndFlush(
                 Goods.publish(unique("商品-"), new BigDecimal("99.99"), createCategory()));
         stockItems.saveAndFlush(GoodsStock.initialize(goods.getId(), stock));
-        queueSequences.saveAndFlush(GoodsQueueSequence.forGoods(goods.getId()));
         return goods;
     }
 

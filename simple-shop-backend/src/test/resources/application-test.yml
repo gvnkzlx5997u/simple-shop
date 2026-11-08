@@ -9,11 +9,9 @@ spring:
 simple-shop:
   media:
     directory: ./target/test-media
-  # API 测试不触发限流；限流算法由 RateLimiterTest 单独覆盖。
+  # API 测试整体关闭限流；限流算法与开关由 RateLimiterTest 单独覆盖。
   rate-limit:
-    register-per-minute: 1000
-    login-per-minute: 1000
-    submit-intention-per-minute: 1000
+    enabled: false
 
 logging:
   level:

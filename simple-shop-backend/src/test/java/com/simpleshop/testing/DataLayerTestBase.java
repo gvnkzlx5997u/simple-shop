@@ -27,13 +27,10 @@ import com.simpleshop.category.entity.CategoryL2;
 import com.simpleshop.category.repository.CategoryL1Repository;
 import com.simpleshop.category.repository.CategoryL2Repository;
 import com.simpleshop.goods.entity.Goods;
+import com.simpleshop.goods.enums.OffShelfReason;
 import com.simpleshop.goods.repository.GoodsContentBlockRepository;
 import com.simpleshop.goods.repository.GoodsImageRepository;
 import com.simpleshop.goods.repository.GoodsRepository;
-import com.simpleshop.history.repository.GoodsHistoryRepository;
-import com.simpleshop.history.repository.IntentionHistoryRepository;
-import com.simpleshop.intention.repository.GoodsQueueSequenceRepository;
-import com.simpleshop.intention.repository.IntentionRepository;
 import com.simpleshop.inventory.entity.GoodsStock;
 import com.simpleshop.inventory.repository.GoodsStockRepository;
 
@@ -55,11 +52,7 @@ public abstract class DataLayerTestBase {
     @Autowired protected GoodsRepository goodsRepository;
     @Autowired protected GoodsImageRepository goodsImages;
     @Autowired protected GoodsContentBlockRepository contentBlocks;
-    @Autowired protected GoodsHistoryRepository goodsHistories;
-    @Autowired protected GoodsQueueSequenceRepository queueSequences;
-    @Autowired protected IntentionRepository intentions;
     @Autowired protected GoodsStockRepository stockItems;
-    @Autowired protected IntentionHistoryRepository intentionHistories;
     @Autowired protected EntityManager entityManager;
     @Autowired protected JdbcTemplate jdbcTemplate;
     @Autowired protected MockMvc mockMvc;
@@ -93,6 +86,12 @@ public abstract class DataLayerTestBase {
                 .orElseThrow(() -> new IllegalStateException("stock row missing"));
         stock.setAvailable(available);
         stockItems.saveAndFlush(stock);
+    }
+
+    /** 直接按领域方法改状态，用于准备「已下架」的夹具。 */
+    protected Goods offShelf(Goods goods, OffShelfReason reason) {
+        goods.offShelf(reason);
+        return goodsRepository.saveAndFlush(goods);
     }
 
     protected void flushAndClear() {

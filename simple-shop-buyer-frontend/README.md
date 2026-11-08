@@ -1,6 +1,8 @@
 # simple-shop-buyer-frontend
 
-在线购物系统 · 买家端前端（阶段二，前后端分离）。
+> **当前状态：阶段三开发进行中。** 本文档尚未按阶段三更新，功能、包结构与接口描述可能滞后，待该工程开发完成后统一修订。
+
+在线购物系统 · 买家端前端（前后端分离）。
 
 对应后端：`simple-shop-backend`（Spring Boot，REST + 媒体文件，不输出 HTML）。
 接口契约以 `simple-shop-doc/阶段二/前端交接文档.md` 与后端 Swagger（`/swagger-ui/index.html`）为准。
