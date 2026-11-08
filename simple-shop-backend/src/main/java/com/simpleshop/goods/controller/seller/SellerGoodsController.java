@@ -22,7 +22,6 @@ import com.simpleshop.goods.dto.GoodsDetailData;
 import com.simpleshop.goods.dto.GoodsPublishRequest;
 import com.simpleshop.goods.dto.GoodsStockRequest;
 import com.simpleshop.goods.dto.GoodsSummaryData;
-import com.simpleshop.goods.dto.ReListRequest;
 import com.simpleshop.goods.service.SellerGoodsQueryService;
 import com.simpleshop.goods.service.SellerGoodsService;
 
@@ -45,14 +44,16 @@ public class SellerGoodsController {
     }
 
     @GetMapping
-    @Operation(summary = "商品列表；可按状态、类别或名称筛选")
+    @Operation(summary = "商品列表；可按状态、下架原因、类别或名称筛选")
     public ApiResponse<PageResponse<GoodsSummaryData>> list(
             @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "off_shelf_reason", required = false) String offShelfReason,
             @RequestParam(name = "category_id", required = false) String categoryId,
             @RequestParam(name = "keyword", required = false) String keyword,
             @RequestParam(name = "page", required = false) Integer page,
             @RequestParam(name = "page_size", required = false) Integer pageSize) {
-        return ApiResponse.ok(queryService.list(status, categoryId, keyword, page, pageSize));
+        return ApiResponse.ok(queryService.list(
+                status, offShelfReason, categoryId, keyword, page, pageSize));
     }
 
     @PostMapping
@@ -68,28 +69,20 @@ public class SellerGoodsController {
     }
 
     @PutMapping("/{id}/stock")
-    @Operation(summary = "修改库存；在售改 0 触发库存清零下架，清零下架改大于 0 自动上架")
+    @Operation(summary = "修改库存；在售改 0 触发库存耗尽下架，库存耗尽下架改大于 0 自动上架；手动下架后库存只读")
     public ApiResponse<GoodsDetailData> updateStock(
             @PathVariable String id, @Valid @RequestBody GoodsStockRequest request) {
         return ApiResponse.ok(goodsService.updateStock(id, request.stock()));
     }
 
     @PostMapping("/{id}/off-shelf")
-    @Operation(summary = "手动下架；要求没有排队中或交易中意向")
+    @Operation(summary = "手动下架；手动下架是终态，没有重新上架接口")
     public ApiResponse<GoodsDetailData> offShelf(@PathVariable String id) {
         return ApiResponse.ok(goodsService.offShelf(id));
     }
 
-    @PostMapping("/{id}/re-list")
-    @Operation(summary = "手动下架后重新上架；必须显式确认")
-    public ApiResponse<GoodsDetailData> reList(
-            @PathVariable String id,
-            @Valid @RequestBody(required = false) ReListRequest request) {
-        return ApiResponse.ok(goodsService.reList(id, request));
-    }
-
     @PutMapping("/{id}/category")
-    @Operation(summary = "商品改挂二级类别；交易中禁止")
+    @Operation(summary = "商品改挂二级类别；所有状态均可改挂")
     public ApiResponse<GoodsDetailData> changeCategory(
             @PathVariable String id, @Valid @RequestBody GoodsCategoryRequest request) {
         return ApiResponse.ok(goodsService.changeCategory(id, request.categoryId()));

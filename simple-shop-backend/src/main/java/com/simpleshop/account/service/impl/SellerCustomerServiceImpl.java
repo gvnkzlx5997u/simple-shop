@@ -1,7 +1,6 @@
 package com.simpleshop.account.service.impl;
 
 import com.simpleshop.account.service.SellerCustomerService;
-import com.simpleshop.account.api.CustomerPurchaseHistoryPort;
 
 import java.util.List;
 
@@ -21,22 +20,17 @@ import com.simpleshop.common.config.AppProperties;
 import com.simpleshop.common.text.UtcIso8601;
 
 /**
- * 卖家客户查询：注册买家列表与详情，只读。购买历史经端口读取，不反向依赖。
+ * 卖家客户查询：注册买家列表与详情，只读。
  */
 @Service
 public class SellerCustomerServiceImpl implements SellerCustomerService {
 
     private final BuyerAccountRepository buyers;
     private final AppProperties properties;
-    private final CustomerPurchaseHistoryPort purchaseHistory;
 
-    public SellerCustomerServiceImpl(
-            BuyerAccountRepository buyers,
-            AppProperties properties,
-            CustomerPurchaseHistoryPort purchaseHistory) {
+    public SellerCustomerServiceImpl(BuyerAccountRepository buyers, AppProperties properties) {
         this.buyers = buyers;
         this.properties = properties;
-        this.purchaseHistory = purchaseHistory;
     }
 
     @Transactional(readOnly = true)
@@ -52,7 +46,7 @@ public class SellerCustomerServiceImpl implements SellerCustomerService {
     }
 
     @Transactional(readOnly = true)
-    public CustomerDetailData detail(String id, Integer page, Integer pageSize) {
+    public CustomerDetailData detail(String id) {
         String buyerId = id == null ? "" : id.trim();
         if (buyerId.isEmpty()) {
             throw new BusinessException(ErrorCode.ACCOUNT_NOT_FOUND);
@@ -64,8 +58,7 @@ public class SellerCustomerServiceImpl implements SellerCustomerService {
                 buyer.getUsername(),
                 buyer.getPhone(),
                 buyer.getDefaultLocation(),
-                UtcIso8601.of(buyer.getCreateAt()),
-                purchaseHistory.history(buyer.getId(), page, pageSize));
+                UtcIso8601.of(buyer.getCreateAt()));
     }
 
     private static CustomerSummaryData summary(BuyerAccount buyer) {

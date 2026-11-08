@@ -27,7 +27,7 @@ import com.simpleshop.goods.repository.GoodsRepository;
 import com.simpleshop.inventory.api.StockPort;
 
 /**
- * 公共商品查询：列表/搜索只返回在售商品，详情额外允许交易中的直链只读。
+ * 公共商品查询：列表/搜索与详情都只返回在售商品，已下架商品对买家不可见。
  */
 @Service
 public class BuyerGoodsQueryServiceImpl implements BuyerGoodsQueryService {
@@ -61,6 +61,7 @@ public class BuyerGoodsQueryServiceImpl implements BuyerGoodsQueryService {
         PageQuery pageQuery = querySupport.page(page, pageSize);
         Page<Goods> result = goodsRepository.search(
                 GoodsStatus.ON_SALE,
+                null,
                 category.id(),
                 category.level(),
                 querySupport.keyword(keyword),
@@ -82,7 +83,7 @@ public class BuyerGoodsQueryServiceImpl implements BuyerGoodsQueryService {
         }
         Goods goods = goodsRepository.findDetailById(id.trim())
                 .orElseThrow(() -> new BusinessException(ErrorCode.GOODS_NOT_FOUND));
-        if (goods.getStatus() != GoodsStatus.ON_SALE && goods.getStatus() != GoodsStatus.FROZEN) {
+        if (!goods.isOnSale()) {
             throw new BusinessException(ErrorCode.GOODS_NOT_FOUND);
         }
         return assembler.detail(

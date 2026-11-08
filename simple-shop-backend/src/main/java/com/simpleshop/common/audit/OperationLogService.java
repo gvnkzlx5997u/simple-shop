@@ -27,24 +27,16 @@ public class OperationLogService {
     public static final String PUBLISH_GOODS = "PUBLISH_GOODS";
     public static final String UPDATE_STOCK = "UPDATE_STOCK";
     public static final String OFF_SHELF_GOODS = "OFF_SHELF_GOODS";
-    public static final String RE_LIST_GOODS = "RE_LIST_GOODS";
     public static final String UPDATE_GOODS_CATEGORY = "UPDATE_GOODS_CATEGORY";
 
     public static final String CREATE_CATEGORY = "CREATE_CATEGORY";
     public static final String RENAME_CATEGORY = "RENAME_CATEGORY";
     public static final String DELETE_CATEGORY = "DELETE_CATEGORY";
 
-    public static final String SUBMIT_INTENTION = "SUBMIT_INTENTION";
-
-    public static final String ENTER_TRADE = "ENTER_TRADE";
-    public static final String MARK_TRADE_SUCCESS = "MARK_TRADE_SUCCESS";
-    public static final String MARK_TRADE_FAILURE = "MARK_TRADE_FAILURE";
-
     public static final String CHANGE_PASSWORD = "CHANGE_PASSWORD";
 
     public static final String TARGET_GOODS = "GOODS";
     public static final String TARGET_CATEGORY = "CATEGORY";
-    public static final String TARGET_INTENTION = "INTENTION";
     public static final String TARGET_ACCOUNT = "ACCOUNT";
 
     public void log(String operation, String targetType, String targetId) {

@@ -14,7 +14,6 @@ import com.simpleshop.goods.dto.GoodsSummaryData;
 import com.simpleshop.goods.entity.Goods;
 import com.simpleshop.goods.entity.GoodsContentBlock;
 import com.simpleshop.goods.entity.GoodsImage;
-import com.simpleshop.goods.enums.GoodsStatus;
 
 /**
  * 商品实体到响应 DTO 的映射，列表只取主图，详情取全部图片与描述块。
@@ -37,6 +36,8 @@ public class GoodsAssembler {
                 goods.getPrice(),
                 stock,
                 goods.getStatus(),
+                goods.getOffShelfReason(),
+                UtcIso8601.of(goods.getOffShelfAt()),
                 mainImageUrl,
                 category(goods),
                 UtcIso8601.of(goods.getCreateAt()),
@@ -68,12 +69,14 @@ public class GoodsAssembler {
                 goods.getPrice(),
                 stock,
                 goods.getStatus(),
+                goods.getOffShelfReason(),
+                UtcIso8601.of(goods.getOffShelfAt()),
                 category(goods),
                 mainImageUrl,
                 imageData,
                 description,
                 UtcIso8601.of(goods.getCreateAt()),
                 UtcIso8601.of(goods.getUpdateAt()),
-                goods.getStatus() == GoodsStatus.ON_SALE && stock > 0);
+                goods.isOnSale() && stock > 0);
     }
 }

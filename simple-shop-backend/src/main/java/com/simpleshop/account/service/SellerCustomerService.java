@@ -11,5 +11,5 @@ public interface SellerCustomerService {
 
     PageResponse<CustomerSummaryData> list(Integer page, Integer pageSize);
 
-    CustomerDetailData detail(String id, Integer page, Integer pageSize);
+    CustomerDetailData detail(String id);
 }

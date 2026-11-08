@@ -38,11 +38,8 @@ public class SellerCustomerController {
     }
 
     @GetMapping("/api/seller/customers/{id}")
-    @Operation(summary = "客户详情与购买历史；购买历史分页参数作用于历史并集")
-    public ApiResponse<CustomerDetailData> detail(
-            @PathVariable String id,
-            @RequestParam(name = "page", required = false) Integer page,
-            @RequestParam(name = "page_size", required = false) Integer pageSize) {
-        return ApiResponse.ok(customerService.detail(id, page, pageSize));
+    @Operation(summary = "客户详情；购买历史暂不返回，等订单模块提供")
+    public ApiResponse<CustomerDetailData> detail(@PathVariable String id) {
+        return ApiResponse.ok(customerService.detail(id));
     }
 }

@@ -21,6 +21,7 @@ import com.simpleshop.goods.dto.GoodsSummaryData;
 import com.simpleshop.goods.entity.Goods;
 import com.simpleshop.goods.entity.GoodsImage;
 import com.simpleshop.goods.enums.GoodsStatus;
+import com.simpleshop.goods.enums.OffShelfReason;
 import com.simpleshop.goods.repository.GoodsContentBlockRepository;
 import com.simpleshop.goods.repository.GoodsImageRepository;
 import com.simpleshop.goods.repository.GoodsRepository;
@@ -57,15 +58,18 @@ public class SellerGoodsQueryServiceImpl implements SellerGoodsQueryService {
     @Transactional(readOnly = true)
     public PageResponse<GoodsSummaryData> list(
             String statusValue,
+            String reasonValue,
             String categoryId,
             String keyword,
             Integer page,
             Integer pageSize) {
         GoodsStatus status = querySupport.status(statusValue);
+        OffShelfReason reason = querySupport.offShelfReason(status, reasonValue);
         GoodsQuerySupport.CategoryFilter category = querySupport.category(categoryId);
         PageQuery pageQuery = querySupport.page(page, pageSize);
         Page<Goods> result = goodsRepository.search(
                 status,
+                reason,
                 category.id(),
                 category.level(),
                 querySupport.keyword(keyword),

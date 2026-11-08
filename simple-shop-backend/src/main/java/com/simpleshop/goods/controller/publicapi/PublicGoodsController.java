@@ -40,7 +40,7 @@ public class PublicGoodsController {
     }
 
     @GetMapping("/{id}")
-    @Operation(summary = "商品详情；在售和交易中可见，下架商品返回 404")
+    @Operation(summary = "商品详情；只返回在售商品，已下架商品返回 404")
     public ApiResponse<GoodsDetailData> detail(@PathVariable String id) {
         return ApiResponse.ok(goodsService.detail(id));
     }

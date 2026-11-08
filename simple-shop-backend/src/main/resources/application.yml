@@ -54,13 +54,12 @@ simple-shop:
     timeout: 30m
     timeout-tolerance: 60s
 
-  queue:
-    max-size: 1000
-
   rate-limit:
-    register-per-minute: ${RATE_LIMIT_REGISTER:10}
-    login-per-minute: ${RATE_LIMIT_LOGIN:10}
-    submit-intention-per-minute: ${RATE_LIMIT_SUBMIT:10}
+    # 保护性限流总开关：开发与测试直接关掉，不要靠调大阈值绕过。
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    register-per-minute: ${RATE_LIMIT_REGISTER:50}
+    login-per-minute: ${RATE_LIMIT_LOGIN:50}
+    order-per-minute: ${RATE_LIMIT_ORDER:1000}
 
   pagination:
     default-size: 10

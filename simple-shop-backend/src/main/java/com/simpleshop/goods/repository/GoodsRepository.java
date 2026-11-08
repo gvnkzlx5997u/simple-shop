@@ -9,12 +9,12 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
-import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.simpleshop.goods.entity.Goods;
 import com.simpleshop.goods.enums.GoodsStatus;
+import com.simpleshop.goods.enums.OffShelfReason;
 
 public interface GoodsRepository extends JpaRepository<Goods, String> {
 
@@ -37,23 +37,16 @@ public interface GoodsRepository extends JpaRepository<Goods, String> {
     Optional<Goods> findWithSharedLockById(@Param("id") String id);
 
     /**
-     * 直接删除当前商品行，绕过一级缓存（实体引用会阻断 em.remove 的 flush）。
-     * 归档流程专用：意向外键 RESTRICT，必须先删该商品全部意向行；
-     * 图片、描述块、队列序号行由数据库级联删除。
-     */
-    @Modifying(flushAutomatically = true)
-    @Query("delete from Goods g where g.id = :id")
-    void deleteRowById(@Param("id") String id);
-
-    /**
      * 卖家/公共商品列表共用查询。categoryLevel 为 0 表示不按类别筛选，
      * 为 1 时 categoryId 是一级类别，为 2 时是二级类别。
+     * reason 只用于「历史商品」三类视图，调用方保证它只与 OFF_SHELF 组合。
      */
     @Query(value = """
             select g from Goods g
             join fetch g.category c
             join fetch c.l1 l1
             where (:status is null or g.status = :status)
+              and (:reason is null or g.offShelfReason = :reason)
               and (:categoryLevel = 0
                    or (:categoryLevel = 1 and l1.id = :categoryId)
                    or (:categoryLevel = 2 and c.id = :categoryId))
@@ -70,6 +63,7 @@ public interface GoodsRepository extends JpaRepository<Goods, String> {
             """)
     Page<Goods> search(
             @Param("status") GoodsStatus status,
+            @Param("reason") OffShelfReason reason,
             @Param("categoryId") String categoryId,
             @Param("categoryLevel") int categoryLevel,
             @Param("keyword") String keyword,

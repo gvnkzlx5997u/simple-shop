@@ -98,7 +98,7 @@ npx playwright test
   - 买家/卖家两端的文案、筛选与按钮状态；
   - 状态与库存的一致性（在售无原因、已下架有原因；`MANUAL` 库存大于 0，另两类为 0）。
 - **媒体限制**：商品图/描述图 5MB，描述视频 20MB，multipart 请求上限 25MB；nginx 的 `client_max_body_size 25m` 不能小于后端上限，否则会先收到 413 而不是业务错误码。
-- **限流**：限流是保护措施，不是业务规则。注册、登录默认各 10 次/分钟，可用 `RATE_LIMIT_*` 环境变量覆盖；下单、购物车、收藏不限流。E2E 与批量造数据用测试开关整体关闭，不要靠把阈值调到 1000 来绕过。
+- **限流**：限流是保护措施，不是业务规则。总开关 `simple-shop.rate-limit.enabled` 默认开；注册、登录默认各 50 次/分钟，登录按「账号 + IP」计；提交订单只给 1000 次/分钟的兜底阈值；购物车、收藏不限流。E2E 与批量造数据在 yml 里整体关闭，不要靠调大阈值绕过。
 
 ## 5. 前端约定
 
@@ -117,7 +117,7 @@ npx playwright test
 ## 6. 数据与迁移
 
 - MySQL 8；开发库 `simple_shop`，测试库 `simple_shop_test`，E2E 库 `simple_shop_e2e`。三者不要混用，尤其不要拿开发库跑 E2E。
-- Flyway 管理表结构：`V1__baseline_schema.sql` 是 12 张表的基线，`V2__seed_initial_data.sql` 写入种子数据。**已发布的迁移脚本不可修改**（改注释也会导致 checksum 失配）；新变更从 `V3` 开始新增，阶段三的 `V3` 建订单/购物车/收藏表、给商品表加下架原因与时间、删除意向与历史表，不写存量数据迁移。
+- Flyway 管理表结构：`V1__baseline_schema.sql` 是 12 张表的基线，`V2__seed_initial_data.sql` 写入种子数据。**已发布的迁移脚本不可修改**（改注释也会导致 checksum 失配）；新变更从 `V3` 开始新增。阶段三的 `V3` 建订单/购物车/收藏表、给商品表加下架原因与时间、删除意向与历史表；它只做三处旧状态值换算（`FROZEN→ON_SALE`、`OFF_MANUAL/OFF_ZERO→OFF_SHELF` 加原因），不迁移意向与历史记录。
 - JPA 固定 `ddl-auto=validate`，不要改成 `update`/`create` 来“省事”；应用能启动本身就是实体与表结构一致的断言。
 - 测试库由 Testcontainers 或 `-Plocal-mysql` 管理；迁移测试会创建随机临时库，不要手工复用。
 - 数据库按阶段重建，旧数据卷不能跨阶段复用：升级必须先备份，再 `docker compose down -v`（或换项目名/卷名）。`down -v` 会删数据，执行前必须和人类确认。

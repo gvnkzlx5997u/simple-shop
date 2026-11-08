@@ -20,22 +20,20 @@ Playwright 驱动**系统已装的 Edge**（不下载 Chromium），对真实运
 | 买家 SPA | `http://localhost:5174` | `npm run dev -- --port 5174` |
 | 卖家 SPA | `http://localhost:5173` | `npm run dev -- --port 5173` |
 
-后端启动示例（独立库 + 放宽限流，否则批量注册会 429）：
+后端启动示例（独立库 + 关闭限流，否则批量注册会被 50001 拒绝）：
 
 ```bash
 cd simple-shop-backend
 DB_PASSWORD=<你的 MySQL 口令> \
 DB_URL="jdbc:mysql://localhost:3306/simple_shop_e2e?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&connectionTimeZone=UTC&rewriteBatchedStatements=true" \
 java -Dserver.port=8080 \
-     -Dsimple-shop.rate-limit.register-per-minute=1000 \
-     -Dsimple-shop.rate-limit.login-per-minute=1000 \
-     -Dsimple-shop.rate-limit.submit-intention-per-minute=1000 \
+     -DRATE_LIMIT_ENABLED=false \
      -jar target/simple-shop.war
 ```
 
 后端添加了环境变量配置，可以通过环境变量一行启动：
 ```powershell
-$env:RATE_LIMIT_REGISTER=1000;$env:RATE_LIMIT_LOGIN=1000;$env:RATE_LIMIT_SUBMIT=1000;$env.DB_PASSWORD=<你的 MySQL 口令>;$env.DB_URL="jdbc:mysql://localhost:3306/simple_shop_e2e?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&connectionTimeZone=UTC&rewriteBatchedStatements=true";java -jar .\target\simple-shop.war
+$env:RATE_LIMIT_ENABLED="false";$env.DB_PASSWORD=<你的 MySQL 口令>;$env.DB_URL="jdbc:mysql://localhost:3306/simple_shop_e2e?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&connectionTimeZone=UTC&rewriteBatchedStatements=true";java -jar .\target\simple-shop.war
 ```
 
 

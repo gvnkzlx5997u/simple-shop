@@ -18,7 +18,6 @@ public class AppProperties {
 
     private final Media media = new Media();
     private final Session session = new Session();
-    private final Queue queue = new Queue();
     private final RateLimit rateLimit = new RateLimit();
     private final Pagination pagination = new Pagination();
 
@@ -28,10 +27,6 @@ public class AppProperties {
 
     public Session getSession() {
         return session;
-    }
-
-    public Queue getQueue() {
-        return queue;
     }
 
     public RateLimit getRateLimit() {
@@ -125,25 +120,21 @@ public class AppProperties {
         }
     }
 
-    public static class Queue {
-
-        /** 单个商品非终态意向的数量上限。 */
-        private int maxSize = 1000;
-
-        public int getMaxSize() {
-            return maxSize;
-        }
-
-        public void setMaxSize(int maxSize) {
-            this.maxSize = maxSize;
-        }
-    }
-
     public static class RateLimit {
 
-        private int registerPerMinute = 10;
-        private int loginPerMinute = 10;
-        private int submitIntentionPerMinute = 10;
+        /** 保护性限流总开关：开发与测试直接关掉，而不是把阈值调大。 */
+        private boolean enabled = true;
+        private int registerPerMinute = 50;
+        private int loginPerMinute = 50;
+        private int orderPerMinute = 1000;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
 
         public int getRegisterPerMinute() {
             return registerPerMinute;
@@ -161,12 +152,12 @@ public class AppProperties {
             this.loginPerMinute = loginPerMinute;
         }
 
-        public int getSubmitIntentionPerMinute() {
-            return submitIntentionPerMinute;
+        public int getOrderPerMinute() {
+            return orderPerMinute;
         }
 
-        public void setSubmitIntentionPerMinute(int submitIntentionPerMinute) {
-            this.submitIntentionPerMinute = submitIntentionPerMinute;
+        public void setOrderPerMinute(int orderPerMinute) {
+            this.orderPerMinute = orderPerMinute;
         }
     }
 

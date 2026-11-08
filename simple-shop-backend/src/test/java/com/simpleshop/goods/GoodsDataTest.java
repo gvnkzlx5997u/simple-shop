@@ -19,8 +19,7 @@ import com.simpleshop.goods.entity.GoodsContentBlock;
 import com.simpleshop.goods.entity.GoodsImage;
 import com.simpleshop.goods.enums.ContentBlockType;
 import com.simpleshop.goods.enums.GoodsStatus;
-import com.simpleshop.history.entity.GoodsHistory;
-import com.simpleshop.history.enums.GoodsHistoryResult;
+import com.simpleshop.goods.enums.OffShelfReason;
 import com.simpleshop.testing.DataLayerTestBase;
 
 class GoodsDataTest extends DataLayerTestBase {
@@ -46,6 +45,8 @@ class GoodsDataTest extends DataLayerTestBase {
         assertThat(loaded.getPrice()).isEqualByComparingTo(new BigDecimal("99.99"));
         assertThat(stockItems.findById(goods.getId()).orElseThrow().getAvailable()).isEqualTo(3);
         assertThat(loaded.getStatus()).isEqualTo(GoodsStatus.ON_SALE);
+        assertThat(loaded.getOffShelfReason()).isNull();
+        assertThat(loaded.getOffShelfAt()).isNull();
         assertThat(loaded.getCategory().getId()).isEqualTo(category.getId());
 
         assertThat(goodsImages.findByGoods_IdOrderBySortNoAsc(goods.getId())).hasSize(2);
@@ -56,6 +57,76 @@ class GoodsDataTest extends DataLayerTestBase {
         assertThat(blocks).extracting(GoodsContentBlock::getBlockType)
                 .containsExactly(ContentBlockType.TEXT, ContentBlockType.IMAGE, ContentBlockType.VIDEO);
         assertThat(blocks.get(0).getTextContent()).isEqualTo("第一行\n第二行");
+    }
+
+    @Test
+    @DisplayName("下架写入原因与时间，复售时两者一起清空")
+    void offShelfAndBackOnSaleKeepReasonAndTimeInPair() {
+        Goods goods = createGoods(createCategory());
+
+        goods.offShelf(OffShelfReason.STOCK_ZERO);
+        goodsRepository.saveAndFlush(goods);
+        flushAndClear();
+
+        Goods offShelf = goodsRepository.findById(goods.getId()).orElseThrow();
+        assertThat(offShelf.getStatus()).isEqualTo(GoodsStatus.OFF_SHELF);
+        assertThat(offShelf.getOffShelfReason()).isEqualTo(OffShelfReason.STOCK_ZERO);
+        assertThat(offShelf.getOffShelfAt()).isNotNull();
+        assertThat(offShelf.isRestockable()).isTrue();
+
+        offShelf.backOnSale();
+        goodsRepository.saveAndFlush(offShelf);
+        flushAndClear();
+
+        Goods onSale = goodsRepository.findById(goods.getId()).orElseThrow();
+        assertThat(onSale.getStatus()).isEqualTo(GoodsStatus.ON_SALE);
+        assertThat(onSale.getOffShelfReason()).isNull();
+        assertThat(onSale.getOffShelfAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("手动下架是终态：不能借复售方法回到在售")
+    void manualOffShelfCannotBeRestocked() {
+        Goods goods = createGoods(createCategory());
+        goods.offShelf(OffShelfReason.MANUAL);
+        goodsRepository.saveAndFlush(goods);
+
+        assertThat(goods.isRestockable()).isFalse();
+        assertThatThrownBy(goods::backOnSale).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    @DisplayName("DB CHECK 拒绝对在售商品写下架原因")
+    void rejectsOnSaleGoodsCarryingOffShelfReason() {
+        Goods goods = createGoods(createCategory());
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "update simpleshop_goods set off_shelf_reason = ?, off_shelf_at = ? where id = ?",
+                "MANUAL", LocalDateTime.now(ZoneOffset.UTC), goods.getId()))
+                .isInstanceOf(DataAccessException.class);
+    }
+
+    @Test
+    @DisplayName("DB CHECK 拒绝已下架但缺原因或缺下架时间的商品")
+    void rejectsOffShelfGoodsWithoutReasonOrTime() {
+        Goods goods = createGoods(createCategory());
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "update simpleshop_goods set status = 'OFF_SHELF', "
+                        + "off_shelf_reason = null, off_shelf_at = null where id = ?",
+                goods.getId()))
+                .isInstanceOf(DataAccessException.class);
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "update simpleshop_goods set status = 'OFF_SHELF', "
+                        + "off_shelf_reason = 'MANUAL', off_shelf_at = null where id = ?",
+                goods.getId()))
+                .isInstanceOf(DataAccessException.class);
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "update simpleshop_goods set status = 'FROZEN' where id = ?",
+                goods.getId()))
+                .isInstanceOf(DataAccessException.class);
     }
 
     @Test
@@ -92,30 +163,5 @@ class GoodsDataTest extends DataLayerTestBase {
                 "GB-INVALID", goods.getId(), "TEXT", 99, "text", "/media/description/x.jpg",
                 LocalDateTime.now(ZoneOffset.UTC)))
                 .isInstanceOf(DataAccessException.class);
-    }
-
-    @Test
-    @DisplayName("历史商品保存描述与图片 JSON 快照")
-    void archivesGoodsWithJsonSnapshots() {
-        Goods goods = createGoods(createCategory());
-        GoodsHistory history = GoodsHistory.archive(
-                goods.getId(),
-                goods.getName(),
-                goods.getPrice(),
-                0,
-                "一级类别",
-                "二级类别",
-                "[{\"type\":\"text\",\"text\":\"hello\"}]",
-                "[{\"url\":\"/media/goods/main.jpg\",\"is_main\":true,\"sort_no\":1}]",
-                goods.getCreateAt());
-
-        goodsHistories.saveAndFlush(history);
-        flushAndClear();
-
-        GoodsHistory loaded = goodsHistories.findById(goods.getId()).orElseThrow();
-        assertThat(loaded.getResult()).isEqualTo(GoodsHistoryResult.SOLD_OUT);
-        assertThat(loaded.getDescriptionSnapshot()).contains("\"text\"").contains("hello");
-        assertThat(loaded.getImagesSnapshot()).contains("\"is_main\"");
-        assertThat(loaded.getArchivedAt()).isNotNull();
     }
 }

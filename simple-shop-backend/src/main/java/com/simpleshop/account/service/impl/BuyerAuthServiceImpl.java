@@ -57,7 +57,8 @@ public class BuyerAuthServiceImpl implements BuyerAuthService {
 
     @Transactional(readOnly = true)
     public SessionStore.Session login(BuyerLoginRequest request, String clientKey) {
-        requireRateLimit(RateLimiter.Scope.LOGIN, clientKey);
+        requireRateLimit(RateLimiter.Scope.LOGIN,
+                RateLimiter.loginKey(request.username(), clientKey));
         String username = AccountRules.username(request.username());
         String password = AccountRules.loginPassword(request.password());
 
@@ -69,7 +70,7 @@ public class BuyerAuthServiceImpl implements BuyerAuthService {
                 AuthRole.BUYER, buyer.getId(), buyer.getUsername()));
     }
 
-    /** 按主键加载买家账号，供 account 之外的功能（如提交意向）读取。 */
+    /** 按主键加载买家账号，供 account 之外的只读查询使用。 */
     @Transactional(readOnly = true)
     public BuyerAccount requireAccount(String id) {
         return buyers.findById(id)

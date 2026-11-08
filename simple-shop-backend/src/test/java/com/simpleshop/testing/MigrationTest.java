@@ -24,14 +24,10 @@ import com.simpleshop.category.entity.CategoryL2;
 import com.simpleshop.goods.entity.Goods;
 import com.simpleshop.goods.entity.GoodsContentBlock;
 import com.simpleshop.goods.entity.GoodsImage;
-import com.simpleshop.history.entity.GoodsHistory;
-import com.simpleshop.history.entity.IntentionHistory;
-import com.simpleshop.intention.entity.GoodsQueueSequence;
-import com.simpleshop.intention.entity.Intention;
 import com.simpleshop.inventory.entity.GoodsStock;
 
 /**
- * 空库迁移验证：在一次性 MySQL 里跑 V1→V2，再用 Hibernate 的 validate 校验实体与表结构。
+ * 空库迁移验证：在一次性 MySQL 里跑 V1→V3，再用 Hibernate 的 validate 校验实体与表结构。
  *
  * <p>默认在 Testcontainers 容器里执行；{@code -Plocal-mysql} 时在本机 MySQL 上创建
  * 一个随机命名的临时库，验证完立即删除，不碰 {@code simple_shop} / {@code simple_shop_test}。
@@ -42,9 +38,7 @@ class MigrationTest {
             CategoryL1.class, CategoryL2.class,
             Goods.class, GoodsImage.class, GoodsContentBlock.class,
             GoodsStock.class,
-            GoodsHistory.class, IntentionHistory.class,
-            SellerAccount.class, BuyerAccount.class,
-            GoodsQueueSequence.class, Intention.class);
+            SellerAccount.class, BuyerAccount.class);
 
     @Test
     void emptyDatabaseMigratesAndValidates() throws Exception {
@@ -103,7 +97,7 @@ class MigrationTest {
                 .load();
         flyway.migrate();
 
-        assertThat(flyway.info().applied()).hasSize(2);
+        assertThat(flyway.info().applied()).hasSize(3);
         assertSchema(url, user, password);
         validateWithHibernate(url, user, password);
     }
@@ -116,20 +110,28 @@ class MigrationTest {
                             + "where table_schema = database() and table_name like 'simpleshop_%'"))
                     .isEqualTo(12);
             assertThat(count(statement,
-                    "select count(*) from information_schema.columns "
-                            + "where table_schema = database() and table_name = 'simpleshop_goods' "
-                            + "and column_name = 'stock'"))
+                    "select count(*) from information_schema.tables "
+                            + "where table_schema = database() and table_name in ("
+                            + "'simpleshop_intention', 'simpleshop_intention_history', "
+                            + "'simpleshop_goods_history', 'simpleshop_goods_queue_sequence')"))
                     .isZero();
             assertThat(count(statement,
                     "select count(*) from information_schema.tables "
-                            + "where table_schema = database() and table_name = 'simpleshop_goods_stock'"))
-                    .isEqualTo(1);
+                            + "where table_schema = database() and table_name in ("
+                            + "'simpleshop_order', 'simpleshop_order_item', "
+                            + "'simpleshop_cart_item', 'simpleshop_favorite')"))
+                    .isEqualTo(4);
+            assertThat(count(statement,
+                    "select count(*) from information_schema.columns "
+                            + "where table_schema = database() and table_name = 'simpleshop_goods' "
+                            + "and column_name in ('off_shelf_reason', 'off_shelf_at')"))
+                    .isEqualTo(2);
             assertThat(count(statement,
                     "select count(*) from simpleshop_seller_account where account = 'seller'"))
                     .isEqualTo(1);
             assertThat(count(statement,
                     "select count(*) from flyway_schema_history where success = 1"))
-                    .isEqualTo(2);
+                    .isEqualTo(3);
         }
     }
 

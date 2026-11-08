@@ -3,11 +3,13 @@ package com.simpleshop.common.api;
 import org.springframework.http.HttpStatus;
 
 /**
- * 业务错误码。编号按域划分：1xxxx 账号与会话，2xxxx 类别与商品，3xxxx 意向与交易，
- * 4xxxx 历史与归档，5xxxx 通用。
+ * 业务错误码。编号按域划分：1xxxx 账号与会话，2xxxx 类别与商品，5xxxx 通用。
  *
  * <p>业务拒绝默认返回 HTTP 200 + 业务码；只有会话失效、参数错误、资源不存在和服务端错误
  * 使用对应的 HTTP 状态。新增错误码必须落在所属域内。
+ *
+ * <p>3xxxx（意向与交易）与 4xxxx（历史与归档）已随机制下线整段停用，码位不得复用：
+ * 旧前端或旧日志里出现过这些编号，复用会让它们被误读成新语义。
  */
 public enum ErrorCode {
 
@@ -41,29 +43,10 @@ public enum ErrorCode {
     IMAGE_LIMIT_EXCEEDED(20017, "too many images", HttpStatus.OK),
     MAIN_IMAGE_REQUIRED(20018, "a main image is required before adding gallery images", HttpStatus.OK),
     GOODS_NOT_ON_SALE(20019, "goods is not on sale", HttpStatus.OK),
-    GOODS_NOT_OFF_SHELF(20020, "goods is not off shelf", HttpStatus.OK),
-    GOODS_FROZEN(20021, "goods is in trade and cannot be changed", HttpStatus.OK),
-    QUEUE_NOT_EMPTY(20022, "intention queue is not empty", HttpStatus.OK),
     GOODS_STATUS_MISMATCH(20023, "goods status does not allow this operation", HttpStatus.OK),
-    GOODS_STOCK_NOT_ZERO(20024, "goods stock is not zero", HttpStatus.OK),
     VIDEO_INVALID(20025, "video is invalid or too large", HttpStatus.OK),
     MEDIA_INVALID(20026, "media is invalid or too large", HttpStatus.OK),
     MEDIA_TYPE_NOT_ALLOWED(20027, "media type is not allowed for this purpose", HttpStatus.OK),
-    CONFIRMATION_REQUIRED(20028, "explicit confirmation is required", HttpStatus.OK),
-
-    // 3xxxx 意向与交易
-    INTENTION_NOT_FOUND(30001, "intention not found", HttpStatus.NOT_FOUND),
-    NOT_QUEUE_HEAD(30002, "target intention is not the queue head", HttpStatus.OK),
-    INTENTION_STATUS_MISMATCH(30003, "intention status does not allow this operation", HttpStatus.OK),
-    TRADING_ALREADY_EXISTS(30004, "another intention is already trading", HttpStatus.OK),
-    QUEUE_FULL(30005, "intention queue is full", HttpStatus.OK),
-    INVALID_DISPOSAL(30006, "disposal must be voided or requeued", HttpStatus.OK),
-    FAIL_REASON_TOO_LONG(30007, "fail reason is too long", HttpStatus.OK),
-
-    // 4xxxx 历史与归档
-    HISTORY_GOODS_NOT_FOUND(40001, "history goods not found", HttpStatus.NOT_FOUND),
-    HISTORY_INTENTION_NOT_FOUND(40002, "history intention not found", HttpStatus.NOT_FOUND),
-    ARCHIVE_PRECONDITION_FAILED(40003, "cannot archive while active intentions exist", HttpStatus.OK),
 
     // 5xxxx 通用
     INTERNAL_ERROR(50000, "internal server error", HttpStatus.INTERNAL_SERVER_ERROR),
