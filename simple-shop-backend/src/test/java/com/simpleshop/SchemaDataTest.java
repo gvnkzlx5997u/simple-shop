@@ -125,6 +125,23 @@ class SchemaDataTest extends DataLayerTestBase {
     }
 
     @Test
+    @DisplayName("订单号与「订单内商品」各有唯一键兜底")
+    void orderUniqueKeysGuardDuplicates() {
+        List<String> keys = jdbcTemplate.queryForList(
+                "select distinct concat(table_name, '.', index_name) "
+                        + "from information_schema.statistics "
+                        + "where table_schema = database() and non_unique = 0 "
+                        + "and ((table_name = 'simpleshop_order' and index_name = 'uk_order_no') "
+                        + "or (table_name = 'simpleshop_order_item' "
+                        + "and index_name = 'uk_order_item_order_goods'))",
+                String.class);
+
+        assertThat(keys).containsExactlyInAnyOrder(
+                "simpleshop_order.uk_order_no",
+                "simpleshop_order_item.uk_order_item_order_goods");
+    }
+
+    @Test
     @DisplayName("种子数据只有一条卖家账号")
     void seedContainsSingleSeller() {
         Integer sellers = jdbcTemplate.queryForObject(

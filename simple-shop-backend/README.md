@@ -118,6 +118,11 @@ Spring 的 multipart 上限已调到 20MB/25MB，图片的 5MB 由 Service 按�
 | POST | `/api/buyer/auth/register` | 买家注册：username、password、phone、default_location |
 | POST | `/api/buyer/auth/session` | 买家登录，返回 token 与 expire_at |
 | DELETE | `/api/buyer/auth/session` | 买家退出，幂等 |
+| POST | `/api/buyer/orders` | 提交订单：items[{goods_id, quantity}]，金额由服务端算 |
+| GET | `/api/buyer/orders` | 我的订单；status、page、page_size，按下单时间倒序 |
+| GET | `/api/buyer/orders/{id}` | 订单详情；只回订单头，不含订单项 |
+| GET | `/api/buyer/orders/{id}/items` | 订单项；按订单 ID 查，不分页 |
+| POST | `/api/buyer/orders/{id}/cancel` | 取消自己的订单；已发货后不可取消 |
 | POST | `/api/seller/auth/session` | 卖家登录 |
 | DELETE | `/api/seller/auth/session` | 卖家退出，幂等 |
 | PUT | `/api/seller/auth/password` | 卖家改密，成功后全部卖家会话失效 |
@@ -133,13 +138,21 @@ Spring 的 multipart 上限已调到 20MB/25MB，图片的 5MB 由 Service 按�
 | PUT | `/api/seller/goods/{id}/stock` | 修改库存；在售改 0 触发库存耗尽下架，补货自动上架 |
 | POST | `/api/seller/goods/{id}/off-shelf` | 手动下架；终态，没有重新上架接口 |
 | PUT | `/api/seller/goods/{id}/category` | 改挂二级类别，所有状态均可 |
+| GET | `/api/seller/orders` | 订单列表；status、buyer_id、goods_id、page、page_size 可组合 |
+| GET | `/api/seller/orders/{id}` | 订单详情；只回订单头，不含订单项 |
+| GET | `/api/seller/orders/{id}/items` | 订单项；按订单 ID 查，不分页 |
+| POST | `/api/seller/orders/{id}/confirm` | 确认订单：待确认 → 已确认 |
+| POST | `/api/seller/orders/{id}/prepare` | 备货完成：已确认 → 备货完成，不校验库存 |
+| POST | `/api/seller/orders/{id}/ship` | 开始发货：备货完成 → 已发货 |
+| POST | `/api/seller/orders/{id}/complete` | 交易完成：按明细数量扣库存，任一不足则整单拒绝 |
+| POST | `/api/seller/orders/{id}/cancel` | 取消订单：交易完成前可取消 |
 | GET | `/api/seller/customers` | 注册客户列表；按注册时间倒序分页 |
-| GET | `/api/seller/customers/{id}` | 客户详情；购买历史待订单模块提供 |
+| GET | `/api/seller/customers/{id}` | 客户详情；不含购买历史，历史订单用 `/api/seller/orders?buyer_id=` 查 |
 
 - 鉴权：`Authorization: Bearer <token>`；买家 token 与卖家 token 不能互用；`/api/public/**` 无需令牌。
 - 媒体上传 `purpose` 取 `GOODS_IMAGE` 或 `DESCRIPTION_MEDIA`；发布商品时绑定返回的 URL。
 - 接口文档：`/v3/api-docs`、`/swagger-ui/index.html`；生产用 `SPRINGDOC_ENABLED=false` 关闭。
-- 订单、购物车、收藏的接口尚未实现。
+- 购物车、收藏的接口尚未实现。
 
 ### 类别与商品口径
 
@@ -149,17 +162,44 @@ Spring 的 multipart 上限已调到 20MB/25MB，图片的 5MB 由 Service 按�
 - 描述是 TEXT / IMAGE / VIDEO 的有序内容块，不存 HTML；文本总长 1000 字符，单块同样最多 1000。
 - 商品只有 `ON_SALE`、`OFF_SHELF` 两态；已下架必须带原因 `MANUAL` / `STOCK_ZERO` / `SOLD_OUT` 与下架时间，在售时两者都为空。
 - 在售改库存为 0 → 自动下架（`STOCK_ZERO`）；库存耗尽下架的商品改回大于 0 → 自动上架并清空原因。手动下架是终态：库存只读，类别仍可改挂。
+- 存在未完成订单（待确认 / 已确认 / 备货完成 / 已发货）时，禁止手动下架，也禁止手动把库存改成 0（20020）；改成其他正数不受限。成交扣减到 0 不在此限。
 - 卖家列表按 `status` + `off_shelf_reason` 筛选；原因只能与 `OFF_SHELF` 组合，否则按参数错误拒绝。
 - 买家列表与详情只放行 `ON_SALE`；`purchasable` 以后端返回为准，等价于「在售且有库存」。
 
-### 订单、购物车与收藏
+### 订单口径
 
-按 B 阶段实现，本节待补。
+- 六态：`PENDING_CONFIRM` → `CONFIRMED` → `PREPARED` → `SHIPPED` → `COMPLETED`，另有终态 `CANCELED`；整单流转，只能按序前进一格，不可跳级或回退。
+- 买家在进入「已发货」前可取消；卖家在「交易完成」前可取消（含已发货）。取消不影响库存，取消人与时间只记操作日志。
+- 下单只校验商品在售与库存，不锁库存行、不预占；交易完成时按明细数量一次性扣减，任一不足则整单拒绝、订单停在已发货，补货后可重试。
+- 下单只收明细与数量，同一订单内重复商品按参数错误（400 / 50002）拒绝，不做数量合并。
+- 列表与详情只回订单头，**不含订单项**；明细走 `/orders/{id}/items`，列表分页、明细不分页，避免一层返回里出现两层分页。
+- 买家只能读自己的订单，他人订单按不存在（60001）处理；卖家可读全部订单。
+- 「订单管理」「按客户」「按商品」三个入口在后端只是同一个列表的筛选条件（`status` / `buyer_id` / `goods_id` 可组合），进入详情一律按订单主键查；按商品筛选经订单项反查订单 ID。
+
+### 订单错误码
+
+| 码 | 常量 | HTTP | 含义 |
+| --- | --- | --- | --- |
+| 60001 | `ORDER_NOT_FOUND` | 404 | 订单不存在；买家操作他人订单同样按不存在处理 |
+| 60002 | `ORDER_STATUS_INVALID` | 200 | 状态不允许该操作：跳级、重复推进、终态推进 |
+| 60003 | `ORDER_NOT_CANCELABLE` | 200 | 当前状态不可取消：买家在已发货后、双方在交易完成后 |
+| 60004 | `ORDER_STOCK_SHORTAGE` | 200 | 交易完成时库存不足，整单拒绝、订单停在已发货 |
+| 20011 | `GOODS_NOT_FOUND` | 404 | 下单时商品不存在 |
+| 20019 | `GOODS_NOT_ON_SALE` | 200 | 下单时商品已下架 |
+| 20015 | `STOCK_INVALID` | 200 | 下单数量超过库存 |
+| 20020 | `GOODS_HAS_UNFINISHED_ORDER` | 200 | 有未完成订单时手动下架或手动把库存改成 0 |
+| 50002 | `PARAM_INVALID` | 400 | 明细为空、同一订单内重复商品、状态参数非法等 |
+
+码表以 `ErrorCode` 枚举为准。重复取消按成功返回只是为了防抖，不是可依赖的业务契约；重复推进会返回 60002。
+
+### 购物车与收藏
+
+按 B2 实现，本节待补。
 
 ### 客户口径
 
 - 客户列表与详情只读：字段仅限用户名、电话、默认交易地点与注册时间，不提供搜索、统计或导出。
-- 购买历史改由订单提供，接入后恢复；当前详情不返回该字段。
+- 购买历史不在客户详情里内嵌：卖家订单列表支持 `buyer_id` 筛选，直接按订单粒度查该客户的订单即可。
 
 ## 数据库
 
@@ -186,6 +226,7 @@ Spring 的 multipart 上限已调到 20MB/25MB，图片的 5MB 由 Service 按�
 - 商品媒体 URL 必须指向 `/media/goods/` 或 `/media/description/` 下已落盘的文件；发布时按用途、扩展名和文件存在性回验，拒绝外链和目录穿越。
 - 商品状态与下架原因只经实体的 `offShelf(reason)` / `backOnSale()` 变化，不提供单独写状态或原因的方法。
 - 注释只保留职责与非显然约束，写清「为什么」，不引用文档编号；这是一条约定，不设机器门禁。
+- 测试不断言审计日志与运行日志：日志是排查手段，不是契约，抓日志文本、数条数都会让测试随文案变脆。测试只断言业务状态、返回码与库内数据；提交后副作用需要验证时，断言业务结果而不是日志。
 - 控制器只调用本功能 Service，跨功能读取走 Service 或只读端口。
 - 事务内不可回滚的副作用（审计日志、改密后的会话撤销）统一经 `AfterCommit` 推迟到提交成功之后；事务回滚时不会执行。
 - 限流是保护措施，不是业务规则：注册与登录按「账号 + 地址」或地址计数，下单只给兜底阈值，购物车与收藏不限流。

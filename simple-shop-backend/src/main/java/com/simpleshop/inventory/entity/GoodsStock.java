@@ -52,12 +52,15 @@ public class GoodsStock {
         this.available = available;
     }
 
-    public int deductOne() {
-        if (available < 1) {
-            throw new IllegalStateException("stock is already zero for goods " + goodsId);
+    /** 成交扣减指定数量。调用方已在同一事务里加锁并校验过，这里的判断只是兜底。 */
+    public void deduct(int quantity) {
+        if (quantity < 1) {
+            throw new IllegalArgumentException("quantity must be at least 1");
         }
-        available--;
-        return available;
+        if (available < quantity) {
+            throw new IllegalStateException("insufficient stock for goods " + goodsId);
+        }
+        available -= quantity;
     }
 
     @PrePersist

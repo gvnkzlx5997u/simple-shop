@@ -35,9 +35,17 @@ public class OperationLogService {
 
     public static final String CHANGE_PASSWORD = "CHANGE_PASSWORD";
 
+    public static final String CREATE_ORDER = "CREATE_ORDER";
+    public static final String ORDER_CONFIRM = "ORDER_CONFIRM";
+    public static final String ORDER_PREPARE = "ORDER_PREPARE";
+    public static final String ORDER_SHIP = "ORDER_SHIP";
+    public static final String ORDER_COMPLETE = "ORDER_COMPLETE";
+    public static final String ORDER_CANCEL = "ORDER_CANCEL";
+
     public static final String TARGET_GOODS = "GOODS";
     public static final String TARGET_CATEGORY = "CATEGORY";
     public static final String TARGET_ACCOUNT = "ACCOUNT";
+    public static final String TARGET_ORDER = "ORDER";
 
     public void log(String operation, String targetType, String targetId) {
         logDeferred(operation, targetType, targetId, null);

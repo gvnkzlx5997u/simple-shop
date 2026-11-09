@@ -25,6 +25,8 @@ import com.simpleshop.goods.entity.Goods;
 import com.simpleshop.goods.entity.GoodsContentBlock;
 import com.simpleshop.goods.entity.GoodsImage;
 import com.simpleshop.inventory.entity.GoodsStock;
+import com.simpleshop.order.entity.Order;
+import com.simpleshop.order.entity.OrderItem;
 
 /**
  * 空库迁移验证：在一次性 MySQL 里跑 V1→V3，再用 Hibernate 的 validate 校验实体与表结构。
@@ -38,7 +40,8 @@ class MigrationTest {
             CategoryL1.class, CategoryL2.class,
             Goods.class, GoodsImage.class, GoodsContentBlock.class,
             GoodsStock.class,
-            SellerAccount.class, BuyerAccount.class);
+            SellerAccount.class, BuyerAccount.class,
+            Order.class, OrderItem.class);
 
     @Test
     void emptyDatabaseMigratesAndValidates() throws Exception {

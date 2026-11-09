@@ -35,6 +35,14 @@ import com.simpleshop.goods.repository.GoodsImageRepository;
 import com.simpleshop.goods.repository.GoodsRepository;
 import com.simpleshop.inventory.entity.GoodsStock;
 import com.simpleshop.inventory.repository.GoodsStockRepository;
+import com.simpleshop.order.entity.Order;
+import com.simpleshop.order.entity.OrderLine;
+import com.simpleshop.order.enums.OrderStatus;
+import com.simpleshop.order.repository.OrderItemRepository;
+import com.simpleshop.order.repository.OrderRepository;
+import com.simpleshop.order.service.BuyerOrderService;
+import com.simpleshop.order.service.SellerOrderService;
+import com.simpleshop.order.support.OrderNoGenerator;
 
 /**
  * 并发测试基类：无外层测试事务，被测服务在每个线程内开启并提交独立事务。
@@ -57,9 +65,17 @@ public abstract class ConcurrencyTestBase {
     @Autowired protected GoodsContentBlockRepository contentBlocks;
     @Autowired protected GoodsStockRepository stockItems;
     @Autowired protected BuyerAccountRepository buyerAccounts;
+    @Autowired protected OrderRepository orders;
+    @Autowired protected OrderItemRepository orderItems;
+    @Autowired protected OrderNoGenerator orderNoGenerator;
+    @Autowired protected SellerOrderService sellerOrders;
+    @Autowired protected BuyerOrderService buyerOrders;
 
     @AfterEach
     void cleanBusinessTables() {
+        // 订单先删：订单项与订单都通过外键 RESTRICT 引用商品与买家。
+        orderItems.deleteAllInBatch();
+        orders.deleteAllInBatch();
         contentBlocks.deleteAllInBatch();
         goodsImages.deleteAllInBatch();
         stockItems.deleteAllInBatch();
@@ -96,6 +112,31 @@ public abstract class ConcurrencyTestBase {
                 .orElseThrow(() -> new IllegalStateException("stock row missing"));
         stock.setAvailable(available);
         stockItems.saveAndFlush(stock);
+    }
+
+    protected Order createOrder(BuyerAccount buyer, Goods goods, int quantity) {
+        return orders.saveAndFlush(Order.place(
+                orderNoGenerator.next(),
+                buyer.getId(),
+                List.of(new OrderLine(goods.getId(), goods.getName(), goods.getPrice(), quantity))));
+    }
+
+    /** 建一笔已发货订单，用于完成/取消类并发用例。 */
+    protected Order shippedOrder(BuyerAccount buyer, Goods goods, int quantity) {
+        Order order = createOrder(buyer, goods, quantity);
+        Order managed = orders.findById(order.getId()).orElseThrow();
+        managed.confirm();
+        managed.prepare();
+        managed.ship();
+        return orders.saveAndFlush(managed);
+    }
+
+    protected Goods reload(Goods goods) {
+        return goodsRepository.findById(goods.getId()).orElseThrow();
+    }
+
+    protected OrderStatus orderStatusOf(Order order) {
+        return orders.findById(order.getId()).orElseThrow().getStatus();
     }
 
     /** 并发执行：所有线程在闩锁处同时起跑，返回按线程序的结果。 */
