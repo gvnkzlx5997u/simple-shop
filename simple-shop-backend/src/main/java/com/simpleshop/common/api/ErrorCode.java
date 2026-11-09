@@ -3,7 +3,7 @@ package com.simpleshop.common.api;
 import org.springframework.http.HttpStatus;
 
 /**
- * 业务错误码。编号按域划分：1xxxx 账号与会话，2xxxx 类别与商品，5xxxx 通用。
+ * 业务错误码。编号按域划分：1xxxx 账号与会话，2xxxx 类别与商品，6xxxx 订单，5xxxx 通用。
  *
  * <p>业务拒绝默认返回 HTTP 200 + 业务码；只有会话失效、参数错误、资源不存在和服务端错误
  * 使用对应的 HTTP 状态。新增错误码必须落在所属域内。
@@ -43,10 +43,22 @@ public enum ErrorCode {
     IMAGE_LIMIT_EXCEEDED(20017, "too many images", HttpStatus.OK),
     MAIN_IMAGE_REQUIRED(20018, "a main image is required before adding gallery images", HttpStatus.OK),
     GOODS_NOT_ON_SALE(20019, "goods is not on sale", HttpStatus.OK),
+    /** 有未完成订单时禁止手动下架、禁止手动把库存改为 0。 */
+    GOODS_HAS_UNFINISHED_ORDER(20020, "goods is referenced by an unfinished order", HttpStatus.OK),
     GOODS_STATUS_MISMATCH(20023, "goods status does not allow this operation", HttpStatus.OK),
     VIDEO_INVALID(20025, "video is invalid or too large", HttpStatus.OK),
     MEDIA_INVALID(20026, "media is invalid or too large", HttpStatus.OK),
     MEDIA_TYPE_NOT_ALLOWED(20027, "media type is not allowed for this purpose", HttpStatus.OK),
+
+    // 6xxxx 订单
+    /** 订单不存在；买家操作他人订单时同样按不存在处理，避免泄露订单是否存在。 */
+    ORDER_NOT_FOUND(60001, "order not found", HttpStatus.NOT_FOUND),
+    /** 状态不允许该操作：跳级推进、重复推进、在终态上推进。 */
+    ORDER_STATUS_INVALID(60002, "order status does not allow this operation", HttpStatus.OK),
+    /** 当前状态不可取消：买家在已发货后、双方在交易完成后。 */
+    ORDER_NOT_CANCELABLE(60003, "order cannot be canceled in its current status", HttpStatus.OK),
+    /** 交易完成时库存不足：整单拒绝，订单停在已发货，不扣任何一行。 */
+    ORDER_STOCK_SHORTAGE(60004, "insufficient stock to complete the order", HttpStatus.OK),
 
     // 5xxxx 通用
     INTERNAL_ERROR(50000, "internal server error", HttpStatus.INTERNAL_SERVER_ERROR),

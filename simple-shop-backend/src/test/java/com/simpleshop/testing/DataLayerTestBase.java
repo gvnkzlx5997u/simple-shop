@@ -1,6 +1,7 @@
 package com.simpleshop.testing;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 import jakarta.persistence.EntityManager;
@@ -33,6 +34,11 @@ import com.simpleshop.goods.repository.GoodsImageRepository;
 import com.simpleshop.goods.repository.GoodsRepository;
 import com.simpleshop.inventory.entity.GoodsStock;
 import com.simpleshop.inventory.repository.GoodsStockRepository;
+import com.simpleshop.order.entity.Order;
+import com.simpleshop.order.entity.OrderLine;
+import com.simpleshop.order.repository.OrderItemRepository;
+import com.simpleshop.order.repository.OrderRepository;
+import com.simpleshop.order.support.OrderNoGenerator;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -53,6 +59,9 @@ public abstract class DataLayerTestBase {
     @Autowired protected GoodsImageRepository goodsImages;
     @Autowired protected GoodsContentBlockRepository contentBlocks;
     @Autowired protected GoodsStockRepository stockItems;
+    @Autowired protected OrderRepository orders;
+    @Autowired protected OrderItemRepository orderItems;
+    @Autowired protected OrderNoGenerator orderNoGenerator;
     @Autowired protected EntityManager entityManager;
     @Autowired protected JdbcTemplate jdbcTemplate;
     @Autowired protected MockMvc mockMvc;
@@ -97,5 +106,14 @@ public abstract class DataLayerTestBase {
     protected void flushAndClear() {
         entityManager.flush();
         entityManager.clear();
+    }
+
+    /** 建一笔待确认订单：单商品、指定数量，用于订单相关测试的夹具。 */
+    protected Order createOrder(BuyerAccount buyer, Goods goods, int quantity) {
+        Order order = Order.place(
+                orderNoGenerator.next(),
+                buyer.getId(),
+                List.of(new OrderLine(goods.getId(), goods.getName(), goods.getPrice(), quantity)));
+        return orders.saveAndFlush(order);
     }
 }
