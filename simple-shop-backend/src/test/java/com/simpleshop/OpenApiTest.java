@@ -55,7 +55,13 @@ class OpenApiTest extends ApiTestBase {
                 "/api/seller/orders/{id}/prepare",
                 "/api/seller/orders/{id}/ship",
                 "/api/seller/orders/{id}/complete",
-                "/api/seller/orders/{id}/cancel");
+                "/api/seller/orders/{id}/cancel",
+                // 购物车与收藏
+                "/api/buyer/cart",
+                "/api/buyer/cart/{goodsId}",
+                "/api/buyer/cart/move-to-favorites",
+                "/api/buyer/favorites",
+                "/api/buyer/favorites/{goodsId}");
 
         assertThat(body).doesNotContain(
                 "/api/seller/goods/{id}/re-list",

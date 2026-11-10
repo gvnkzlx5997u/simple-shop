@@ -24,11 +24,16 @@ import org.springframework.test.context.DynamicPropertySource;
 
 import com.simpleshop.account.entity.BuyerAccount;
 import com.simpleshop.account.repository.BuyerAccountRepository;
+import com.simpleshop.cart.repository.CartItemRepository;
+import com.simpleshop.cart.service.CartService;
+import com.simpleshop.cart.service.CartToFavoriteService;
 import com.simpleshop.category.entity.CategoryL1;
 import com.simpleshop.category.entity.CategoryL2;
 import com.simpleshop.category.repository.CategoryL1Repository;
 import com.simpleshop.category.repository.CategoryL2Repository;
 import com.simpleshop.common.auth.PasswordHasher;
+import com.simpleshop.favorite.repository.FavoriteRepository;
+import com.simpleshop.favorite.service.FavoriteService;
 import com.simpleshop.goods.entity.Goods;
 import com.simpleshop.goods.repository.GoodsContentBlockRepository;
 import com.simpleshop.goods.repository.GoodsImageRepository;
@@ -70,10 +75,17 @@ public abstract class ConcurrencyTestBase {
     @Autowired protected OrderNoGenerator orderNoGenerator;
     @Autowired protected SellerOrderService sellerOrders;
     @Autowired protected BuyerOrderService buyerOrders;
+    @Autowired protected CartItemRepository cartItems;
+    @Autowired protected FavoriteRepository favorites;
+    @Autowired protected CartService cart;
+    @Autowired protected CartToFavoriteService cartToFavorites;
+    @Autowired protected FavoriteService favoriteService;
 
     @AfterEach
     void cleanBusinessTables() {
-        // 订单先删：订单项与订单都通过外键 RESTRICT 引用商品与买家。
+        // 先删引用商品与买家的行：购物车、收藏、订单项、订单都通过外键 RESTRICT 指向它们。
+        cartItems.deleteAllInBatch();
+        favorites.deleteAllInBatch();
         orderItems.deleteAllInBatch();
         orders.deleteAllInBatch();
         contentBlocks.deleteAllInBatch();
