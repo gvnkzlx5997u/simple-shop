@@ -47,7 +47,7 @@ db/阶段三/   阶段三交付归档目录
 功能包内 `service/` 放接口、`service/impl/` 放实现；跨功能只允许依赖对方的 `api/` 端口，
 Controller 与测试注入接口。controller 下按 `seller` / `buyer` / `publicapi` 分目录。
 
-订单、购物车、收藏三个功能包尚未建立，按 B 阶段落地，packaging 与分层沿用 `goods` 的方式。
+订单、购物车、收藏三个功能包已按 B 阶段落地，packaging 与分层沿用 `goods` 的方式。
 
 ## 构建与运行
 
@@ -123,6 +123,14 @@ Spring 的 multipart 上限已调到 20MB/25MB，图片的 5MB 由 Service 按�
 | GET | `/api/buyer/orders/{id}` | 订单详情；只回订单头，不含订单项 |
 | GET | `/api/buyer/orders/{id}/items` | 订单项；按订单 ID 查，不分页 |
 | POST | `/api/buyer/orders/{id}/cancel` | 取消自己的订单；已发货后不可取消 |
+| POST | `/api/buyer/cart` | 加入购物车：goods_id；重复加购只留一行，商品不在售返回 70001 |
+| GET | `/api/buyer/cart` | 我的购物车；不分页，已下架行保留并标 selectable=false |
+| DELETE | `/api/buyer/cart/{goodsId}` | 移除一件；行不存在也返回成功 |
+| POST | `/api/buyer/cart/move-to-favorites` | 批量转收藏：goods_ids；含不可选商品整批拒绝并返回 70003 |
+| POST | `/api/buyer/favorites` | 收藏：goods_id；重复收藏只留一行，商品不在售返回 70002 |
+| GET | `/api/buyer/favorites` | 我的收藏；page、page_size，按收藏时间倒序 |
+| GET | `/api/buyer/favorites/{goodsId}` | 当前买家是否收藏了这件商品，返回 favorited |
+| DELETE | `/api/buyer/favorites/{goodsId}` | 取消收藏；不要求商品在售，行不存在也返回成功 |
 | POST | `/api/seller/auth/session` | 卖家登录 |
 | DELETE | `/api/seller/auth/session` | 卖家退出，幂等 |
 | PUT | `/api/seller/auth/password` | 卖家改密，成功后全部卖家会话失效 |
@@ -152,7 +160,6 @@ Spring 的 multipart 上限已调到 20MB/25MB，图片的 5MB 由 Service 按�
 - 鉴权：`Authorization: Bearer <token>`；买家 token 与卖家 token 不能互用；`/api/public/**` 无需令牌。
 - 媒体上传 `purpose` 取 `GOODS_IMAGE` 或 `DESCRIPTION_MEDIA`；发布商品时绑定返回的 URL。
 - 接口文档：`/v3/api-docs`、`/swagger-ui/index.html`；生产用 `SPRINGDOC_ENABLED=false` 关闭。
-- 购物车、收藏的接口尚未实现。
 
 ### 类别与商品口径
 
@@ -194,7 +201,23 @@ Spring 的 multipart 上限已调到 20MB/25MB，图片的 5MB 由 Service 按�
 
 ### 购物车与收藏
 
-按 B2 实现，本节待补。
+- 购物车行只存「买家 + 商品 + 加购时间」；数量与勾选由前端 localStorage 维护，不落库、也不产生接口。
+- 「买家 + 商品」由唯一键保证唯一：重复加购不新增行，也不刷新加购时间。移除与取消收藏幂等，行不存在同样返回成功。
+- 是否可选在读取时由商品状态派生，不落库：`selectable` 与 `detail_available` 都等价于「商品在售」。**库存不足仍可选中**，缺货由结算时校验拦截。已下架行保留展示并带 `off_shelf_reason`，复售自动恢复，不需要同步。
+- 购物车列表不分页：前端要算总价与导航角标，翻页会漏行。收藏列表分页，默认 10 条，上限见分页配置。
+- 转收藏整批成功或整批拒绝：入参里有一件不可选就整单拒绝、一行不动（70003）；只转本购物车真实存在的行，`moved_count` 恒等于真正转过去的件数。写收藏与删购物车行在同一事务。
+- 详情页的「收藏 / 已收藏」用 `GET /api/buyer/favorites/{goodsId}` 查，不要靠翻收藏列表判断——列表分页，超过一页就会漏。
+- 购物车与收藏不限流，与订单不同。
+
+### 购物车与收藏错误码
+
+| 码 | 常量 | HTTP | 含义 |
+| --- | --- | --- | --- |
+| 70001 | `CART_GOODS_NOT_SELECTABLE` | 200 | 加入购物车时商品不在售 |
+| 70002 | `FAVORITE_GOODS_NOT_SELECTABLE` | 200 | 收藏时商品不在售 |
+| 70003 | `CART_TO_FAVORITE_REJECTED` | 200 | 转收藏时入参含不可选商品，整批拒绝；message 带被拒商品 ID |
+
+不设「行不存在」错误码：移除购物车行与取消收藏都按幂等处理，删不到也返回成功。
 
 ### 客户口径
 

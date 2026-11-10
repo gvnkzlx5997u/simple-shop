@@ -19,8 +19,10 @@ import org.testcontainers.containers.MySQLContainer;
 
 import com.simpleshop.account.entity.BuyerAccount;
 import com.simpleshop.account.entity.SellerAccount;
+import com.simpleshop.cart.entity.CartItem;
 import com.simpleshop.category.entity.CategoryL1;
 import com.simpleshop.category.entity.CategoryL2;
+import com.simpleshop.favorite.entity.Favorite;
 import com.simpleshop.goods.entity.Goods;
 import com.simpleshop.goods.entity.GoodsContentBlock;
 import com.simpleshop.goods.entity.GoodsImage;
@@ -41,7 +43,8 @@ class MigrationTest {
             Goods.class, GoodsImage.class, GoodsContentBlock.class,
             GoodsStock.class,
             SellerAccount.class, BuyerAccount.class,
-            Order.class, OrderItem.class);
+            Order.class, OrderItem.class,
+            CartItem.class, Favorite.class);
 
     @Test
     void emptyDatabaseMigratesAndValidates() throws Exception {

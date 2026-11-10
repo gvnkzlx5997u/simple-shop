@@ -3,13 +3,17 @@ package com.simpleshop.common.api;
 import org.springframework.http.HttpStatus;
 
 /**
- * 业务错误码。编号按域划分：1xxxx 账号与会话，2xxxx 类别与商品，6xxxx 订单，5xxxx 通用。
+ * 业务错误码。编号按域划分：1xxxx 账号与会话，2xxxx 类别与商品，6xxxx 订单，
+ * 7xxxx 购物车与收藏，5xxxx 通用。
  *
  * <p>业务拒绝默认返回 HTTP 200 + 业务码；只有会话失效、参数错误、资源不存在和服务端错误
  * 使用对应的 HTTP 状态。新增错误码必须落在所属域内。
  *
  * <p>3xxxx（意向与交易）与 4xxxx（历史与归档）已随机制下线整段停用，码位不得复用：
  * 旧前端或旧日志里出现过这些编号，复用会让它们被误读成新语义。
+ *
+ * <p>6xxxx 与 7xxxx 由 B 阶段两条并行线各自追加，只追加不重排：订单占 6xxxx，
+ * 购物车与收藏占 7xxxx。
  */
 public enum ErrorCode {
 
@@ -59,6 +63,11 @@ public enum ErrorCode {
     ORDER_NOT_CANCELABLE(60003, "order cannot be canceled in its current status", HttpStatus.OK),
     /** 交易完成时库存不足：整单拒绝，订单停在已发货，不扣任何一行。 */
     ORDER_STOCK_SHORTAGE(60004, "insufficient stock to complete the order", HttpStatus.OK),
+
+    // 7xxxx 购物车与收藏
+    CART_GOODS_NOT_SELECTABLE(70001, "goods cannot be added to cart", HttpStatus.OK),
+    FAVORITE_GOODS_NOT_SELECTABLE(70002, "goods cannot be added to favorites", HttpStatus.OK),
+    CART_TO_FAVORITE_REJECTED(70003, "cart contains goods that cannot be moved to favorites", HttpStatus.OK),
 
     // 5xxxx 通用
     INTERNAL_ERROR(50000, "internal server error", HttpStatus.INTERNAL_SERVER_ERROR),

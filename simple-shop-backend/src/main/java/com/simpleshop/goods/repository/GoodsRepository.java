@@ -1,5 +1,7 @@
 package com.simpleshop.goods.repository;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 import jakarta.persistence.LockModeType;
@@ -27,6 +29,11 @@ public interface GoodsRepository extends JpaRepository<Goods, String> {
     @EntityGraph(attributePaths = {"category", "category.l1"})
     @Query("select g from Goods g where g.id = :id")
     Optional<Goods> findDetailById(@Param("id") String id);
+
+    /** 批量取详情：一次取出类别链，供购物车、收藏列表组装快照，避免逐条查询。 */
+    @EntityGraph(attributePaths = {"category", "category.l1"})
+    @Query("select g from Goods g where g.id in :ids")
+    List<Goods> findDetailsByIdIn(@Param("ids") Collection<String> ids);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select g from Goods g where g.id = :id")
