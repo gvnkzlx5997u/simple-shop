@@ -88,7 +88,7 @@ mvn spring-boot:run            # 启动，需要 MySQL；默认使用 simple_sho
 | `RATE_LIMIT_ENABLED` | `true` | 保护性限流总开关；开发与测试环境设为 `false`，不要靠调大阈值绕过 |
 | `RATE_LIMIT_REGISTER` | 50 | 注册每分钟上限，按客户端地址计 |
 | `RATE_LIMIT_LOGIN` | 50 | 登录每分钟上限，按「账号 + 客户端地址」计 |
-| `RATE_LIMIT_ORDER` | 1000 | 提交订单每分钟上限，按客户端地址计；只是兜底保护，不是业务规则 |
+| `RATE_LIMIT_ORDER` | 1000 | 提交订单每分钟上限，按买家计；只是兜底保护，不是业务规则 |
 
 媒体限制在 `application.yml` 的 `simple-shop.media` 下配置：
 
@@ -134,7 +134,7 @@ Spring 的 multipart 上限已调到 20MB/25MB，图片的 5MB 由 Service 按�
 | POST | `/api/seller/auth/session` | 卖家登录 |
 | DELETE | `/api/seller/auth/session` | 卖家退出，幂等 |
 | PUT | `/api/seller/auth/password` | 卖家改密，成功后全部卖家会话失效 |
-| POST | `/api/seller/media` | 卖家上传媒体，multipart 字段 file + purpose |
+| POST | `/api/seller/media` | 卖家上传媒体：multipart 字段 `file`，查询参数 `purpose` |
 | GET | `/api/seller/categories` | 卖家类别树 |
 | POST | `/api/seller/categories/l1` | 新增一级类别 |
 | PUT/DELETE | `/api/seller/categories/l1/{id}` | 重命名/删除一级类别 |
@@ -160,6 +160,7 @@ Spring 的 multipart 上限已调到 20MB/25MB，图片的 5MB 由 Service 按�
 - 鉴权：`Authorization: Bearer <token>`；买家 token 与卖家 token 不能互用；`/api/public/**` 无需令牌。
 - 媒体上传 `purpose` 取 `GOODS_IMAGE` 或 `DESCRIPTION_MEDIA`；发布商品时绑定返回的 URL。
 - 接口文档：`/v3/api-docs`、`/swagger-ui/index.html`；生产用 `SPRINGDOC_ENABLED=false` 关闭。
+- 阶段三交付快照：`../simple-shop-doc/阶段三/openapi.json`，契约口径与边界见同目录《契约交接》；改接口后需重新生成快照。
 
 ### 类别与商品口径
 
@@ -231,7 +232,7 @@ Spring 的 multipart 上限已调到 20MB/25MB，图片的 5MB 由 Service 按�
   `V3__stage3_goods_and_trade_schema.sql`（删意向与归档四表、商品加下架原因与时间、建订单/订单项/购物车/收藏）。
 - 迁移后仍是 12 张表；`V3` 只做结构变更与旧状态值换算，不迁移意向与历史记录。
 - 数据库按阶段重建：升级前先备份，再删库或删数据卷；`V3` 可以用于阶段二存量库的原地升级（商品与类别数据保留）。
-- `db/草稿/` 保留阶段三设计草稿供对照；`db/阶段一`、`db/阶段二` 是历史归档，Flyway 不会加载。
+- `db/草稿/` 保留阶段三设计草稿供对照；`db/阶段三/` 是阶段三交付归档（V3 定稿）；`db/阶段一`、`db/阶段二` 是历史归档，Flyway 不会加载。
 - 种子卖家：账号 `seller`，初始口令 `Abcd@1234`，首次登录后请修改。
 - 测试库默认 `simple_shop_test`，可通过 `TEST_DB_URL` 覆盖；测试启动时自动跑 Flyway 并校验实体。
 - 已发布的迁移脚本不得修改，只能追加新版本。

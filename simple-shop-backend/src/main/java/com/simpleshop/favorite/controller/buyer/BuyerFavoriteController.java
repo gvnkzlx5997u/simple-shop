@@ -4,6 +4,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -29,6 +30,7 @@ import com.simpleshop.favorite.service.FavoriteService;
 @RestController
 @RequestMapping("/api/buyer/favorites")
 @Tag(name = "买家收藏")
+@SecurityRequirement(name = "bearerAuth")
 public class BuyerFavoriteController {
 
     private final FavoriteService favoriteService;
