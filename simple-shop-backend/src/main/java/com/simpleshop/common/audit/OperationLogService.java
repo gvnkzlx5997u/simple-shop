@@ -42,10 +42,19 @@ public class OperationLogService {
     public static final String ORDER_COMPLETE = "ORDER_COMPLETE";
     public static final String ORDER_CANCEL = "ORDER_CANCEL";
 
+    public static final String ADD_CART = "ADD_CART";
+    public static final String REMOVE_CART = "REMOVE_CART";
+    public static final String ADD_FAVORITE = "ADD_FAVORITE";
+    public static final String REMOVE_FAVORITE = "REMOVE_FAVORITE";
+
     public static final String TARGET_GOODS = "GOODS";
     public static final String TARGET_CATEGORY = "CATEGORY";
     public static final String TARGET_ACCOUNT = "ACCOUNT";
     public static final String TARGET_ORDER = "ORDER";
+
+    /** 购物车与收藏的目标 ID 用商品 ID：行 ID 是随机 UUID，对排查没有信息量。 */
+    public static final String TARGET_CART = "CART";
+    public static final String TARGET_FAVORITE = "FAVORITE";
 
     public void log(String operation, String targetType, String targetId) {
         logDeferred(operation, targetType, targetId, null);
