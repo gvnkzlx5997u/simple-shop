@@ -73,11 +73,12 @@ npx playwright test
 - **按功能分包**：`account`、`category`、`goods`、`inventory`、`order`、`cart`、`favorite`、`common`。功能包内按 `entity / repository / service / controller / dto` 组织；`service/` 放接口，`service/impl/` 放实现。阶段二的 `intention` 与 `history` 包已下线，不要恢复。
 - **依赖方向由 ArchUnit 守门**：`common` 保持隔离；Controller 不直接碰 Repository；跨功能只依赖对方的 `api/` 端口；功能包之间不允许循环依赖。不要用“先写通再重构”的方式绕过这些规则。
 - **Controller 分层**：卖家、买家、公共查询分别放在 `controller/seller`、`controller/buyer`、`controller/publicapi`；不要把所有接口塞进一个 Controller。
-- **接口边界**：Entity 不直接暴露给前端；请求/响应使用 DTO。响应外壳统一为 `{code, message, data}`，`code=0` 表示成功；业务拒绝通常是 HTTP 200 + 业务码，只有 401、400、404、500 使用 HTTP 状态码。参数校验错误可能带 `errors` 数组。
+- **接口边界**：Entity 不直接暴露给前端；请求/响应使用 DTO。响应外壳统一为 `{code, message, data}`，`code=0` 表示成功；业务拒绝通常是 HTTP 200 + 业务码，只有 401、400、404、500 使用 HTTP 状态码。参数校验错误可能带 `errors` 数组。业务码按域分段：1xxxx 账号、2xxxx 类别与商品、6xxxx 订单、7xxxx 购物车与收藏、5xxxx 通用；3xxxx 与 4xxxx 已停用，不得复用。
+- **订单查询边界**：列表与详情只回订单头，订单项按订单 ID 单独查询（避免一层返回里两层分页）；买家只能读自己的订单，他人订单按不存在处理；客户购买历史不在客户详情内嵌，改查卖家订单列表并按买家筛选。
 - **分页**：请求 `page` 从 1 开始，`page_size` 默认 10、上限 100；响应为 `{items, page, page_size, total}`。
 - **契约/错误码变更**：新增业务码要登记并同步两端，不能复用旧码，也不能只改一端；改接口或 DTO 时同批更新：
   - 后端 DTO 与实现；
-  - OpenAPI 契约；
+  - OpenAPI 快照（`simple-shop-doc/阶段三/openapi.json`）与《契约交接》；
   - 买家、卖家两端的 `api/types.ts`；
   - 受影响的接口测试。
 - **鉴权**：自定义拦截器 + BCrypt 校验，没有引入 Spring Security 全栈；令牌放在进程内，买家与卖家令牌不能互用。默认会话 30 分钟，backend 重启会丢会话。
@@ -118,6 +119,7 @@ npx playwright test
 
 - MySQL 8；开发库 `simple_shop`，测试库 `simple_shop_test`，E2E 库 `simple_shop_e2e`。三者不要混用，尤其不要拿开发库跑 E2E。
 - Flyway 管理表结构：`V1__baseline_schema.sql` 是 12 张表的基线，`V2__seed_initial_data.sql` 写入种子数据。**已发布的迁移脚本不可修改**（改注释也会导致 checksum 失配）；新变更从 `V3` 开始新增。阶段三的 `V3` 建订单/购物车/收藏表、给商品表加下架原因与时间、删除意向与历史表；它只做三处旧状态值换算（`FROZEN→ON_SALE`、`OFF_MANUAL/OFF_ZERO→OFF_SHELF` 加原因），不迁移意向与历史记录。
+- 阶段三交付后 `V3` 归档在 `db/阶段三/`，与 `src/main/resources/db/migration` 中的执行版本保持一致；改动迁移只能新增 V4，不能回头改 V3。
 - JPA 固定 `ddl-auto=validate`，不要改成 `update`/`create` 来“省事”；应用能启动本身就是实体与表结构一致的断言。
 - 测试库由 Testcontainers 或 `-Plocal-mysql` 管理；迁移测试会创建随机临时库，不要手工复用。
 - 数据库按阶段重建，旧数据卷不能跨阶段复用：升级必须先备份，再 `docker compose down -v`（或换项目名/卷名）。`down -v` 会删数据，执行前必须和人类确认。

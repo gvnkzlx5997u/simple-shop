@@ -4,6 +4,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -29,6 +30,7 @@ import com.simpleshop.common.auth.CurrentUser;
 @RestController
 @RequestMapping("/api/buyer/cart")
 @Tag(name = "买家购物车")
+@SecurityRequirement(name = "bearerAuth")
 public class BuyerCartController {
 
     private final CartService cartService;
