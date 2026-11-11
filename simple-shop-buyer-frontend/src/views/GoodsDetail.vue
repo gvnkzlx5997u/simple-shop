@@ -1,21 +1,21 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 
-import { fetchGoodsDetail, submitIntention } from '../api/buyer'
+import { fetchGoodsDetail } from '../api/buyer'
+import { ApiError } from '../api/http'
+import { ApiCode } from '../api/types'
 import type { GoodsDetail } from '../api/types'
-import { describeError, useAuthStore } from '../stores/auth'
+import { describeError } from '../stores/auth'
 
 const route = useRoute()
-const router = useRouter()
-const auth = useAuthStore()
 
 const goods = ref<GoodsDetail | null>(null)
 const activeImage = ref('')
 const loading = ref(false)
 const errorText = ref('')
-const submitting = ref(false)
-const notice = ref('')
+/** 已下架与不存在都是正常结果，给空态而不是错误提示。 */
+const notFound = ref(false)
 
 const goodsId = computed(() => String(route.params.id ?? ''))
 const allImages = computed(() => {
@@ -28,39 +28,23 @@ const allImages = computed(() => {
   return list
 })
 
-/** 交易中的商品能看但不能买；purchasable 由后端给出，前端不自行推断。 */
-const canBuy = computed(() => !!goods.value?.purchasable)
-
 async function load() {
   loading.value = true
   errorText.value = ''
+  notFound.value = false
   try {
     goods.value = await fetchGoodsDetail(goodsId.value)
     activeImage.value = goods.value.main_image_url || allImages.value[0] || ''
   } catch (err) {
-    errorText.value = describeError(err)
     goods.value = null
+    // 买家只在售商品可见；下架后详情返回 404 + 20011，不是故障。
+    notFound.value =
+      err instanceof ApiError && (err.code === ApiCode.GOODS_NOT_FOUND || err.httpStatus === 404)
+    if (!notFound.value) {
+      errorText.value = describeError(err)
+    }
   } finally {
     loading.value = false
-  }
-}
-
-async function onBuy() {
-  if (!auth.isLoggedIn) {
-    router.push({ name: 'login', query: { redirect: route.fullPath } })
-    return
-  }
-  submitting.value = true
-  notice.value = ''
-  errorText.value = ''
-  try {
-    await submitIntention(goodsId.value)
-    // 回执不含位次，这里只能确认"已提交"，不展示排队位置。
-    notice.value = '已提交购买意向'
-  } catch (err) {
-    errorText.value = describeError(err)
-  } finally {
-    submitting.value = false
   }
 }
 
@@ -70,6 +54,13 @@ onMounted(load)
 <template>
   <div class="page stack">
     <p v-if="loading" class="muted">加载中…</p>
+
+    <div v-else-if="notFound" class="card empty">
+      <p class="empty-title">商品已下架或不存在</p>
+      <p class="muted">该商品可能已被卖家下架，可以看看其他在售商品。</p>
+      <RouterLink class="back-link" to="/goods">返回商品列表</RouterLink>
+    </div>
+
     <p v-else-if="errorText && !goods" class="error">{{ errorText }}</p>
 
     <template v-else-if="goods">
@@ -101,13 +92,6 @@ onMounted(load)
             {{ goods.category?.l1_name ?? '未分类' }} / {{ goods.category?.l2_name ?? '' }}
           </div>
           <div class="muted">库存 {{ goods.stock }}</div>
-
-          <p v-if="notice" class="notice">{{ notice }}</p>
-          <p v-if="errorText" class="error">{{ errorText }}</p>
-
-          <button class="primary buy" :disabled="!canBuy || submitting" @click="onBuy">
-            {{ canBuy ? (submitting ? '提交中…' : '我要购买') : '商品交易中，暂停接收新意向' }}
-          </button>
         </div>
       </div>
 
@@ -195,14 +179,21 @@ onMounted(load)
   margin-bottom: 8px;
 }
 
-.buy {
-  width: 100%;
-  margin-top: 16px;
-  padding: 10px;
+.empty {
+  text-align: center;
+  padding: 40px 16px;
 }
 
-.notice {
-  color: #15803d;
+.empty-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 8px;
+}
+
+.back-link {
+  display: inline-block;
+  margin-top: 12px;
+  color: var(--color-primary);
 }
 
 .section-title {

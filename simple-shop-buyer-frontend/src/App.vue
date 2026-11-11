@@ -19,7 +19,6 @@ async function onLogout() {
 
       <nav class="nav">
         <RouterLink to="/goods">商品</RouterLink>
-        <RouterLink v-if="auth.isLoggedIn" to="/history">我的历史</RouterLink>
       </nav>
 
       <div class="account">

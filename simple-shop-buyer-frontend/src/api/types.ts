@@ -20,7 +20,7 @@ export const ApiCode = {
   USERNAME_INVALID: 10006,
   PHONE_INVALID: 10007,
   DEFAULT_LOCATION_INVALID: 10008,
-  /** 商品不存在 / 已下架 / 已归档；后端同时回 HTTP 404。 */
+  /** 商品不存在或已下架；后端同时回 HTTP 404。 */
   GOODS_NOT_FOUND: 20011,
   TOO_MANY_REQUESTS: 50001,
   PARAM_INVALID: 50002,
@@ -85,8 +85,7 @@ export interface GoodsSummary {
 
 /**
  * 商品详情。
- * purchasable 为 true 表示可以提交购买意向（在售且有库存）；
- * 交易中的商品也能打开，但 purchasable 为 false。
+ * purchasable 为 true 表示「在售且有库存」，由后端给出，前端不自行推断。
  */
 export interface GoodsDetail {
   id: string
@@ -101,17 +100,6 @@ export interface GoodsDetail {
   create_at: string
   update_at: string
   purchasable: boolean
-}
-
-/**
- * 我的历史条目：只有四个字段，不含价格与图片。
- * result 为全大写枚举（数据库 CHECK 约束固定为 SUCCEEDED / FAILED）。
- */
-export interface BuyerHistoryEntry {
-  goods_name: string
-  create_at: string
-  result: 'SUCCEEDED' | 'FAILED'
-  finish_at: string
 }
 
 export interface RegisterRequest {
@@ -129,13 +117,4 @@ export interface LoginRequest {
 export interface LoginData {
   token: string
   expire_at: string
-}
-
-/**
- * 提交意向的响应。
- * 只回意向记录的 id 与创建时间——**不含排队位次**，界面不得展示位置。
- */
-export interface IntentionAccepted {
-  id: string
-  create_at: string
 }
