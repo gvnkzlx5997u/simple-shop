@@ -22,6 +22,20 @@ export const ApiCode = {
   DEFAULT_LOCATION_INVALID: 10008,
   /** 商品不存在或已下架；后端同时回 HTTP 404。 */
   GOODS_NOT_FOUND: 20011,
+  /** 下单数量超过库存。 */
+  STOCK_INVALID: 20015,
+  /** 目标商品当前不在售（加购、下单时可能遇到）。 */
+  GOODS_NOT_ON_SALE: 20019,
+  ORDER_NOT_FOUND: 60001,
+  ORDER_STATUS_INVALID: 60002,
+  ORDER_NOT_CANCELABLE: 60003,
+  ORDER_STOCK_SHORTAGE: 60004,
+  /** 加购的商品已下架。 */
+  CART_GOODS_NOT_SELECTABLE: 70001,
+  /** 收藏的商品已下架。 */
+  FAVORITE_GOODS_NOT_SELECTABLE: 70002,
+  /** 转收藏的批次里含已下架商品，整批拒绝。 */
+  CART_TO_FAVORITE_REJECTED: 70003,
   TOO_MANY_REQUESTS: 50001,
   PARAM_INVALID: 50002,
 } as const
@@ -117,4 +131,62 @@ export interface LoginRequest {
 export interface LoginData {
   token: string
   expire_at: string
+}
+
+/** 商品状态：阶段三买家只能看到在售，因此只有两态。 */
+export type GoodsStatus = 'ON_SALE' | 'OFF_SHELF'
+
+/** 下架原因：手动下架 / 库存归零 / 售罄归档。买家端只用来生成提示文案。 */
+export type OffShelfReason = 'MANUAL' | 'STOCK_ZERO' | 'SOLD_OUT'
+
+/**
+ * 购物车行。**没有数量字段**——数量与勾选只存在前端（见 utils/cartStorage.ts）。
+ *
+ * `selectable` 的口径是「在售」，**在售但库存为 0 时仍为 true**；
+ * 别和商品详情的 `purchasable`（在售且有库存）混用。
+ */
+export interface CartItemData {
+  goods_id: string
+  name: string
+  price: number
+  stock: number
+  status: GoodsStatus
+  off_shelf_reason: OffShelfReason | null
+  main_image_url: string
+  selectable: boolean
+  added_at: string
+}
+
+/** 购物车列表：不分页，一次返回全部行（含已下架行）。 */
+export interface CartListData {
+  items: CartItemData[]
+}
+
+/** 转收藏结果：只回成功转了几件。 */
+export interface MoveToFavoritesData {
+  moved_count: number
+}
+
+/** 订单状态，与后端 `OrderStatus` 六个值逐字一致。 */
+export type OrderStatus =
+  | 'PENDING_CONFIRM'
+  | 'CONFIRMED'
+  | 'PREPARED'
+  | 'SHIPPED'
+  | 'COMPLETED'
+  | 'CANCELED'
+
+/** 下单入参：只带明细与数量，**不带金额**（总额由服务端按商品价快照算）。 */
+export interface PlaceOrderItem {
+  goods_id: string
+  quantity: number
+}
+
+/** 下单成功回执。 */
+export interface OrderPlacedData {
+  order_id: string
+  order_no: string
+  total_amount: number
+  status: OrderStatus
+  create_at: string
 }

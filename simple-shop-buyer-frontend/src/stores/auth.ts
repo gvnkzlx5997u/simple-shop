@@ -6,6 +6,7 @@ import { ApiError, onUnauthorized } from '../api/http'
 import { clearToken, getToken, saveToken } from '../api/token'
 import { ApiCode } from '../api/types'
 import type { LoginRequest, RegisterRequest } from '../api/types'
+import { clearCartLocal } from '../utils/cartStorage'
 
 /**
  * 登录态。
@@ -28,6 +29,10 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function clearSession(): void {
+    // 先按当前用户名清掉购物车本地状态：数量与勾选只存本地，换账号不能串数据（D3-1）。
+    if (username.value) {
+      clearCartLocal(username.value)
+    }
     clearToken()
     localStorage.removeItem('simple-shop.buyer.username')
     token.value = null
@@ -86,6 +91,14 @@ export function describeError(err: unknown): string {
         return '默认交易地点不符合要求：最多 50 字，不能含换行'
       case ApiCode.GOODS_NOT_FOUND:
         return '商品不存在或已下架'
+      case ApiCode.CART_GOODS_NOT_SELECTABLE:
+        return '商品已下架，无法加入购物车'
+      case ApiCode.GOODS_NOT_ON_SALE:
+        return '有商品已下架，请回购物车处理'
+      case ApiCode.STOCK_INVALID:
+        return '库存不足，请回购物车调整数量'
+      case ApiCode.ORDER_STOCK_SHORTAGE:
+        return '卖家库存不足，订单未完成'
       case ApiCode.TOO_MANY_REQUESTS:
         return '操作太频繁了，请稍后再试'
       case ApiCode.PARAM_INVALID:

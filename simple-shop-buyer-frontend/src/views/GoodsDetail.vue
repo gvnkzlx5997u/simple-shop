@@ -1,14 +1,18 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import { fetchGoodsDetail } from '../api/buyer'
 import { ApiError } from '../api/http'
 import { ApiCode } from '../api/types'
 import type { GoodsDetail } from '../api/types'
-import { describeError } from '../stores/auth'
+import { describeError, useAuthStore } from '../stores/auth'
+import { useCartStore } from '../stores/cart'
 
 const route = useRoute()
+const router = useRouter()
+const auth = useAuthStore()
+const cart = useCartStore()
 
 const goods = ref<GoodsDetail | null>(null)
 const activeImage = ref('')
@@ -16,6 +20,11 @@ const loading = ref(false)
 const errorText = ref('')
 /** 已下架与不存在都是正常结果，给空态而不是错误提示。 */
 const notFound = ref(false)
+
+const adding = ref(false)
+const notice = ref('')
+/** 加购失败单独一份，避免和「详情加载失败」互相覆盖。 */
+const actionError = ref('')
 
 const goodsId = computed(() => String(route.params.id ?? ''))
 const allImages = computed(() => {
@@ -27,6 +36,11 @@ const allImages = computed(() => {
   }
   return list
 })
+
+/** 能进详情页的商品后端只放行在售，这里再按状态判一次，避免按钮在异常数据下亮着。 */
+const canAddToCart = computed(() => goods.value?.status === 'ON_SALE')
+/** 在售但没货：可以加进购物车等补货，但要先说明白。 */
+const outOfStock = computed(() => !!goods.value && goods.value.status === 'ON_SALE' && goods.value.stock <= 0)
 
 async function load() {
   loading.value = true
@@ -45,6 +59,26 @@ async function load() {
     }
   } finally {
     loading.value = false
+  }
+}
+
+async function onAddToCart() {
+  if (!auth.isLoggedIn) {
+    // 未登录不拦在详情页，跳登录后回原页（阶段D §2.2 的统一守卫口径）。
+    router.push({ name: 'login', query: { redirect: route.fullPath } })
+    return
+  }
+  adding.value = true
+  notice.value = ''
+  actionError.value = ''
+  try {
+    const result = await cart.add(goodsId.value)
+    // 后端加购幂等，重复点不会产生第二行，这里只是把结果说清楚。
+    notice.value = result === 'existed' ? '这件商品已经在购物车里了' : '已加入购物车'
+  } catch (err) {
+    actionError.value = describeError(err)
+  } finally {
+    adding.value = false
   }
 }
 
@@ -92,6 +126,23 @@ onMounted(load)
             {{ goods.category?.l1_name ?? '未分类' }} / {{ goods.category?.l2_name ?? '' }}
           </div>
           <div class="muted">库存 {{ goods.stock }}</div>
+
+          <p v-if="outOfStock" class="warn">当前缺货，可以先加入购物车，等补货后再下单</p>
+
+          <button
+            v-if="canAddToCart"
+            class="primary buy"
+            :disabled="adding"
+            @click="onAddToCart"
+          >
+            {{ adding ? '加入中…' : '加入购物车' }}
+          </button>
+
+          <p v-if="notice" class="notice">
+            {{ notice }}
+            <RouterLink to="/cart">去购物车</RouterLink>
+          </p>
+          <p v-if="actionError" class="error">{{ actionError }}</p>
         </div>
       </div>
 
@@ -182,6 +233,20 @@ onMounted(load)
 .empty {
   text-align: center;
   padding: 40px 16px;
+}
+
+.buy {
+  width: 100%;
+  margin-top: 16px;
+  padding: 10px;
+}
+
+.notice {
+  color: #15803d;
+}
+
+.warn {
+  color: #92400e;
 }
 
 .empty-title {

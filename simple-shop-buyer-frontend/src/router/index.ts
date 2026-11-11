@@ -19,6 +19,12 @@ const router = createRouter({
       meta: { title: '商品详情' },
     },
     {
+      path: '/cart',
+      name: 'cart',
+      component: () => import('../views/Cart.vue'),
+      meta: { title: '购物车', requiresAuth: true },
+    },
+    {
       path: '/login',
       name: 'login',
       component: () => import('../views/Login.vue'),
@@ -36,7 +42,7 @@ const router = createRouter({
 
 /**
  * 登录守卫：`meta.requiresAuth` 为真的页面未登录时跳登录，并带 redirect 回原页。
- * 本期只有浏览与账号页（都不需要登录），守卫留给购物车、收藏与订单页接入时使用。
+ * 目前只有购物车需要登录；订单与收藏页接入时沿用同一份判断。
  */
 router.beforeEach((to) => {
   const auth = useAuthStore()
