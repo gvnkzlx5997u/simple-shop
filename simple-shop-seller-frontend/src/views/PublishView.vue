@@ -6,6 +6,7 @@ import { publishGoods } from '../api/goods'
 import { uploadMedia } from '../api/media'
 import { ApiCode } from '../api/types'
 import type { GoodsPublishRequest, MediaPurpose } from '../api/types'
+import AppIcon from '../components/common/AppIcon.vue'
 import ConfirmDialog from '../components/common/ConfirmDialog.vue'
 import CategoryCascadeSelect from '../components/goods/CategoryCascadeSelect.vue'
 import DescriptionBlockEditor from '../components/goods/DescriptionBlockEditor.vue'
@@ -192,92 +193,97 @@ async function doPublish(): Promise<void> {
 </script>
 
 <template>
-  <div class="page">
-    <div class="page__header">
-      <h1 class="page__title">发布商品</h1>
-      <RouterLink to="/" class="btn">返回列表</RouterLink>
-    </div>
+  <div class="flex flex-col gap-4">
+    <header class="flex flex-wrap items-center justify-between gap-3">
+      <h1 class="text-lg font-semibold">发布商品</h1>
+      <RouterLink to="/" class="btn btn-sm btn-outline">
+        <AppIcon name="arrow-left" />
+        返回列表
+      </RouterLink>
+    </header>
 
-    <form class="card publish-form" @submit.prevent="onSubmit">
-      <div class="field">
-        <label class="field__label" for="goods-name">商品名称</label>
+    <!-- novalidate：库存 input 的 min=1 会触发浏览器原生气泡，挡住我们自己的中文文案 -->
+    <form
+      class="panel flex max-w-[720px] flex-col gap-4"
+      novalidate
+      @submit.prevent="onSubmit"
+    >
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend text-xs">商品名称</legend>
         <input
           id="goods-name"
           v-model="name"
-          class="input"
+          class="input w-full"
           type="text"
           maxlength="60"
           :disabled="submitting"
         />
-        <p v-if="errors.name" class="field__error">{{ errors.name }}</p>
-      </div>
+        <p v-if="errors.name" class="mt-1 text-xs text-error">{{ errors.name }}</p>
+      </fieldset>
 
-      <div class="publish-form__row">
-        <div class="field">
-          <label class="field__label" for="goods-price">价格(元)</label>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend text-xs">价格（元）</legend>
           <input
             id="goods-price"
             v-model="price"
-            class="input"
+            class="input w-full"
             type="text"
             inputmode="decimal"
             placeholder="0.00 ~ 999999.99"
             :disabled="submitting"
           />
-          <p v-if="errors.price" class="field__error">{{ errors.price }}</p>
-        </div>
-        <div class="field">
-          <label class="field__label" for="goods-stock">库存(件)</label>
+          <p v-if="errors.price" class="mt-1 text-xs text-error">{{ errors.price }}</p>
+        </fieldset>
+
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend text-xs">库存（件）</legend>
           <input
             id="goods-stock"
             v-model.number="stock"
-            class="input"
+            class="input w-full"
             type="number"
             min="1"
             step="1"
             :disabled="submitting"
           />
-          <p v-if="errors.stock" class="field__error">{{ errors.stock }}</p>
-        </div>
+          <p v-if="errors.stock" class="mt-1 text-xs text-error">{{ errors.stock }}</p>
+        </fieldset>
       </div>
 
-      <div class="field">
-        <span class="field__label">所属类别</span>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend text-xs">所属类别</legend>
         <CategoryCascadeSelect
           v-model:l1-id="categoryL1"
           v-model:l2-id="categoryL2"
           :disabled="submitting"
         />
-        <p v-if="errors.category" class="field__error">{{ errors.category }}</p>
-      </div>
+        <p v-if="errors.category" class="mt-1 text-xs text-error">{{ errors.category }}</p>
+      </fieldset>
 
-      <div class="field">
-        <ImageFilePicker
-          v-model="mainImages"
-          label="主图"
-          :max="1"
-          hint="JPG/PNG,≤5MB;可选,但有图集时必须有主图"
-          :disabled="submitting"
-        />
-      </div>
+      <ImageFilePicker
+        v-model="mainImages"
+        label="主图"
+        :max="1"
+        hint="JPG/PNG，≤5MB；可选，但有图集时必须有主图"
+        :disabled="submitting"
+      />
 
-      <div class="field">
-        <ImageFilePicker
-          v-model="galleryImages"
-          label="图集"
-          :max="8"
-          hint="JPG/PNG,≤5MB;最多 8 张"
-          :disabled="submitting"
-        />
-      </div>
+      <ImageFilePicker
+        v-model="galleryImages"
+        label="图集"
+        :max="8"
+        hint="JPG/PNG，≤5MB；最多 8 张"
+        :disabled="submitting"
+      />
 
-      <div class="field">
-        <span class="field__label">商品描述</span>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend text-xs">商品描述</legend>
         <DescriptionBlockEditor v-model="editorLines" />
-      </div>
+      </fieldset>
 
-      <div class="publish-form__actions">
-        <button type="submit" class="btn btn--primary" :disabled="submitting">
+      <div class="flex justify-end pt-1">
+        <button type="submit" class="btn btn-primary" :disabled="submitting">
           {{ submitLabel }}
         </button>
       </div>
@@ -293,37 +299,3 @@ async function doPublish(): Promise<void> {
     />
   </div>
 </template>
-
-<style scoped>
-.page__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-
-.page__title {
-  margin: 0;
-}
-
-.publish-form {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  max-width: 720px;
-}
-
-.publish-form__row {
-  display: flex;
-  gap: 16px;
-}
-
-.publish-form__row .field {
-  flex: 1;
-}
-
-.publish-form__actions {
-  display: flex;
-  justify-content: flex-end;
-}
-</style>

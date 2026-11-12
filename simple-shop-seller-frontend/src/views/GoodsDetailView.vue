@@ -1,51 +1,37 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 
-import {
-  getGoods,
-  reListGoods,
-  takeGoodsOffShelf,
-  updateGoodsCategory,
-  updateGoodsStock,
-} from '../api/goods'
-import { enterTrade, listIntentions, markTradeFailure, markTradeSuccess } from '../api/intention'
-import type { Disposal, GoodsDetailData, IntentionEntryData, IntentionStatus } from '../api/types'
+import { getGoods, takeGoodsOffShelf, updateGoodsCategory, updateGoodsStock } from '../api/goods'
+import type { GoodsDetailData } from '../api/types'
 import placeholderImage from '../assets/product.svg'
+import AppIcon from '../components/common/AppIcon.vue'
 import ConfirmDialog from '../components/common/ConfirmDialog.vue'
-import Pagination from '../components/common/Pagination.vue'
 import StatusTag from '../components/common/StatusTag.vue'
 import CategoryCascadeSelect from '../components/goods/CategoryCascadeSelect.vue'
 import DescriptionBlocks from '../components/goods/DescriptionBlocks.vue'
-import IntentionTable from '../components/intention/IntentionTable.vue'
-import TradeFailureDialog from '../components/intention/TradeFailureDialog.vue'
-import { GOODS_STATUS_LABELS, INTENTION_STATUS_LABELS } from '../constants/labels'
+import OrderList from '../components/order/OrderList.vue'
+import {
+  GOODS_STATUS_LABELS,
+  GOODS_STATUS_TONES,
+  OFF_SHELF_REASON_LABELS,
+  OFF_SHELF_REASON_TONES,
+} from '../constants/labels'
+import type { TagTone } from '../constants/labels'
 import { M10 } from '../constants/messages'
 import { useToast } from '../composables/useToast'
 import { errorMessage } from '../utils/error'
 import { formatDateTime, formatPrice } from '../utils/format'
 import { validateAdjustStock } from '../validation'
 
-const PAGE_SIZE = 10
-
 const route = useRoute()
-const router = useRouter()
 const toast = useToast()
 
 const goods = ref<GoodsDetailData | null>(null)
-const intentions = ref<IntentionEntryData[]>([])
-const intentionTotal = ref(0)
-const intentionPage = ref(1)
-const intentionStatus = ref<IntentionStatus | ''>('')
 const loadingGoods = ref(false)
-const loadingIntentions = ref(false)
 const error = ref<string | null>(null)
 
 const goodsId = computed(() => (typeof route.params.id === 'string' ? route.params.id : ''))
-
-const INTENTION_STATUS_OPTIONS = (Object.keys(INTENTION_STATUS_LABELS) as IntentionStatus[]).map(
-  (value) => ({ value, label: INTENTION_STATUS_LABELS[value] }),
-)
 
 async function loadGoods(): Promise<void> {
   loadingGoods.value = true
@@ -60,79 +46,43 @@ async function loadGoods(): Promise<void> {
   }
 }
 
-async function loadIntentions(): Promise<void> {
-  loadingIntentions.value = true
-  try {
-    const data = await listIntentions(goodsId.value, {
-      status: intentionStatus.value || undefined,
-      page: intentionPage.value,
-      page_size: PAGE_SIZE,
-    })
-    intentions.value = data.items
-    intentionTotal.value = data.total
-  } catch (caught) {
-    toast.error(errorMessage(caught))
-  } finally {
-    loadingIntentions.value = false
-  }
-}
-
-function loadAll(): Promise<void[]> {
-  return Promise.all([loadGoods(), loadIntentions()])
-}
-
-onMounted(loadAll)
-watch(goodsId, loadAll)
-watch(intentionStatus, () => {
-  intentionPage.value = 1
-  void loadIntentions()
-})
-
-/** 队首 = 第一页数据里的第一条 QUEUED;翻页后无法从当前页判断,置空。 */
-const queueHeadId = computed(() => {
-  if (intentionPage.value !== 1) {
-    return null
-  }
-  return intentions.value.find((item) => item.status === 'QUEUED')?.id ?? null
-})
+onMounted(loadGoods)
+watch(goodsId, loadGoods)
 
 const isOnSale = computed(() => goods.value?.status === 'ON_SALE')
-const isFrozen = computed(() => goods.value?.status === 'FROZEN')
-const isOffManual = computed(() => goods.value?.status === 'OFF_MANUAL')
-const isOffZero = computed(() => goods.value?.status === 'OFF_ZERO')
-
-// ---- 商品操作:下架 / 重新上架 / 进入交易 / 标记成功(共用确认弹窗) ----
-
-type PendingAction =
-  | { kind: 'off-shelf' }
-  | { kind: 're-list' }
-  | { kind: 'enter-trade'; item: IntentionEntryData }
-  | { kind: 'trade-success'; item: IntentionEntryData }
-
-const pending = ref<PendingAction | null>(null)
-const failureItem = ref<IntentionEntryData | null>(null)
-const busy = ref(false)
-
-const confirmMessage = computed(() => {
-  switch (pending.value?.kind) {
-    case 'off-shelf':
-      return M10.confirmOffShelf
-    case 're-list':
-      return M10.confirmReList
-    case 'enter-trade':
-      return M10.confirmEnterTrade
-    case 'trade-success':
-      // 最后一件成交 → 售罄归档,提示语更重。
-      return (goods.value?.stock ?? 0) <= 1
-        ? M10.confirmTradeSuccessArchive
-        : M10.confirmTradeSuccessWithStock
-    default:
-      return ''
-  }
-})
-const confirmDanger = computed(
-  () => pending.value?.kind === 'off-shelf' || pending.value?.kind === 'trade-success',
+/** 库存耗尽 / 已售下架的商品补货即自动上架；手动下架是终态。 */
+const canRestock = computed(
+  () => goods.value?.status === 'OFF_SHELF' && goods.value.off_shelf_reason !== 'MANUAL',
 )
+
+const statusTone = computed<TagTone>(() =>
+  goods.value ? GOODS_STATUS_TONES[goods.value.status] : 'default',
+)
+
+/** 状态与原因成对展示：在售时没有原因。 */
+const statusBadges = computed(() => {
+  const current = goods.value
+  if (!current) {
+    return [] as { label: string; tone: TagTone }[]
+  }
+  const badges = [{ label: GOODS_STATUS_LABELS[current.status], tone: statusTone.value }]
+  if (current.off_shelf_reason) {
+    badges.push({
+      label: OFF_SHELF_REASON_LABELS[current.off_shelf_reason],
+      tone: OFF_SHELF_REASON_TONES[current.off_shelf_reason],
+    })
+  }
+  return badges
+})
+
+/** 手动下架是终态，库存只读；在售与可补货的已下架都能改。 */
+const stockEditable = computed(() => isOnSale.value || canRestock.value)
+
+// ---- 商品操作：手动下架（终态，没有重新上架） ----
+
+const offShelfPending = ref(false)
+
+const busy = ref(false)
 
 // ---- 大图与图集切换:默认主图,点击缩略图切换;路由切换商品时回默认 ----
 
@@ -159,68 +109,30 @@ watch(goodsId, () => {
   heroFailed.value = false
 })
 
-async function onConfirm(): Promise<void> {
-  const action = pending.value
-  if (!action) {
-    return
-  }
+async function onConfirmOffShelf(): Promise<void> {
   busy.value = true
   try {
-    if (action.kind === 'off-shelf') {
-      await takeGoodsOffShelf(goodsId.value)
-      toast.success(M10.offShelfDone)
-      await loadGoods()
-    } else if (action.kind === 're-list') {
-      await reListGoods(goodsId.value)
-      toast.success(M10.reListDone)
-      await loadGoods()
-    } else if (action.kind === 'enter-trade') {
-      await enterTrade(action.item.id)
-      toast.success(M10.enterTradeDone)
-      await loadAll()
-    } else {
-      const result = await markTradeSuccess(action.item.id)
-      if (result.goods_status === 'ARCHIVED') {
-        // 售罄归档:商品已从当前表转入历史,详情页即将 404,直接回列表。
-        toast.success(M10.tradeSuccessArchived)
-        await router.replace({ name: 'goods-list' })
-        return
-      }
-      toast.success(M10.tradeSuccessOnSale)
-      await loadAll()
-    }
+    await takeGoodsOffShelf(goodsId.value)
+    toast.success(M10.offShelfDone)
+    await loadGoods()
   } catch (caught) {
     toast.error(errorMessage(caught))
-    void loadAll()
+    void loadGoods()
   } finally {
-    pending.value = null
+    offShelfPending.value = false
     busy.value = false
   }
 }
 
-async function onFailureSubmit(disposal: Disposal): Promise<void> {
-  const item = failureItem.value
-  if (!item) {
-    return
-  }
-  busy.value = true
-  try {
-    await markTradeFailure(item.id, disposal)
-    toast.success(M10.tradeFailureDone)
-    failureItem.value = null
-    await loadAll()
-  } catch (caught) {
-    toast.error(errorMessage(caught))
-    void loadAll()
-  } finally {
-    busy.value = false
-  }
-}
-
-// ---- 库存行内编辑(OFF_ZERO 改 >0 保存即自动重新上架) ----
+// ---- 库存行内编辑（库存耗尽下架的商品改成 >0 保存即自动上架） ----
 
 const stockEditing = ref(false)
 const stockInput = ref<number | ''>(0)
+
+/** 在售商品把库存改成 0 保存后会立刻下架，保存前先说清后果。 */
+const willOffShelf = computed(
+  () => stockEditing.value && isOnSale.value && Number(stockInput.value) === 0,
+)
 
 function startStockEdit(): void {
   stockInput.value = goods.value?.stock ?? 0
@@ -248,7 +160,7 @@ async function saveStock(): Promise<void> {
   }
 }
 
-// ---- 改挂类别行内编辑 ----
+// ---- 改挂类别行内编辑（所有状态都可改） ----
 
 const categoryEditing = ref(false)
 const categoryL1 = ref<string | null>(null)
@@ -282,43 +194,47 @@ async function saveCategory(): Promise<void> {
     busy.value = false
   }
 }
-
-function onIntentionPageChange(next: number): void {
-  intentionPage.value = next
-  void loadIntentions()
-}
 </script>
 
 <template>
-  <div class="page">
-    <div class="page__header">
-      <h1 class="page__title">商品详情</h1>
-      <RouterLink to="/" class="btn">返回列表</RouterLink>
+  <div class="flex flex-col gap-4">
+    <header class="flex flex-wrap items-center justify-between gap-3">
+      <h1 class="text-lg font-semibold">商品详情</h1>
+      <RouterLink to="/" class="btn btn-sm btn-outline">
+        <AppIcon name="arrow-left" />
+        返回列表
+      </RouterLink>
+    </header>
+
+    <div v-if="error" role="alert" class="alert alert-error alert-soft text-sm">
+      <AppIcon name="forbidden" />
+      <span>{{ error }}</span>
+    </div>
+    <div v-else-if="loadingGoods && !goods" class="panel text-sm text-base-content/60">
+      加载中…
     </div>
 
-    <p v-if="error" class="page__error">
-      {{ error }}
-      <RouterLink to="/">返回商品列表</RouterLink>
-    </p>
-    <div v-else-if="loadingGoods && !goods" class="card muted">加载中…</div>
-
     <template v-else-if="goods">
-      <div class="card goods">
-        <div class="goods__media">
-          <img class="goods__main-image" :src="heroImage" :alt="goods.name" @error="onHeroError" />
-          <div v-if="goods.images.length > 1" class="goods__gallery">
+      <div class="panel flex flex-col gap-6 lg:flex-row">
+        <div class="flex shrink-0 flex-col gap-2 lg:w-[320px]">
+          <img
+            class="aspect-square w-full rounded-box border border-base-300 bg-base-300 object-cover"
+            :src="heroImage"
+            :alt="goods.name"
+            @error="onHeroError"
+          />
+          <div v-if="goods.images.length > 1" class="flex flex-wrap gap-1.5">
             <button
               v-for="image in goods.images"
               :key="image.url"
               type="button"
-              class="goods__thumb-btn"
-              :class="{ 'goods__thumb-btn--active': image.url === activeImageUrl }"
+              class="cursor-pointer rounded-md p-0 leading-none"
+              :class="image.url === activeImageUrl ? 'ring-2 ring-primary' : ''"
               :title="image.is_main ? '主图（默认大图）' : '点击切换大图'"
               @click="selectImage(image.url)"
             >
               <img
-                class="goods__thumb"
-                :class="{ 'goods__thumb--main': image.is_main }"
+                class="size-12 rounded-md border border-base-300 object-cover"
                 :src="image.url"
                 :alt="image.is_main ? '主图' : '图集图片'"
                 loading="lazy"
@@ -327,36 +243,45 @@ function onIntentionPageChange(next: number): void {
           </div>
         </div>
 
-        <div class="goods__info">
-          <div class="goods__title-row">
-            <h2 class="goods__name">{{ goods.name }}</h2>
-            <StatusTag :label="GOODS_STATUS_LABELS[goods.status]" />
+        <div class="flex min-w-0 flex-1 flex-col gap-3">
+          <div class="flex flex-wrap items-center gap-2.5">
+            <h2 class="text-lg font-semibold">{{ goods.name }}</h2>
+            <StatusTag
+              v-for="badge in statusBadges"
+              :key="badge.label"
+              :label="badge.label"
+              :tone="badge.tone"
+            />
           </div>
 
-          <dl class="goods__meta">
-            <div class="goods__meta-row">
-              <dt>价格</dt>
-              <dd class="goods__price">{{ formatPrice(goods.price) }}</dd>
+          <dl class="flex flex-col gap-2.5 text-sm">
+            <div class="flex flex-wrap items-center gap-3">
+              <dt class="w-20 shrink-0 text-xs text-base-content/60">价格</dt>
+              <dd class="m-0 flex flex-wrap items-center gap-2 font-semibold text-error">
+                {{ formatPrice(goods.price) }}
+              </dd>
             </div>
-            <div class="goods__meta-row">
-              <dt>库存</dt>
-              <dd>
+
+            <div class="flex flex-wrap items-center gap-3">
+              <dt class="w-20 shrink-0 text-xs text-base-content/60">库存</dt>
+              <dd class="m-0 flex flex-wrap items-center gap-2">
                 <template v-if="!stockEditing">
-                  {{ goods.stock }} 件
+                  <span>{{ goods.stock }} 件</span>
                   <button
+                    v-if="stockEditable"
                     type="button"
-                    class="btn btn--small"
-                    :disabled="isFrozen || busy"
-                    :title="isFrozen ? '交易中的商品不能改库存' : undefined"
+                    class="btn btn-sm btn-outline"
+                    :disabled="busy"
                     @click="startStockEdit"
                   >
+                    <AppIcon name="edit" />
                     修改库存
                   </button>
                 </template>
                 <template v-else>
                   <input
                     v-model.number="stockInput"
-                    class="input goods__stock-input"
+                    class="input input-sm goods__stock-input w-24"
                     type="number"
                     min="0"
                     step="1"
@@ -364,7 +289,7 @@ function onIntentionPageChange(next: number): void {
                   />
                   <button
                     type="button"
-                    class="btn btn--small btn--primary"
+                    class="btn btn-sm btn-primary"
                     :disabled="busy"
                     @click="saveStock"
                   >
@@ -372,27 +297,31 @@ function onIntentionPageChange(next: number): void {
                   </button>
                   <button
                     type="button"
-                    class="btn btn--small"
+                    class="btn btn-sm btn-ghost"
                     :disabled="busy"
                     @click="stockEditing = false"
                   >
                     取消
                   </button>
                 </template>
+                <span v-if="willOffShelf" class="text-xs text-warning">
+                  {{ M10.stockZeroHint }}
+                </span>
               </dd>
             </div>
-            <div class="goods__meta-row">
-              <dt>类别</dt>
-              <dd>
+
+            <div class="flex flex-wrap items-center gap-3">
+              <dt class="w-20 shrink-0 text-xs text-base-content/60">类别</dt>
+              <dd class="m-0 flex flex-wrap items-center gap-2">
                 <template v-if="!categoryEditing">
-                  {{ goods.category.l1_name }} / {{ goods.category.l2_name }}
+                  <span>{{ goods.category.l1_name }} / {{ goods.category.l2_name }}</span>
                   <button
                     type="button"
-                    class="btn btn--small"
-                    :disabled="isFrozen || busy"
-                    :title="isFrozen ? '交易中的商品不能改挂类别' : undefined"
+                    class="btn btn-sm btn-outline"
+                    :disabled="busy"
                     @click="startCategoryEdit"
                   >
+                    <AppIcon name="file" />
                     改挂类别
                   </button>
                 </template>
@@ -404,7 +333,7 @@ function onIntentionPageChange(next: number): void {
                   />
                   <button
                     type="button"
-                    class="btn btn--small btn--primary"
+                    class="btn btn-sm btn-primary"
                     :disabled="busy"
                     @click="saveCategory"
                   >
@@ -412,7 +341,7 @@ function onIntentionPageChange(next: number): void {
                   </button>
                   <button
                     type="button"
-                    class="btn btn--small"
+                    class="btn btn-sm btn-ghost"
                     :disabled="busy"
                     @click="categoryEditing = false"
                   >
@@ -421,263 +350,71 @@ function onIntentionPageChange(next: number): void {
                 </template>
               </dd>
             </div>
-            <div class="goods__meta-row">
-              <dt>创建时间</dt>
-              <dd>{{ formatDateTime(goods.create_at) }}</dd>
+
+            <div v-if="goods.off_shelf_at" class="flex flex-wrap items-center gap-3">
+              <dt class="w-20 shrink-0 text-xs text-base-content/60">下架时间</dt>
+              <dd class="m-0">{{ formatDateTime(goods.off_shelf_at) }}</dd>
             </div>
-            <div class="goods__meta-row">
-              <dt>更新时间</dt>
-              <dd>{{ formatDateTime(goods.update_at) }}</dd>
+
+            <div class="flex flex-wrap items-center gap-3">
+              <dt class="w-20 shrink-0 text-xs text-base-content/60">创建时间</dt>
+              <dd class="m-0">{{ formatDateTime(goods.create_at) }}</dd>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-3">
+              <dt class="w-20 shrink-0 text-xs text-base-content/60">更新时间</dt>
+              <dd class="m-0">{{ formatDateTime(goods.update_at) }}</dd>
             </div>
           </dl>
 
-          <p v-if="isOffZero" class="goods__hint">{{ M10.offZeroHint }}</p>
+          <p v-if="canRestock" class="text-xs text-warning">{{ M10.restockHint }}</p>
+          <p v-if="!stockEditable" class="text-xs text-base-content/60">
+            {{ M10.manualOffShelfHint }}
+          </p>
 
-          <div class="goods__actions">
+          <div class="mt-auto flex flex-wrap gap-2 pt-2">
             <button
               v-if="isOnSale"
               type="button"
-              class="btn btn--danger"
+              class="btn btn-sm btn-error"
               :disabled="busy"
-              @click="pending = { kind: 'off-shelf' }"
+              @click="offShelfPending = true"
             >
+              <AppIcon name="forbidden" />
               下架
-            </button>
-            <button
-              v-if="isOffManual"
-              type="button"
-              class="btn btn--primary"
-              :disabled="busy"
-              @click="pending = { kind: 're-list' }"
-            >
-              重新上架
             </button>
           </div>
         </div>
       </div>
 
-      <section class="card section">
-        <h2 class="section__title">商品描述</h2>
+      <section class="panel">
+        <h2 class="mb-3 text-base font-semibold">商品描述</h2>
         <DescriptionBlocks v-if="goods.description.length > 0" :blocks="goods.description" />
-        <p v-else class="muted">{{ M10.emptyDescription }}</p>
+        <p v-else class="text-sm text-base-content/60">{{ M10.emptyDescription }}</p>
       </section>
 
-      <section class="card section">
-        <div class="section__header">
-          <h2 class="section__title">意向名单</h2>
-          <select v-model="intentionStatus" class="input section__filter" aria-label="意向状态筛选">
-            <option value="">全部状态</option>
-            <option
-              v-for="option in INTENTION_STATUS_OPTIONS"
-              :key="option.value"
-              :value="option.value"
-            >
-              {{ option.label }}
-            </option>
-          </select>
+      <!-- 该商品的订单：内嵌同一份订单列表，按 goods_id 固定筛选，不跳转到订单管理页 -->
+      <section class="flex flex-col gap-3">
+        <div class="flex flex-wrap items-baseline gap-2">
+          <h2 class="text-base font-semibold">该商品的订单</h2>
+          <span class="text-xs text-base-content/60">点任意一行进入订单详情</span>
         </div>
-        <IntentionTable
-          :items="intentions"
-          :loading="loadingIntentions"
-          :can-enter-trade="isOnSale"
-          :can-decide-trade="isFrozen"
-          :queue-head-id="queueHeadId"
-          @enter-trade="pending = { kind: 'enter-trade', item: $event }"
-          @trade-success="pending = { kind: 'trade-success', item: $event }"
-          @trade-failure="failureItem = $event"
-        />
-        <Pagination
-          v-if="intentionTotal > PAGE_SIZE"
-          class="section__pagination"
-          :page="intentionPage"
-          :page-size="PAGE_SIZE"
-          :total="intentionTotal"
-          :disabled="loadingIntentions"
-          @update:page="onIntentionPageChange"
+        <OrderList
+          :goods-id="goodsId"
+          :page-size="5"
+          :sync-query="false"
+          empty-text="该商品还没有被下单"
         />
       </section>
     </template>
 
     <ConfirmDialog
-      :open="pending !== null"
-      :message="confirmMessage"
-      :danger="confirmDanger"
+      :open="offShelfPending"
+      :message="M10.confirmOffShelf"
+      danger
       :loading="busy"
-      @confirm="onConfirm"
-      @cancel="pending = null"
-    />
-    <TradeFailureDialog
-      :open="failureItem !== null"
-      :loading="busy"
-      @submit="onFailureSubmit"
-      @cancel="failureItem = null"
+      @confirm="onConfirmOffShelf"
+      @cancel="offShelfPending = false"
     />
   </div>
 </template>
-
-<style scoped>
-.page__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-
-.page__title {
-  margin: 0;
-}
-
-.page__error {
-  margin: 0 0 16px;
-  padding: 10px 12px;
-  border: 1px solid #fecaca;
-  border-radius: 6px;
-  background: #fef2f2;
-  color: var(--danger);
-}
-
-.goods {
-  display: flex;
-  gap: 20px;
-}
-
-.goods__media {
-  flex: 0 0 320px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.goods__main-image {
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  object-fit: cover;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: #f3f4f6;
-}
-
-.goods__gallery {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.goods__thumb-btn {
-  padding: 0;
-  border: none;
-  background: none;
-  cursor: pointer;
-  border-radius: 4px;
-  line-height: 0;
-}
-
-.goods__thumb-btn--active {
-  box-shadow: 0 0 0 2px var(--primary);
-  border-radius: 6px;
-}
-
-.goods__thumb {
-  width: 48px;
-  height: 48px;
-  object-fit: cover;
-  border-radius: 4px;
-  border: 1px solid var(--border);
-}
-
-/* .goods__thumb--main {
-  border-color: var(--primary);
-  border-width: 2px;
-} */
-
-.goods__info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.goods__title-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.goods__name {
-  margin: 0;
-  font-size: 18px;
-}
-
-.goods__meta {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.goods__meta-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.goods__meta-row dt {
-  flex: 0 0 72px;
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.goods__meta-row dd {
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.goods__price {
-  color: var(--danger);
-  font-weight: 600;
-}
-
-.goods__stock-input {
-  width: 100px;
-}
-
-.goods__hint {
-  margin: 0;
-  font-size: 13px;
-  color: var(--warning);
-}
-
-.goods__actions {
-  display: flex;
-  gap: 8px;
-  margin-top: auto;
-}
-
-.section {
-  margin-top: 16px;
-}
-
-.section__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.section__title {
-  margin: 0;
-  font-size: 16px;
-}
-
-.section__filter {
-  width: 140px;
-}
-
-.section__pagination {
-  margin-top: 12px;
-}
-</style>

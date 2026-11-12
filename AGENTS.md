@@ -25,7 +25,8 @@
 | `deploy-cloud/` | 使用云端镜像的三容器 Compose 部署 |
 
 - **后端**：Java 21、Spring Boot 3.5.16、Maven（可执行 war）、Spring Data JPA/Hibernate、MySQL 8、Flyway、springdoc；运行端口 8080。
-- **前端**：Vue 3 + TypeScript + Vite + Pinia + Vue Router + Axios；卖家开发端口 5173，买家开发端口 5174。两端均使用原生 CSS，不引入 UI 组件库。
+- **前端**：Vue 3 + TypeScript + Vite + Pinia + Vue Router + Axios；卖家开发端口 5173，买家开发端口 5174。
+- **样式栈按端区分**：**卖家端**用 Tailwind CSS 4 + daisyUI 5（深/浅两套自定义主题）；**买家端**仍用原生 CSS，不引入 UI 组件库。这项选择**不同步**到买家端，也不要跨端复制样式方案。
 - **构建环境**：Node 24（Docker 统一用 `node:24-bookworm-slim`；卖家 `engines` 允许 `^22.18.0 || >=24.12.0`）；Docker 23+（BuildKit 的 `RUN --mount=type=cache`）。
 - **测试**：JUnit 5、Testcontainers（`mysql:8.0`）、ArchUnit、Vitest、Playwright（默认系统 Edge，不下载 Chromium）。
 - **部署**：Docker Compose，三容器 mysql / backend / frontend；只有 nginx 暴露宿主 80 端口。
@@ -114,6 +115,15 @@ npx playwright test
 - 卖家 SPA 生产构建 base 为 `/seller/`，开发期仍在根路径；不要用生产 URL 规则套开发地址。买家 SPA 固定在 `/`。
 - 开发期 Vite 已把 `/api`、`/media` 代理到 `http://localhost:8080`；后端不在本机时用 `VITE_API_BASE_URL` 覆盖。
 - 改页面时优先复用现有 `components/common`、`composables`、`stores`，不要为单个页面另起一套请求/状态实现。
+- **卖家端样式栈**：Tailwind CSS 4 + daisyUI 5。唯一 CSS 入口是 `src/assets/base.css`（`@import "tailwindcss"` + `@plugin "daisyui"` + 两套主题 + 少量 `@layer components` 项目复合类）。写样式优先用 daisyUI 组件类，其次 Tailwind 工具类；确有全局复用的复合类再放进 `@layer components`，不要写未分层的组件样式（未分层 CSS 会压过工具类，之后只能靠 `!important` 打架）。
+- **不要与 daisyUI 重名**：`.btn`、`.card`、`.input`、`.textarea`、`.select`、`.table`、`.badge`、`.menu`、`.modal`、`.toast`、`.alert` 归 daisyUI 所有。项目里不要再定义同名类，也不要给这些元素补裸写覆盖；项目自有容器统一用 `.panel`。
+- **要改 daisyUI 组件自身的外观，用 `@utility`**：daisyUI 的组件类落在 utilities 层的子层里，`@layer components` 盖不住（会被静默忽略）。全局调整用 `@utility btn { font-size: ... }` 这种形式；`@layer components` 只放项目自己的复合类。
+- **颜色只用语义色**：`base-100/200/300`、`base-content`、`primary`、`success`、`warning`、`error`、`info` 及对应 `-content`。模板与 scoped 样式里不写死色值（`#fff`、`rgba(...)`、`gray-500`），否则深色主题必然失效；弱化文字用 `text-base-content/60`。
+- **叠加层用实色 `--color-surface-solid`**：浅色的 `--color-base-100` 是半透明（面板叠在暖色底上才是暖白），但**盖在内容之上**的界面必须不透明，否则背后文字会透上来——原生 `<select>` 的弹出列表、`option`、`modal-box`、以后的 `dropdown-content`/`toast` 都用 `var(--color-surface-solid)`。新增浮层时先想这一条，不要直接用 `bg-base-100`。`--color-base-100` 与 `--color-surface-solid` 都在 `base.css` 的两套主题里定义，改色时一起改。
+- **两套主题**：`data-theme="shop-light" | "shop-dark"` 挂在 `<html>`。切换与持久化只走 `composables/useTheme`，页面内不要直接改 `document.documentElement.dataset.theme`；首屏主题由 `index.html` 内联脚本先定，避免闪白。
+- **图标**：统一走 `components/common/AppIcon.vue`（内联 `<svg>` + `currentColor`），不要在模板里用 `<img src="*.svg">` 直插图标——`assets/` 里的图标是固定黑色填充，深色主题下会糊成黑块。新增图标把 path 的 `d` 加进 `PATHS` 即可。
+- **后台密度**：数据密集型界面默认取 `-sm` 一档（`btn-sm`、`input-sm`、`select-sm`、`table-sm`），用默认尺寸会把一屏信息量挤掉。
+- **买家端不受影响**：卖家端引入 Tailwind/daisyUI 不改变买家端约定；不要把 Tailwind 类名、主题变量或 `@apply` 写法带进买家端。
 
 ## 6. 数据与迁移
 

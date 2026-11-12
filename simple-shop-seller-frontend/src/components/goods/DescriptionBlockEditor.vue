@@ -55,6 +55,62 @@ function onTextInput(event: Event): void {
   autosize(event.target as HTMLTextAreaElement)
 }
 
+/**
+ * 媒体在视觉上是「整块」的，用户自然会用 Backspace／Delete 删它。
+ * 光标在文本行首按 Backspace、行尾按 Delete 时，直接删掉相邻的媒体行，
+ * 不再要求先把焦点移到媒体块上。
+ */
+/**
+ * 媒体在视觉上是「整块」的，用户自然会用 Backspace／Delete 删它；
+ * 文本行之间也要能像普通文本那样前后相连（行首 Backspace / 行尾 Delete 合并两行），
+ * 否则删完媒体会留下两个互不相通的文本框。
+ */
+function onTextKeydown(event: KeyboardEvent, line: DescriptionEditorLine, index: number): void {
+  if (line.kind !== 'text') {
+    return
+  }
+  const el = event.target as HTMLTextAreaElement
+  if (el.selectionStart !== el.selectionEnd) {
+    return
+  }
+  const atStart = el.selectionStart === 0
+  const atEnd = el.selectionStart === el.value.length
+
+  if (event.key === 'Backspace' && atStart && index > 0) {
+    const previous = lines.value[index - 1]
+    if (!previous) {
+      return
+    }
+    event.preventDefault()
+    if (previous.kind !== 'text') {
+      removeMedia(previous.id)
+      return
+    }
+    // 上一行也是文本：把当前行并进去。空行因此能被 Backspace 删掉。
+    const caret = previous.content.length
+    previous.content = previous.content + line.content
+    lines.value.splice(index, 1)
+    focusText(previous.id, caret)
+    return
+  }
+
+  if (event.key === 'Delete' && atEnd && index < lines.value.length - 1) {
+    const next = lines.value[index + 1]
+    if (!next) {
+      return
+    }
+    event.preventDefault()
+    if (next.kind !== 'text') {
+      removeMedia(next.id)
+      return
+    }
+    const caret = line.content.length
+    line.content = line.content + next.content
+    lines.value.splice(index + 1, 1)
+    focusText(line.id, caret)
+  }
+}
+
 function pickFiles(kind: 'IMAGE' | 'VIDEO'): void {
   // mousedown.prevent 保住文本行焦点与光标，插入位置才正确。
   if (kind === 'IMAGE') {
@@ -110,29 +166,60 @@ function insertAtCaret(media: ReturnType<typeof createMediaLine>[]): void {
   focusText(after.id, 'start')
 }
 
+/**
+ * 去掉媒体后，若它左右都是文本行就并成一行。
+ * 不合并的话会留下两个互不相通的文本框：方向键跨不过去，空行也删不掉。
+ * 返回合并后的行 id 与接缝处光标位置。
+ */
+function mergeNeighbours(index: number): { id: number; caret: number } | null {
+  const previous = lines.value[index - 1]
+  const next = lines.value[index]
+  if (!previous || !next || previous.kind !== 'text' || next.kind !== 'text') {
+    return null
+  }
+  const caret = previous.content.length
+  previous.content = previous.content + next.content
+  lines.value.splice(index, 1)
+  return { id: previous.id, caret }
+}
+
 function removeMedia(id: number): void {
   const index = lines.value.findIndex((line) => line.id === id)
   if (index === -1) {
     return
   }
   lines.value.splice(index, 1)
+
   if (lines.value.length === 0) {
     const tail = createTextLine()
     lines.value.push(tail)
-    focusText(tail.id, 'end')
+    focusText(tail.id, 'start')
     return
   }
-  // 焦点落到前一个文本行末尾，保持连续输入的手感。
-  for (let i = index - 1; i >= 0; i -= 1) {
-    const candidate = lines.value[i]
-    if (candidate !== undefined && candidate.kind === 'text') {
-      focusText(candidate.id, 'end')
-      break
-    }
+
+  const merged = mergeNeighbours(index)
+  if (merged) {
+    focusText(merged.id, merged.caret)
+    return
+  }
+
+  // 两侧不都是文本：焦点落到后面最近的文本行，没有就落到前面的。
+  const nextText = lines.value.slice(index).find((line) => line.kind === 'text')
+  if (nextText) {
+    focusText(nextText.id, 'start')
+    return
+  }
+  const previousText = lines.value
+    .slice(0, index)
+    .reverse()
+    .find((line) => line.kind === 'text')
+  if (previousText) {
+    focusText(previousText.id, 'end')
   }
 }
 
-function focusText(id: number, position: 'start' | 'end'): void {
+/** position 支持具体偏移量：合并行后光标要落在两段文本的接缝处。 */
+function focusText(id: number, position: 'start' | 'end' | number): void {
   focusedTextId = id
   void nextTick(() => {
     const el = textareas.get(id)
@@ -140,8 +227,14 @@ function focusText(id: number, position: 'start' | 'end'): void {
       return
     }
     el.focus()
-    const caret = position === 'start' ? 0 : el.value.length
+    const caret =
+      position === 'start'
+        ? 0
+        : position === 'end'
+          ? el.value.length
+          : Math.min(position, el.value.length)
     el.setSelectionRange(caret, caret)
+    autosize(el)
   })
 }
 
@@ -153,10 +246,10 @@ function mediaTypeLabel(mediaType: 'IMAGE' | 'VIDEO'): string {
 <template>
   <div class="desc-editor" data-testid="description-editor">
     <div class="desc-editor__toolbar">
-      <button type="button" class="btn btn--small" @mousedown.prevent @click="pickFiles('IMAGE')">
+      <button type="button" class="btn btn-sm btn-outline" @mousedown.prevent @click="pickFiles('IMAGE')">
         在光标处插入图片
       </button>
-      <button type="button" class="btn btn--small" @mousedown.prevent @click="pickFiles('VIDEO')">
+      <button type="button" class="btn btn-sm btn-outline" @mousedown.prevent @click="pickFiles('VIDEO')">
         在光标处插入视频
       </button>
       <span class="desc-editor__counter" :class="{ 'desc-editor__counter--over': overLimit }">
@@ -179,11 +272,12 @@ function mediaTypeLabel(mediaType: 'IMAGE' | 'VIDEO'): string {
           "
           @focus="focusedTextId = line.id"
           @input="onTextInput"
+          @keydown="onTextKeydown($event, line, index)"
         ></textarea>
         <div
           v-else
           class="desc-editor__media"
-          :title="'选中后可按 Backspace 删除'"
+          :title="'在相邻文本行的行首按 Backspace、行尾按 Delete，或选中本行后按 Backspace 删除'"
           tabindex="0"
           @keydown.backspace.prevent="removeMedia(line.id)"
           @keydown.delete.prevent="removeMedia(line.id)"
@@ -201,7 +295,7 @@ function mediaTypeLabel(mediaType: 'IMAGE' | 'VIDEO'): string {
           </span>
           <button
             type="button"
-            class="btn btn--small desc-editor__remove"
+            class="btn btn-sm desc-editor__remove"
             @click="removeMedia(line.id)"
           >
             删除
@@ -231,9 +325,9 @@ function mediaTypeLabel(mediaType: 'IMAGE' | 'VIDEO'): string {
 
 <style scoped>
 .desc-editor {
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
+  border: 1px solid var(--color-base-300);
+  border-radius: var(--radius-box);
+  background: var(--color-base-100);
 }
 
 .desc-editor__toolbar {
@@ -241,17 +335,17 @@ function mediaTypeLabel(mediaType: 'IMAGE' | 'VIDEO'): string {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--color-base-300);
 }
 
 .desc-editor__counter {
   margin-left: auto;
   font-size: 12px;
-  color: var(--muted);
+  color: color-mix(in oklab, var(--color-base-content) 60%, transparent);
 }
 
 .desc-editor__counter--over {
-  color: var(--danger);
+  color: var(--color-error);
   font-weight: 600;
 }
 
@@ -282,13 +376,13 @@ function mediaTypeLabel(mediaType: 'IMAGE' | 'VIDEO'): string {
   align-items: center;
   gap: 10px;
   padding: 6px 10px;
-  border: 1px dashed var(--border);
-  border-radius: 6px;
-  background: #f9fafb;
+  border: 1px dashed var(--color-base-300);
+  border-radius: var(--radius-box);
+  background: var(--color-base-200);
 }
 
 .desc-editor__media:focus-visible {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--color-primary);
   outline-offset: 1px;
 }
 
@@ -297,14 +391,14 @@ function mediaTypeLabel(mediaType: 'IMAGE' | 'VIDEO'): string {
   padding: 1px 8px;
   border-radius: 999px;
   font-size: 12px;
-  border: 1px solid var(--border);
-  background: #eff6ff;
-  color: var(--primary);
+  border: 1px solid var(--color-base-300);
+  background: color-mix(in oklab, var(--color-primary) 10%, transparent);
+  color: var(--color-primary);
 }
 
 .desc-editor__media-type--VIDEO {
-  background: #f5f3ff;
-  color: #6d28d9;
+  background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+  color: var(--color-accent);
 }
 
 .desc-editor__media-name {
@@ -317,7 +411,7 @@ function mediaTypeLabel(mediaType: 'IMAGE' | 'VIDEO'): string {
 .desc-editor__media-size {
   flex: 0 0 auto;
   font-size: 12px;
-  color: var(--muted);
+  color: color-mix(in oklab, var(--color-base-content) 60%, transparent);
 }
 
 .desc-editor__media-status {

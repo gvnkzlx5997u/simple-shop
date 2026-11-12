@@ -1,17 +1,60 @@
 <script setup lang="ts">
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
+import AppIcon from '../components/common/AppIcon.vue'
+import type { IconName } from '../components/common/AppIcon.vue'
+import { useTheme } from '../composables/useTheme'
 import { useAuthStore } from '../stores/auth'
+
+interface NavItem {
+  to: string
+  label: string
+  icon: IconName
+  /** 归属该入口的路径前缀：商品详情、发布页也算「商品列表」这个域。 */
+  matches: string[]
+}
+
+const NAV: NavItem[] = [
+  { to: '/', label: '商品列表', icon: 'product', matches: ['/', '/goods', '/publish'] },
+  { to: '/orders', label: '订单管理', icon: 'list', matches: ['/orders'] },
+  { to: '/categories', label: '类别管理', icon: 'file', matches: ['/categories'] },
+  { to: '/customers', label: '客户管理', icon: 'user', matches: ['/customers'] },
+  { to: '/password', label: '修改密码', icon: 'key', matches: ['/password'] },
+]
+
+const SIDEBAR_KEY = 'simple-shop.seller.sidebar'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const { isDark, toggle: toggleTheme } = useTheme()
 
-function isActive(target: string): boolean {
-  if (target === '/') {
-    return route.path === '/'
+function readCollapsed(): boolean {
+  try {
+    return localStorage.getItem(SIDEBAR_KEY) === 'collapsed'
+  } catch {
+    return false
   }
-  return route.path === target || route.path.startsWith(target + '/')
+}
+
+const collapsed = ref(readCollapsed())
+
+watch(collapsed, (value) => {
+  try {
+    localStorage.setItem(SIDEBAR_KEY, value ? 'collapsed' : 'expanded')
+  } catch {
+    // 隐私模式下写不进去，只在本次会话生效
+  }
+})
+
+/** 收起后文字不可见，按钮与图标的可读名称统一走 aria-label 与 tooltip。 */
+const themeLabel = computed(() => (isDark.value ? '切换到浅色' : '切换到深色'))
+
+function isActive(item: NavItem): boolean {
+  return item.matches.some((target) =>
+    target === '/' ? route.path === '/' : route.path === target || route.path.startsWith(target + '/'),
+  )
 }
 
 async function onLogout(): Promise<void> {
@@ -25,107 +68,85 @@ async function onLogout(): Promise<void> {
 </script>
 
 <template>
-  <div class="layout">
-    <aside class="layout__sidebar">
-      <div class="layout__brand">SimpleShop<br />卖家后台</div>
-      <nav class="layout__nav">
-        <RouterLink to="/" class="layout__link" :class="{ 'layout__link--active': isActive('/') }">
-          商品列表
-        </RouterLink>
-        <RouterLink
-          to="/categories"
-          class="layout__link"
-          :class="{ 'layout__link--active': isActive('/categories') }"
+  <div class="flex min-h-screen">
+    <aside
+      class="sticky top-0 flex h-screen shrink-0 flex-col border-r border-base-300 bg-base-100 py-4 transition-[width,padding] duration-200"
+      :class="collapsed ? 'w-16 px-2' : 'w-[200px] px-3'"
+    >
+      <div class="mb-6 flex items-center gap-2" :class="collapsed ? 'justify-center' : 'px-1'">
+        <AppIcon name="shop" class="text-[22px] text-primary" />
+        <div v-if="!collapsed" class="min-w-0 leading-tight">
+          <p class="truncate text-sm font-semibold">SimpleShop</p>
+          <p class="truncate text-xs text-base-content/60">卖家后台</p>
+        </div>
+      </div>
+
+      <ul class="menu menu-sm w-full gap-1 p-0">
+        <li v-for="item in NAV" :key="item.to">
+          <RouterLink
+            :to="item.to"
+            class="gap-2.5"
+            :class="[
+              isActive(item) ? 'menu-active font-semibold' : '',
+              collapsed ? 'justify-center' : '',
+            ]"
+            :title="collapsed ? item.label : undefined"
+            :aria-current="isActive(item) ? 'page' : undefined"
+          >
+            <AppIcon :name="item.icon" class="text-[18px]" />
+            <span v-if="!collapsed" class="truncate">{{ item.label }}</span>
+          </RouterLink>
+        </li>
+      </ul>
+
+      <div class="mt-auto flex flex-col gap-1 pt-6" :class="collapsed ? 'items-center' : ''">
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm font-normal"
+          :class="collapsed ? 'btn-square' : 'justify-start'"
+          :title="collapsed ? themeLabel : undefined"
+          :aria-label="themeLabel"
+          @click="toggleTheme"
         >
-          类别管理
-        </RouterLink>
-        <RouterLink
-          to="/customers"
-          class="layout__link"
-          :class="{ 'layout__link--active': isActive('/customers') }"
+          <AppIcon :name="isDark ? 'sun' : 'moon'" class="text-[16px]" />
+          <span v-if="!collapsed" class="truncate">{{ themeLabel }}</span>
+        </button>
+
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm font-normal"
+          :class="collapsed ? 'btn-square' : 'justify-start'"
+          :title="collapsed ? '退出登录' : undefined"
+          aria-label="退出登录"
+          @click="onLogout"
         >
-          客户管理
-        </RouterLink>
-        <RouterLink
-          to="/history"
-          class="layout__link"
-          :class="{ 'layout__link--active': isActive('/history') }"
+          <AppIcon name="sign-out" class="text-[16px]" />
+          <span v-if="!collapsed" class="truncate">退出登录</span>
+        </button>
+
+        <div class="divider my-0.5"></div>
+
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm font-normal"
+          :class="collapsed ? 'btn-square' : 'justify-start'"
+          :title="collapsed ? '展开侧栏' : undefined"
+          :aria-label="collapsed ? '展开侧栏' : '收起侧栏'"
+          :aria-expanded="!collapsed"
+          @click="collapsed = !collapsed"
         >
-          历史记录
-        </RouterLink>
-        <RouterLink
-          to="/password"
-          class="layout__link"
-          :class="{ 'layout__link--active': isActive('/password') }"
-        >
-          修改密码
-        </RouterLink>
-      </nav>
-      <button type="button" class="btn layout__logout" @click="onLogout">退出登录</button>
+          <AppIcon :name="collapsed ? 'arrow-right' : 'arrow-left'" class="text-[16px]" />
+          <span v-if="!collapsed" class="truncate">收起侧栏</span>
+        </button>
+      </div>
     </aside>
-    <main class="layout__main">
-      <RouterView />
+
+    <main class="min-w-0 flex-1 p-6">
+      <RouterView v-slot="{ Component }">
+        <Transition name="route" mode="out-in">
+          <component :is="Component" />
+        </Transition>
+      </RouterView>
     </main>
   </div>
 </template>
-
-<style scoped>
-.layout {
-  display: flex;
-  min-height: 100vh;
-}
-
-.layout__sidebar {
-  /* 固定在视口内:内容再长侧栏也不被拉长,退出登录按钮始终可见。 */
-  position: sticky;
-  top: 0;
-  height: 100vh;
-  box-sizing: border-box;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  flex: 0 0 200px;
-  padding: 20px 16px;
-  border-right: 1px solid var(--border);
-  background: var(--surface);
-}
-
-.layout__brand {
-  margin-bottom: 24px;
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.4;
-}
-
-.layout__nav {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.layout__link {
-  padding: 8px 12px;
-  border-radius: 6px;
-  color: var(--text);
-}
-
-.layout__link:hover {
-  background: #f3f4f6;
-}
-
-.layout__link--active {
-  background: #eff6ff;
-  color: var(--primary);
-  font-weight: 600;
-}
-
-.layout__logout {
-  margin-top: auto;
-}
-
-.layout__main {
-  flex: 1;
-  min-width: 0;
-  padding: 24px;
-}
-</style>

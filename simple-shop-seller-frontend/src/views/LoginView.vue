@@ -4,6 +4,8 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { ApiError } from '../api/http'
 import { ApiCode } from '../api/types'
+import AppIcon from '../components/common/AppIcon.vue'
+import { useTheme } from '../composables/useTheme'
 import { useToast } from '../composables/useToast'
 import { apiCodeMessage, M10 } from '../constants/messages'
 import { useAuthStore } from '../stores/auth'
@@ -14,6 +16,7 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const toast = useToast()
+const { isDark, toggle: toggleTheme } = useTheme()
 
 const account = ref('')
 const password = ref('')
@@ -21,6 +24,7 @@ const errors = ref<{ account?: string; password?: string }>({})
 const submitting = ref(false)
 
 const sessionExpired = computed(() => route.query.reason === 'expired')
+const themeLabel = computed(() => (isDark.value ? '切换到浅色' : '切换到深色'))
 
 async function onSubmit(): Promise<void> {
   const accountResult = validateAccount(account.value)
@@ -50,67 +54,63 @@ async function onSubmit(): Promise<void> {
 </script>
 
 <template>
-  <div class="login">
-    <form class="login__card card" @submit.prevent="onSubmit">
-      <h1 class="login__title">SimpleShop 卖家后台</h1>
-      <p v-if="sessionExpired" class="login__notice">{{ M10.sessionExpired }}</p>
+  <div class="relative flex min-h-screen items-center justify-center p-6">
+    <!-- 登录页没有侧栏，主题开关单独放右上角，否则未登录时没法切换主题。 -->
+    <button
+      type="button"
+      class="btn btn-circle btn-ghost btn-sm absolute top-5 right-5"
+      :aria-label="themeLabel"
+      :title="themeLabel"
+      @click="toggleTheme"
+    >
+      <AppIcon :name="isDark ? 'sun' : 'moon'" class="text-[16px]" />
+    </button>
 
-      <div class="field">
-        <label class="field__label" for="account">账号</label>
-        <input id="account" v-model="account" class="input" type="text" autocomplete="username" />
-        <p v-if="errors.account" class="field__error">{{ errors.account }}</p>
+    <form
+      class="card w-full max-w-sm border border-base-300 bg-base-100 shadow-sm"
+      @submit.prevent="onSubmit"
+    >
+      <div class="card-body gap-5 p-6">
+        <div class="flex items-center gap-2.5">
+          <AppIcon name="shop" class="text-[28px] text-primary" />
+          <div class="leading-tight">
+            <p class="text-base font-semibold">SimpleShop</p>
+            <p class="text-xs text-base-content/60">卖家后台</p>
+          </div>
+        </div>
+
+        <p v-if="sessionExpired" class="alert alert-warning alert-soft text-sm">
+          {{ M10.sessionExpired }}
+        </p>
+
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend text-xs">账号</legend>
+          <input
+            id="account"
+            v-model="account"
+            class="input w-full"
+            type="text"
+            autocomplete="username"
+          />
+          <p v-if="errors.account" class="mt-1 text-xs text-error">{{ errors.account }}</p>
+        </fieldset>
+
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend text-xs">密码</legend>
+          <input
+            id="password"
+            v-model="password"
+            class="input w-full"
+            type="password"
+            autocomplete="current-password"
+          />
+          <p v-if="errors.password" class="mt-1 text-xs text-error">{{ errors.password }}</p>
+        </fieldset>
+
+        <button type="submit" class="btn btn-primary mt-1 w-full" :disabled="submitting">
+          {{ submitting ? '登录中…' : '登录' }}
+        </button>
       </div>
-
-      <div class="field">
-        <label class="field__label" for="password">密码</label>
-        <input
-          id="password"
-          v-model="password"
-          class="input"
-          type="password"
-          autocomplete="current-password"
-        />
-        <p v-if="errors.password" class="field__error">{{ errors.password }}</p>
-      </div>
-
-      <button type="submit" class="btn btn--primary login__submit" :disabled="submitting">
-        {{ submitting ? '登录中…' : '登录' }}
-      </button>
     </form>
   </div>
 </template>
-
-<style scoped>
-.login {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  padding: 24px;
-}
-
-.login__card {
-  width: 100%;
-  max-width: 360px;
-}
-
-.login__title {
-  margin-bottom: 20px;
-  font-size: 18px;
-  text-align: center;
-}
-
-.login__notice {
-  margin: 0 0 16px;
-  padding: 8px 12px;
-  border: 1px solid #fde68a;
-  border-radius: 6px;
-  background: #fffbeb;
-  color: var(--warning);
-  font-size: 13px;
-}
-
-.login__submit {
-  width: 100%;
-}
-</style>

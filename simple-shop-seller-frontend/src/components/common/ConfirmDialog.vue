@@ -1,5 +1,7 @@
 <script setup lang="ts">
-withDefaults(
+import { onUnmounted, watch } from 'vue'
+
+const props = withDefaults(
   defineProps<{
     open: boolean
     message: string
@@ -22,22 +24,50 @@ const emit = defineEmits<{
   confirm: []
   cancel: []
 }>()
+
+/** 弹窗是自绘的 modal-open，没有原生 dialog 的 Esc 行为，这里补上；提交中不允许关闭。 */
+function onKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape' && props.open && !props.loading) {
+    emit('cancel')
+  }
+}
+
+watch(
+  () => props.open,
+  (open) => {
+    if (open) {
+      window.addEventListener('keydown', onKeydown)
+    } else {
+      window.removeEventListener('keydown', onKeydown)
+    }
+  },
+  { immediate: true },
+)
+
+onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 </script>
 
 <template>
   <Teleport to="body">
-    <div v-if="open" class="dialog-mask" @click.self="emit('cancel')">
-      <div class="dialog" role="dialog" aria-modal="true">
-        <h3 class="dialog__title">{{ title }}</h3>
-        <p class="dialog__message">{{ message }}</p>
-        <div class="dialog__actions">
-          <button type="button" class="btn" :disabled="loading" @click="emit('cancel')">
+    <div
+      v-if="open"
+      class="modal modal-open"
+      role="dialog"
+      aria-modal="true"
+      @click.self="emit('cancel')"
+    >
+      <!-- 弹窗底色走 --color-surface-solid（见 base.css 的 @utility modal-box），实色就不再需要模糊。 -->
+      <div class="modal-box max-w-[420px] shadow-xl">
+        <h3 class="text-base font-semibold">{{ title }}</h3>
+        <p class="mt-3 mb-6 whitespace-pre-line text-sm leading-relaxed">{{ message }}</p>
+        <div class="modal-action">
+          <button type="button" class="btn btn-sm btn-outline" :disabled="loading" @click="emit('cancel')">
             {{ cancelText }}
           </button>
           <button
             type="button"
-            class="btn"
-            :class="danger ? 'btn--danger' : 'btn--primary'"
+            class="btn btn-sm"
+            :class="danger ? 'btn-error' : 'btn-primary'"
             :disabled="loading"
             @click="emit('confirm')"
           >
@@ -48,42 +78,3 @@ const emit = defineEmits<{
     </div>
   </Teleport>
 </template>
-
-<style scoped>
-.dialog-mask {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: rgba(15, 23, 42, 0.45);
-}
-
-.dialog {
-  width: 100%;
-  max-width: 420px;
-  padding: 20px;
-  border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.24);
-}
-
-.dialog__title {
-  margin-bottom: 10px;
-  font-size: 16px;
-}
-
-.dialog__message {
-  margin: 0 0 18px;
-  color: var(--text);
-  white-space: pre-line;
-}
-
-.dialog__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-</style>

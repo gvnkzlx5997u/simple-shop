@@ -1,162 +1,196 @@
-:root {
-  --bg: #f4f6f9;
-  --surface: #ffffff;
-  --border: #e3e7ee;
-  --text: #1f2430;
-  --muted: #6b7280;
-  --primary: #2563eb;
-  --primary-dark: #1d4ed8;
-  --danger: #dc2626;
-  --danger-dark: #b91c1c;
-  --success: #16a34a;
-  --warning: #d97706;
-  --radius: 8px;
-  --shadow: 0 2px 10px rgba(15, 23, 42, 0.08);
+/**
+ * 卖家端唯一 CSS 入口：Tailwind v4 + daisyUI 5，只启用自定义的 shop-light / shop-dark 两套主题。
+ * 约定见 AGENTS.md §5：颜色只用语义色，组件类归 daisyUI，项目自有复合类放 @layer components。
+ */
+@import 'tailwindcss';
+
+@plugin 'daisyui' {
+  /* 内置主题全部关闭，只保留下面两套，避免带进用不到的色板变量。 */
+  themes: false;
+  logs: false;
 }
 
-* {
-  box-sizing: border-box;
+@plugin 'daisyui/theme' {
+  name: 'shop-light';
+  default: true;
+  prefersdark: false;
+  color-scheme: light;
+
+  /* 浅色的 base-100 故意留透明：纯白在暖色底上偏冷偏硬，半透明后叠加成暖白，层次也更柔 */
+  --color-base-100: rgb(255 255 255 / 72%);
+  /*
+   * 叠加层专用实色：弹窗、下拉弹层这类盖在内容之上的界面必须不透明，
+   * 否则背后的文字会透上来。取值等于 base-100 叠在 base-200 上的观感（≈ #fcfaf7）。
+   */
+  --color-surface-solid: #fcfaf7;
+  --color-base-200: #f6f3ee;
+  --color-base-300: #e7e1d6;
+  --color-base-content: #2b2620;
+  --color-primary: #d14408;
+  --color-primary-content: #ffffff;
+  --color-secondary: #0f766e;
+  --color-secondary-content: #ffffff;
+  --color-accent: #c026d3;
+  --color-accent-content: #ffffff;
+  --color-neutral: #3f3a33;
+  --color-neutral-content: #f6f3ee;
+  --color-info: #0369a1;
+  --color-info-content: #ffffff;
+  --color-success: #15803d;
+  --color-success-content: #ffffff;
+  --color-warning: #f59e0b;
+  --color-warning-content: #451a03;
+  --color-error: #dc2626;
+  --color-error-content: #ffffff;
+
+  --radius-selector: 1rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.5rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
 }
 
-body {
-  margin: 0;
-  font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--text);
-  background: var(--bg);
+@plugin 'daisyui/theme' {
+  name: 'shop-dark';
+  default: false;
+  prefersdark: true;
+  color-scheme: dark;
+
+  --color-base-100: #26221c;
+  /* 深色的 base-100 本身已不透明，叠加层沿用同色即可，避免多出一档明度。 */
+  --color-surface-solid: #26221c;
+  --color-base-200: #1c1915;
+  --color-base-300: #38322a;
+  --color-base-content: #ede7dc;
+  --color-primary: #ff6b35;
+  --color-primary-content: #331005;
+  --color-secondary: #2dd4bf;
+  --color-secondary-content: #052e29;
+  --color-accent: #e879f9;
+  --color-accent-content: #4a044e;
+  --color-neutral: #3a342b;
+  --color-neutral-content: #ede7dc;
+  --color-info: #38bdf8;
+  --color-info-content: #082f49;
+  --color-success: #4ade80;
+  --color-success-content: #052e16;
+  --color-warning: #fbbf24;
+  --color-warning-content: #451a03;
+  --color-error: #f87171;
+  --color-error-content: #450a0a;
+
+  --radius-selector: 1rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.5rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  /* 深色下阴影几乎不可见，层级靠 base-100 与 base-300 的明度差，关掉 3D 深度。 */
+  --depth: 0;
+  --noise: 0;
 }
 
-h1,
-h2,
-h3 {
-  margin: 0 0 12px;
-  font-weight: 600;
+@layer base {
+  html {
+    font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  }
+
+  body {
+    /* 页面底走 base-200，卡片/面板走 base-100，这个分工固定，不要在页面里反转。 */
+    @apply bg-base-200 text-base-content;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-weight: 600;
+  }
+
+  /*
+   * 原生下拉的选项由浏览器绘制，拿不到 .select 上的样式，
+   * 不显式给底色弹层就会跟着 select 一起半透明（背后内容透出来）。
+   */
+  option {
+    background-color: var(--color-surface-solid);
+    color: var(--color-base-content);
+  }
 }
 
-a {
-  color: var(--primary);
-  text-decoration: none;
+@layer components {
+  /* 页面通用容器：等价于改造前 .card 的观感，避免每处重复写四条工具类。 */
+  .panel {
+    @apply rounded-box border border-base-300 bg-base-100 p-4 shadow-sm;
+  }
+
+  /* 二级文字：与 text-base-content/60 等价，保留短类名减少模板噪音。 */
+  .muted {
+    @apply text-base-content/60;
+  }
+
+  /* 路由切换过渡：只做透明度与位移，不改布局；out-in 保证两页不重叠。 */
+  .route-enter-active,
+  .route-leave-active,
+  .fade-enter-active,
+  .fade-leave-active {
+    transition:
+      opacity 120ms ease-out,
+      transform 120ms ease-out;
+  }
+
+  .route-enter-from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  .route-leave-to {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  .fade-enter-from,
+  .fade-leave-to {
+    opacity: 0;
+  }
+
+  /* 系统里选了「减少动态效果」就不做位移与淡入。 */
+  @media (prefers-reduced-motion: reduce) {
+    .route-enter-active,
+    .route-leave-active,
+    .fade-enter-active,
+    .fade-leave-active {
+      transition: none;
+    }
+  }
 }
 
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
-  color: var(--text);
-  font-size: 13px;
-  cursor: pointer;
+/**
+ * daisyUI 的组件类落在 utilities 层的子层里，普通 @layer components 盖不住，
+ * 所以按钮与输入控件的最小字号统一用 @utility 提升到 13px（高度仍走 sm 档，不改密度）。
+ */
+@utility btn {
+  font-size: 0.8125rem;
 }
 
-.btn:hover:not(:disabled) {
-  border-color: #c7ccd6;
+@utility input {
+  font-size: 0.8125rem;
 }
 
-.btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
+@utility select {
+  font-size: 0.8125rem;
+  /* 下拉的弹出列表会用这个底色画，必须实色，见 --color-surface-solid。 */
+  background-color: var(--color-surface-solid);
 }
 
-.btn--primary {
-  border-color: var(--primary);
-  background: var(--primary);
-  color: #fff;
+@utility textarea {
+  font-size: 0.8125rem;
 }
 
-.btn--primary:hover:not(:disabled) {
-  background: var(--primary-dark);
-  border-color: var(--primary-dark);
-}
-
-.btn--danger {
-  border-color: var(--danger);
-  background: var(--danger);
-  color: #fff;
-}
-
-.btn--danger:hover:not(:disabled) {
-  background: var(--danger-dark);
-  border-color: var(--danger-dark);
-}
-
-.btn--small {
-  padding: 3px 10px;
-  font-size: 12px;
-}
-
-.input,
-.textarea {
-  width: 100%;
-  padding: 7px 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font: inherit;
-  color: inherit;
-  background: var(--surface);
-}
-
-.input:focus,
-.textarea:focus {
-  outline: 2px solid rgba(37, 99, 235, 0.25);
-  border-color: var(--primary);
-}
-
-.textarea {
-  min-height: 88px;
-  resize: vertical;
-}
-
-.field {
-  margin-bottom: 14px;
-}
-
-.field__label {
-  display: block;
-  margin-bottom: 4px;
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.field__error {
-  margin-top: 4px;
-  color: var(--danger);
-  font-size: 12px;
-}
-
-.card {
-  padding: 18px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: var(--shadow);
-}
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: var(--surface);
-}
-
-.data-table th,
-.data-table td {
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--border);
-  text-align: left;
-  vertical-align: top;
-}
-
-.data-table th {
-  color: var(--muted);
-  font-weight: 500;
-  font-size: 13px;
-  background: #fafbfc;
-}
-
-.muted {
-  color: var(--muted);
+@utility modal-box {
+  /* 弹窗属于叠加层：半透明会让遮罩下的正文透上来，影响阅读。 */
+  background-color: var(--color-surface-solid);
 }

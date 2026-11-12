@@ -1,12 +1,15 @@
 import { fileURLToPath, URL } from 'node:url'
 
-import { defineConfig } from 'vite'
+import tailwindcss from '@tailwindcss/vite'
 import vue from '@vitejs/plugin-vue'
+import { defineConfig } from 'vite'
 import vueDevTools from 'vite-plugin-vue-devtools'
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
+    // Tailwind v4 走 Vite 插件接入，不需要 postcss 配置与 tailwind.config.js。
+    tailwindcss(),
     vue(),
     // vueDevTools(),
   ],

@@ -1,19 +1,27 @@
 <script setup lang="ts">
 import { useToast } from '../../composables/useToast'
+import type { ToastTone } from '../../composables/useToast'
 
 const { items, remove } = useToast()
+
+const TONE_CLASS: Record<ToastTone, string> = {
+  success: 'alert-success',
+  error: 'alert-error',
+  info: 'alert-info',
+}
 </script>
 
 <template>
   <Teleport to="body">
-    <div class="toast-host">
+    <div class="toast toast-top toast-center z-50">
       <TransitionGroup name="toast">
         <div
           v-for="item in items"
           :key="item.id"
-          class="toast"
-          :class="'toast--' + item.tone"
+          class="alert max-w-[420px] cursor-pointer shadow-lg"
+          :class="TONE_CLASS[item.tone]"
           role="status"
+          data-testid="toast-item"
           @click="remove(item.id)"
         >
           {{ item.message }}
@@ -24,38 +32,6 @@ const { items, remove } = useToast()
 </template>
 
 <style scoped>
-.toast-host {
-  position: fixed;
-  top: 20px;
-  left: 50%;
-  z-index: 2000;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  transform: translateX(-50%);
-  pointer-events: none;
-}
-
-.toast {
-  min-width: 220px;
-  max-width: 420px;
-  padding: 10px 16px;
-  border-radius: 6px;
-  color: #fff;
-  background: #334155;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.2);
-  pointer-events: auto;
-  cursor: pointer;
-}
-
-.toast--success {
-  background: var(--success);
-}
-
-.toast--error {
-  background: var(--danger);
-}
-
 .toast-enter-active,
 .toast-leave-active {
   transition:

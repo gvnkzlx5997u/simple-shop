@@ -47,7 +47,7 @@ defineProps<{
   max-width: 75%;
   margin: auto;
   border-radius: 6px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--color-base-300);
 }
 
 .description-blocks__video {

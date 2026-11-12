@@ -69,7 +69,7 @@ watch(tree, (next) => {
   <div class="category-cascade">
     <select
       v-model="l1Id"
-      class="input category-cascade__select"
+      class="select select-sm category-cascade__select"
       :disabled="disabled || loading || loadFailed || tree.length === 0"
       :aria-label="l1Placeholder"
     >
@@ -78,7 +78,7 @@ watch(tree, (next) => {
     </select>
     <select
       v-model="l2Id"
-      class="input category-cascade__select"
+      class="select select-sm category-cascade__select"
       :disabled="disabled || !l1Id || l2Options.length === 0"
       :aria-label="l2Placeholder"
     >
@@ -88,7 +88,7 @@ watch(tree, (next) => {
 
     <p v-if="loadFailed" class="category-cascade__hint">
       {{ M10.categoryLoadFailed }}
-      <button type="button" class="btn btn--small" @click="load">重试</button>
+      <button type="button" class="btn btn-sm btn-outline" @click="load">重试</button>
     </p>
     <p v-else-if="!loading && tree.length === 0" class="category-cascade__hint">
       {{ M10.categoryRequiredFirst }}

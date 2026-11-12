@@ -110,7 +110,7 @@ function remove(id: number): void {
   <div class="image-picker">
     <div class="image-picker__header">
       <span class="image-picker__label">{{ label }}</span>
-      <button type="button" class="btn btn--small" :disabled="disabled" @click="pick">
+      <button type="button" class="btn btn-sm btn-outline" :disabled="disabled" @click="pick">
         选择图片
       </button>
       <span v-if="hint" class="image-picker__hint muted">{{ hint }}</span>
@@ -126,7 +126,7 @@ function remove(id: number): void {
             >{{ formatBytes(item.file.size) }} · {{ item.url ? '已上传' : '发布时上传' }}</span
           >
         </div>
-        <button type="button" class="btn btn--small" :disabled="disabled" @click="remove(item.id)">
+        <button type="button" class="btn btn-sm btn-outline" :disabled="disabled" @click="remove(item.id)">
           移除
         </button>
       </li>
@@ -151,7 +151,9 @@ function remove(id: number): void {
 }
 
 .image-picker__label {
-  font-weight: 600;
+  /* 与发布页 fieldset 的 legend 对齐：12px、略重于 hint */
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .image-picker__hint {
@@ -177,9 +179,9 @@ function remove(id: number): void {
   align-items: center;
   gap: 10px;
   padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: #f9fafb;
+  border: 1px solid var(--color-base-300);
+  border-radius: var(--radius-box);
+  background: var(--color-base-200);
 }
 
 .image-picker__thumb {
@@ -188,7 +190,7 @@ function remove(id: number): void {
   height: 48px;
   object-fit: cover;
   border-radius: 4px;
-  background: #fff;
+  background: var(--color-base-100);
 }
 
 .image-picker__meta {
@@ -208,6 +210,6 @@ function remove(id: number): void {
 
 .image-picker__size {
   font-size: 12px;
-  color: var(--muted);
+  color: color-mix(in oklab, var(--color-base-content) 60%, transparent);
 }
 </style>
