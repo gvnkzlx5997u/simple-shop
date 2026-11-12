@@ -8,45 +8,20 @@ withDefaults(
   }>(),
   { tone: 'default' },
 )
+
+/** 只负责把 TagTone 翻成 daisyUI 的 badge 色；具体状态用哪个 tone 仍由 constants/labels.ts 决定。 */
+const TONE_CLASS: Record<TagTone, string> = {
+  // 中性态用 ghost：底色与文字都跟着 base-* 走，深浅主题都读得出来。
+  default: 'badge-ghost',
+  success: 'badge-soft badge-success',
+  warning: 'badge-soft badge-warning',
+  danger: 'badge-soft badge-error',
+  info: 'badge-soft badge-info',
+}
 </script>
 
 <template>
-  <span class="tag" :class="'tag--' + tone">{{ label }}</span>
+  <span class="badge badge-sm" :class="TONE_CLASS[tone]" data-testid="status-tag">
+    {{ label }}
+  </span>
 </template>
-
-<style scoped>
-.tag {
-  display: inline-block;
-  padding: 1px 8px;
-  border-radius: 999px;
-  font-size: 12px;
-  line-height: 18px;
-  border: 1px solid var(--border);
-  background: #f3f4f6;
-  color: var(--muted);
-}
-
-.tag--success {
-  border-color: #bbf7d0;
-  background: #f0fdf4;
-  color: var(--success);
-}
-
-.tag--warning {
-  border-color: #fde68a;
-  background: #fffbeb;
-  color: var(--warning);
-}
-
-.tag--danger {
-  border-color: #fecaca;
-  background: #fef2f2;
-  color: var(--danger);
-}
-
-.tag--info {
-  border-color: #bfdbfe;
-  background: #eff6ff;
-  color: var(--primary);
-}
-</style>

@@ -17,7 +17,7 @@ simple-shop 的**卖家后台**，前后端分离的 Vue 单页应用。
 | 路由     | Vue Router                         |
 | 状态     | Pinia                              |
 | 请求     | axios                              |
-| 样式     | 原生 CSS（不引入 UI 库）           |
+| 样式     | Tailwind CSS 4 + daisyUI 5（深/浅双主题） |
 | 测试     | Vitest                             |
 | 格式化   | Prettier                           |
 | 类型检查 | vue-tsc                            |
@@ -85,24 +85,26 @@ Node 版本要求见 package.json 的 engines 字段。
     │   ├── intention.ts      意向名单(按商品) + 进入交易/成功/失败
     │   ├── history.ts        历史商品列表 / 详情
     │   ├── customer.ts       客户列表 / 详情(内嵌购买历史分页)
+    │   ├── orders.ts         订单列表 / 详情 / 明细 / 确认·备货·发货·完成·取消
     │   └── __tests__/        连通性测试
     ├── validation/           前端输入校验:login / goods / category / intention + shared
     ├── stores/               Pinia:auth(登录状态)与全局实例
     ├── router/               路由表 + 登录守卫
     ├── layouts/              AppLayout(左侧导航 sticky 固定视口 + 退出登录)
-    ├── views/                10 个页面
+    ├── views/                8 个页面
     ├── components/
-    │   ├── common/           通用件:ConfirmDialog、Pagination、StatusTag、ToastHost
+    │   ├── common/           通用件:AppIcon(图标,currentColor)、ConfirmDialog、Pagination、StatusTag、ToastHost
+    │   ├── category/         类别域:CategoryCard(一级类别卡片 + 二级行内增改删)
+    │   ├── order/            订单域:OrderList(状态 tab + 列表 + 分页,订单页与客户/商品详情共用)、OrderProgress(状态流程图)
     │   ├── goods/            商品域:GoodsCard(宫格卡)、CategoryCascadeSelect(两级级联)、
     │   │                     ImageFilePicker(主图/图集选择)、DescriptionBlocks(描述渲染)、
     │   │                     DescriptionBlockEditor(描述编辑器)+ descriptionEditor.ts(行模型)
-    │   └── intention/        意向域:IntentionTable(名单表)、TradeFailureDialog(失败裁决)
-    ├── composables/          useToast(轻量消息提示,短窗口同文案去重)
+    ├── composables/          useToast(轻量消息提示,短窗口同文案去重)、useTheme(深浅主题切换与持久化)
     ├── constants/            labels(枚举→中文)、messages(提示文案 + 错误码→文案)
     ├── utils/                format(东八区时间/金额/字节数)、error(异常→文案)
-    └── assets/               base.css(全局基础样式)、product.svg(无图占位图)
+    └── assets/               base.css(Tailwind 入口 + daisyUI 主题 + 项目复合类)、product.svg(无图占位图)
 
-组件按功能分子文件夹（common / goods / intention）；页面与其他目录暂不拆分。
+组件按功能分子文件夹（common / category / goods / order）；页面与其他目录暂不拆分。
 
 ### 页面与路由
 
@@ -174,9 +176,15 @@ FROZEN 状态下改库存/改挂/下架按钮置灰(后端 20021 兜底);下架�
 
 validation/ 按域拆分(login/goods/category/intention),规则与后端一致:名称/类别名 ≤50 码点拒尖括号、价格按 BigDecimal 口径(0<p≤999999.99 两位小数)、发布库存 ≥1 调整库存 ≥0、描述文本**各块合计** ≤1000 码点、图集 ≤8 张连主图 ≤9 张、媒体类型与大小本地预检(图 ≤5MB、视频 ≤20MB)。服务端始终是唯一权威,后端专属业务码仍会被正确映射处理。
 
-### 11. 原生 CSS,不引入 UI 库
+### 11. 样式:Tailwind CSS 4 + daisyUI 5
 
-全局基础样式(按钮/输入/表格/卡片/弹窗/标签)在 assets/base.css,组件内 scoped 样式。Toast、确认弹窗、分页均为自行实现。侧栏导航 sticky 固定在视口内,长页面不拉伸。
+- 唯一 CSS 入口是 assets/base.css:`@import "tailwindcss"` + `@plugin "daisyui"`,再定义 `shop-light` / `shop-dark` 两套主题。不写 `tailwind.config.js`(v4 已废弃),接入方式是 vite.config.ts 里的 `@tailwindcss/vite` 插件。
+- 样式优先级:daisyUI 组件类 > Tailwind 工具类 > base.css 里的 `@layer components` 复合类(只剩 `.panel` 与 `.muted`)。不要在未分层作用域写组件样式,会压过工具类。
+- 颜色一律用语义色(`base-*`、`primary`、`success`、`warning`、`error`、`info`),不写死色值,否则深色主题失效。
+- 主题:`data-theme="shop-light" | "shop-dark"` 挂在 `<html>`;切换与持久化走 composables/useTheme,首屏由 index.html 内联脚本先定,避免闪白。
+- 侧栏导航、Toast、确认弹窗、分页、状态标签、类别卡片均基于 daisyUI 组件实现;业务逻辑仍在各自 composable / 页面里,组件不持有请求状态。
+- 图标统一用 components/common/AppIcon.vue(内联 SVG + currentColor),不要 `<img src="*.svg">` 直插图标——assets 里的图标是固定黑色填充,深色主题下会糊成黑块。
+- 页面切换有 120ms 过渡(AppLayout 内层 `route`、App.vue 外层 `fade`),`prefers-reduced-motion` 下自动关闭。
 
 ### 12. 时间与金额的展示口径
 

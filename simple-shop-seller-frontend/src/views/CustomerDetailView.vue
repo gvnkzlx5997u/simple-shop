@@ -4,22 +4,16 @@ import { useRoute } from 'vue-router'
 
 import { getCustomerDetail } from '../api/customer'
 import type { CustomerDetailData } from '../api/types'
-import Pagination from '../components/common/Pagination.vue'
-import StatusTag from '../components/common/StatusTag.vue'
-import { FAIL_TYPE_LABELS, HISTORY_INTENTION_RESULT_LABELS } from '../constants/labels'
-import type { TagTone } from '../constants/labels'
-import { M10 } from '../constants/messages'
+import AppIcon from '../components/common/AppIcon.vue'
+import OrderList from '../components/order/OrderList.vue'
 import { errorMessage } from '../utils/error'
 import { formatDateTime } from '../utils/format'
-
-const PAGE_SIZE = 10
 
 const route = useRoute()
 
 const customerId = computed(() => (typeof route.params.id === 'string' ? route.params.id : ''))
 
 const data = ref<CustomerDetailData | null>(null)
-const page = ref(1)
 const loading = ref(false)
 const error = ref<string | null>(null)
 
@@ -27,7 +21,7 @@ async function load(): Promise<void> {
   loading.value = true
   error.value = null
   try {
-    data.value = await getCustomerDetail(customerId.value, page.value, PAGE_SIZE)
+    data.value = await getCustomerDetail(customerId.value)
   } catch (caught) {
     error.value = errorMessage(caught)
     data.value = null
@@ -37,159 +31,63 @@ async function load(): Promise<void> {
 }
 
 onMounted(load)
-watch(customerId, () => {
-  page.value = 1
-  void load()
-})
-
-const purchases = computed(() => data.value?.purchase_history.items ?? [])
-const purchaseTotal = computed(() => data.value?.purchase_history.total ?? 0)
-
-function resultTone(result: 'SUCCEEDED' | 'FAILED'): TagTone {
-  return result === 'SUCCEEDED' ? 'success' : 'danger'
-}
-
-function onPageChange(next: number): void {
-  page.value = next
-  void load()
-}
+watch(customerId, load)
 </script>
 
 <template>
-  <div class="page">
-    <div class="page__header">
-      <h1 class="page__title">客户详情</h1>
-      <RouterLink to="/customers" class="btn">返回客户列表</RouterLink>
+  <div class="flex flex-col gap-4">
+    <header class="flex flex-wrap items-center justify-between gap-3">
+      <h1 class="text-lg font-semibold">客户详情</h1>
+      <RouterLink to="/customers" class="btn btn-sm btn-outline">
+        <AppIcon name="arrow-left" />
+        返回客户列表
+      </RouterLink>
+    </header>
+
+    <div v-if="error" role="alert" class="alert alert-error alert-soft text-sm">
+      <AppIcon name="forbidden" />
+      <span>{{ error }}</span>
     </div>
+    <div v-else-if="loading && !data" class="panel text-sm text-base-content/60">加载中…</div>
 
-    <p v-if="error" class="page__error">
-      {{ error }}
-      <RouterLink to="/customers">返回客户列表</RouterLink>
-    </p>
-    <div v-else-if="loading && !data" class="card muted">加载中…</div>
-
-    <template v-else-if="data">
-      <div class="card info">
-        <dl class="info__meta">
-          <div class="info__row">
-            <dt>用户名</dt>
-            <dd>{{ data.username }}</dd>
-          </div>
-          <div class="info__row">
-            <dt>联系电话</dt>
-            <dd>{{ data.phone }}</dd>
-          </div>
-          <div class="info__row">
-            <dt>默认交易地点</dt>
-            <dd>{{ data.default_location ?? '—' }}</dd>
-          </div>
-          <div class="info__row">
-            <dt>注册时间</dt>
-            <dd>{{ formatDateTime(data.create_at) }}</dd>
-          </div>
-        </dl>
+    <div v-else-if="data" class="panel">
+      <div class="flex items-center gap-3 border-b border-base-300 pb-3">
+        <span
+          class="flex size-9 items-center justify-center rounded-full bg-base-200 text-base-content/60"
+        >
+          <AppIcon name="user" class="text-[18px]" />
+        </span>
+        <div class="min-w-0">
+          <p class="truncate text-base font-semibold">{{ data.username }}</p>
+          <p class="text-xs text-base-content/60">注册于 {{ formatDateTime(data.create_at) }}</p>
+        </div>
       </div>
 
-      <section class="card section">
-        <h2 class="section__title">购买历史</h2>
-        <p v-if="loading" class="muted">加载中…</p>
-        <table v-else class="data-table">
-          <thead>
-            <tr>
-              <th>商品名</th>
-              <th>下单时间</th>
-              <th>结果</th>
-              <th>失败类型</th>
-              <th>交易时间</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="purchases.length === 0">
-              <td colspan="5" class="muted">{{ M10.emptyPurchases }}</td>
-            </tr>
-            <tr v-for="(entry, index) in purchases" v-else :key="index">
-              <td>{{ entry.goods_name }}</td>
-              <td>{{ formatDateTime(entry.create_at) }}</td>
-              <td>
-                <StatusTag
-                  :label="HISTORY_INTENTION_RESULT_LABELS[entry.result]"
-                  :tone="resultTone(entry.result)"
-                />
-              </td>
-              <td>{{ entry.fail_type ? FAIL_TYPE_LABELS[entry.fail_type] : '—' }}</td>
-              <td>{{ formatDateTime(entry.finish_at) }}</td>
-            </tr>
-          </tbody>
-        </table>
+      <dl class="mt-4 grid grid-cols-1 gap-x-10 gap-y-3 text-sm sm:grid-cols-2">
+        <div class="flex flex-col gap-0.5">
+          <dt class="text-xs text-base-content/60">联系电话</dt>
+          <dd class="m-0">{{ data.phone }}</dd>
+        </div>
+        <div class="flex flex-col gap-0.5">
+          <dt class="text-xs text-base-content/60">默认交易地点</dt>
+          <dd class="m-0">{{ data.default_location ?? '—' }}</dd>
+        </div>
+      </dl>
+    </div>
 
-        <Pagination
-          v-if="purchaseTotal > PAGE_SIZE"
-          class="section__pagination"
-          :page="page"
-          :page-size="PAGE_SIZE"
-          :total="purchaseTotal"
-          :disabled="loading"
-          @update:page="onPageChange"
-        />
-      </section>
-    </template>
+    <!-- 该客户的订单：内嵌同一份订单列表，按 buyer_id 固定筛选，不跳转到订单管理页 -->
+    <section v-if="data" class="flex flex-col gap-3">
+      <div class="flex flex-wrap items-baseline gap-2">
+        <h2 class="text-base font-semibold">该客户的订单</h2>
+        <span class="text-xs text-base-content/60">点任意一行进入订单详情</span>
+      </div>
+      <OrderList
+        :buyer-id="customerId"
+        :page-size="5"
+        :sync-query="false"
+        :show-buyer="false"
+        empty-text="该客户还没有下过单"
+      />
+    </section>
   </div>
 </template>
-
-<style scoped>
-.page__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-
-.page__title {
-  margin: 0;
-}
-
-.page__error {
-  margin: 0 0 16px;
-  padding: 10px 12px;
-  border: 1px solid #fecaca;
-  border-radius: 6px;
-  background: #fef2f2;
-  color: var(--danger);
-}
-
-.info__meta {
-  margin: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 10px;
-}
-
-.info__row {
-  display: flex;
-  gap: 12px;
-  align-items: baseline;
-}
-
-.info__row dt {
-  flex: 0 0 96px;
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.info__row dd {
-  margin: 0;
-}
-
-.section {
-  margin-top: 16px;
-}
-
-.section__title {
-  margin: 0 0 12px;
-  font-size: 16px;
-}
-
-.section__pagination {
-  margin-top: 12px;
-}
-</style>

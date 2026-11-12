@@ -34,47 +34,36 @@ function go(page: number): void {
 </script>
 
 <template>
-  <div class="pagination">
-    <span class="pagination__total muted">共 {{ total }} 条</span>
-    <button
-      type="button"
-      class="btn btn--small"
-      :disabled="disabled || page <= 1"
-      @click="go(page - 1)"
-    >
-      上一页
-    </button>
-    <button
-      v-for="item in pages"
-      :key="item"
-      type="button"
-      class="btn btn--small"
-      :class="{ 'btn--primary': item === page }"
-      :disabled="disabled"
-      @click="go(item)"
-    >
-      {{ item }}
-    </button>
-    <button
-      type="button"
-      class="btn btn--small"
-      :disabled="disabled || page >= totalPages"
-      @click="go(page + 1)"
-    >
-      下一页
-    </button>
+  <div class="flex flex-wrap items-center gap-3">
+    <span class="mr-auto text-sm text-base-content/60">共 {{ total }} 条</span>
+    <div class="join">
+      <button
+        type="button"
+        class="btn join-item btn-sm"
+        :disabled="disabled || page <= 1"
+        @click="go(page - 1)"
+      >
+        上一页
+      </button>
+      <button
+        v-for="item in pages"
+        :key="item"
+        type="button"
+        class="btn join-item btn-sm"
+        :class="{ 'btn-primary': item === page }"
+        :disabled="disabled"
+        @click="go(item)"
+      >
+        {{ item }}
+      </button>
+      <button
+        type="button"
+        class="btn join-item btn-sm"
+        :disabled="disabled || page >= totalPages"
+        @click="go(page + 1)"
+      >
+        下一页
+      </button>
+    </div>
   </div>
 </template>
-
-<style scoped>
-.pagination {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.pagination__total {
-  margin-right: auto;
-  font-size: 13px;
-}
-</style>

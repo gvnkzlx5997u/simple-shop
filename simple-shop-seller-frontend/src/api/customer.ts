@@ -13,17 +13,12 @@ export function listCustomers(page = 1, pageSize = 10): Promise<PageResponse<Cus
 }
 
 /**
- * 客户详情；购买历史内嵌分页，page/page_size 作用于 purchase_history。
+ * 客户详情；只有基本信息，不含购买历史（历史订单改查卖家订单列表的 buyer_id 筛选）。
  * 客户不存在返回 10009 + HTTP 404。
  */
-export function getCustomerDetail(
-  id: string,
-  page = 1,
-  pageSize = 10,
-): Promise<CustomerDetailData> {
+export function getCustomerDetail(id: string): Promise<CustomerDetailData> {
   return request<CustomerDetailData>({
     method: 'get',
     url: CUSTOMERS_PATH + '/' + encodeURIComponent(id),
-    params: { page, page_size: pageSize },
   })
 }

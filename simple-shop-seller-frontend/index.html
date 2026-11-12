@@ -1,10 +1,28 @@
 <!DOCTYPE html>
-<html lang="">
+<html lang="zh-CN">
   <head>
     <meta charset="UTF-8">
     <link rel="icon" href="/favicon.ico">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SimpleShop</title>
+    <script>
+      // 首屏先把主题定下来：这一段必须早于样式表执行，否则深色用户会先看到一帧浅色底。
+      ;(function () {
+        var saved = null
+        try {
+          saved = localStorage.getItem('simple-shop.seller.theme')
+        } catch (e) {
+          saved = null
+        }
+        var valid = saved === 'shop-light' || saved === 'shop-dark'
+        var theme = valid
+          ? saved
+          : window.matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'shop-dark'
+            : 'shop-light'
+        document.documentElement.setAttribute('data-theme', theme)
+      })()
+    </script>
   </head>
   <body>
     <div id="app"></div>

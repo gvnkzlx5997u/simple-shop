@@ -68,47 +68,52 @@ async function onConfirmChange(): Promise<void> {
 </script>
 
 <template>
-  <div class="page">
-    <h1 class="page__title">修改密码</h1>
+  <div class="flex flex-col gap-4">
+    <header>
+      <h1 class="text-lg font-semibold">修改密码</h1>
+      <p class="text-xs text-base-content/60">修改成功后当前会话会失效，需要重新登录。</p>
+    </header>
 
-    <form class="card password" @submit.prevent="onSubmit">
-      <div class="field">
-        <label class="field__label" for="old-password">原密码</label>
+    <form class="panel flex max-w-[420px] flex-col gap-4" @submit.prevent="onSubmit">
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend text-xs">原密码</legend>
         <input
           id="old-password"
           v-model="oldPassword"
-          class="input"
+          class="input w-full"
           type="password"
           autocomplete="current-password"
         />
-        <p v-if="errors.old" class="field__error">{{ errors.old }}</p>
-      </div>
+        <p v-if="errors.old" class="mt-1 text-xs text-error">{{ errors.old }}</p>
+      </fieldset>
 
-      <div class="field">
-        <label class="field__label" for="new-password">新密码（至少 8 位）</label>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend text-xs">新密码（至少 8 位）</legend>
         <input
           id="new-password"
           v-model="newPassword"
-          class="input"
+          class="input w-full"
           type="password"
           autocomplete="new-password"
         />
-        <p v-if="errors.next" class="field__error">{{ errors.next }}</p>
-      </div>
+        <p v-if="errors.next" class="mt-1 text-xs text-error">{{ errors.next }}</p>
+      </fieldset>
 
-      <div class="field">
-        <label class="field__label" for="confirm-password">确认新密码</label>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend text-xs">确认新密码</legend>
         <input
           id="confirm-password"
           v-model="confirmPassword"
-          class="input"
+          class="input w-full"
           type="password"
           autocomplete="new-password"
         />
-        <p v-if="errors.confirm" class="field__error">{{ errors.confirm }}</p>
-      </div>
+        <p v-if="errors.confirm" class="mt-1 text-xs text-error">{{ errors.confirm }}</p>
+      </fieldset>
 
-      <button type="submit" class="btn btn--primary" :disabled="submitting">提交修改</button>
+      <button type="submit" class="btn btn-primary mt-1 w-full" :disabled="submitting">
+        提交修改
+      </button>
     </form>
 
     <ConfirmDialog
@@ -120,13 +125,3 @@ async function onConfirmChange(): Promise<void> {
     />
   </div>
 </template>
-
-<style scoped>
-.page__title {
-  margin-bottom: 16px;
-}
-
-.password {
-  max-width: 420px;
-}
-</style>

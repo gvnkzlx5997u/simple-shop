@@ -31,6 +31,16 @@ const router = createRouter({
           component: () => import('../views/GoodsDetailView.vue'),
         },
         {
+          path: 'orders',
+          name: 'orders',
+          component: () => import('../views/OrderListView.vue'),
+        },
+        {
+          path: 'orders/:id',
+          name: 'order-detail',
+          component: () => import('../views/OrderDetailView.vue'),
+        },
+        {
           path: 'customers',
           name: 'customers',
           component: () => import('../views/CustomerListView.vue'),
@@ -39,16 +49,6 @@ const router = createRouter({
           path: 'customers/:id',
           name: 'customer-detail',
           component: () => import('../views/CustomerDetailView.vue'),
-        },
-        {
-          path: 'history',
-          name: 'history',
-          component: () => import('../views/HistoryListView.vue'),
-        },
-        {
-          path: 'history/:id',
-          name: 'history-detail',
-          component: () => import('../views/HistoryDetailView.vue'),
         },
         {
           path: 'categories',

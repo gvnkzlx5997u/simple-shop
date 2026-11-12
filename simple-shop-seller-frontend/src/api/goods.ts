@@ -4,6 +4,7 @@ import type {
   GoodsPublishRequest,
   GoodsStatus,
   GoodsSummaryData,
+  OffShelfReason,
   PageResponse,
 } from './types'
 
@@ -11,13 +12,15 @@ const GOODS_PATH = '/seller/goods'
 
 export interface GoodsListQuery {
   status?: GoodsStatus
+  /** 只能与 status=OFF_SHELF 组合；带原因却不筛已下架会被后端按参数错误（50002）拒绝。 */
+  off_shelf_reason?: OffShelfReason
   category_id?: string
   keyword?: string
   page?: number
   page_size?: number
 }
 
-/** 商品列表；按创建时间倒序，支持状态/类别/关键字筛选；page 从 1 起。 */
+/** 商品列表；按创建时间倒序，支持状态/下架原因/类别/关键字筛选；page 从 1 起。 */
 export function listGoods(query: GoodsListQuery = {}): Promise<PageResponse<GoodsSummaryData>> {
   return request<PageResponse<GoodsSummaryData>>({
     method: 'get',
@@ -36,7 +39,10 @@ export function getGoods(id: string): Promise<GoodsDetailData> {
   return request<GoodsDetailData>({ method: 'get', url: GOODS_PATH + '/' + encodeURIComponent(id) })
 }
 
-/** 修改库存；交易中（冻结）被拒 20021。OFF_ZERO 商品改为 >0 即自动重新上架。 */
+/**
+ * 修改库存。在售改成 0 触发库存耗尽下架（20020：有未完成订单时被拒）；
+ * 库存耗尽/已售下架的商品改成大于 0 保存即自动上架；手动下架的商品库存只读（20023）。
+ */
 export function updateGoodsStock(id: string, stock: number): Promise<GoodsDetailData> {
   return request<GoodsDetailData>({
     method: 'put',
@@ -45,7 +51,7 @@ export function updateGoodsStock(id: string, stock: number): Promise<GoodsDetail
   })
 }
 
-/** 改挂类别；交易中被拒 20021；目标必须是二级类别（20002）。 */
+/** 改挂类别；所有状态都能改挂。目标必须是二级类别（20002）。 */
 export function updateGoodsCategory(id: string, categoryId: string): Promise<GoodsDetailData> {
   return request<GoodsDetailData>({
     method: 'put',
@@ -54,19 +60,13 @@ export function updateGoodsCategory(id: string, categoryId: string): Promise<Goo
   })
 }
 
-/** 手动下架；队列非空被拒 20022。下架商品留在当前列表（OFF_MANUAL），不进历史。 */
+/**
+ * 手动下架。手动下架是终态：没有重新上架接口，库存变为只读、类别仍可改挂。
+ * 有未完成订单（待确认至已发货）时被拒 20020，非在售状态被拒 20019。
+ */
 export function takeGoodsOffShelf(id: string): Promise<GoodsDetailData> {
   return request<GoodsDetailData>({
     method: 'post',
     url: GOODS_PATH + '/' + encodeURIComponent(id) + '/off-shelf',
-  })
-}
-
-/** 重新上架（仅手动下架的商品）；不带显式确认会被拒 20028。 */
-export function reListGoods(id: string): Promise<GoodsDetailData> {
-  return request<GoodsDetailData>({
-    method: 'post',
-    url: GOODS_PATH + '/' + encodeURIComponent(id) + '/re-list',
-    data: { confirm: true },
   })
 }

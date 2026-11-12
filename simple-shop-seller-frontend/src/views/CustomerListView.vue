@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 
 import { listCustomers } from '../api/customer'
 import type { CustomerSummaryData } from '../api/types'
+import AppIcon from '../components/common/AppIcon.vue'
 import Pagination from '../components/common/Pagination.vue'
 import { M10 } from '../constants/messages'
 import { errorMessage } from '../utils/error'
@@ -46,48 +47,70 @@ function viewDetail(id: string): void {
 </script>
 
 <template>
-  <div class="page">
-    <h1 class="page__title">客户管理</h1>
-    <p class="muted page__hint">
-      买家注册即成为客户;详情页可查看其全部购买历史（含排队失败记录）。
-    </p>
+  <div class="flex flex-col gap-4">
+    <header>
+      <h1 class="text-lg font-semibold">客户管理</h1>
+      <p class="text-xs text-base-content/60">买家注册即成为客户；详情页展示其基本信息。</p>
+    </header>
 
-    <p v-if="error" class="page__error">{{ error }}</p>
+    <div v-if="error" role="alert" class="alert alert-error alert-soft text-sm">
+      <AppIcon name="forbidden" />
+      <span>{{ error }}</span>
+    </div>
 
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>用户名</th>
-          <th>联系电话</th>
-          <th>默认交易地点</th>
-          <th>注册时间</th>
-          <th>操作</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-if="loading && customers.length === 0">
-          <td colspan="5" class="muted">加载中…</td>
-        </tr>
-        <tr v-else-if="customers.length === 0 && !error">
-          <td colspan="5" class="muted">{{ M10.emptyCustomers }}</td>
-        </tr>
-        <tr v-for="customer in customers" v-else :key="customer.id">
-          <td>{{ customer.username }}</td>
-          <td>{{ customer.phone }}</td>
-          <td>{{ customer.default_location ?? '—' }}</td>
-          <td>{{ formatDateTime(customer.create_at) }}</td>
-          <td>
-            <button type="button" class="btn btn--small" @click="viewDetail(customer.id)">
-              详情
-            </button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="panel p-0">
+      <div class="overflow-x-auto">
+        <table class="table table-sm">
+          <thead>
+            <tr>
+              <th>用户名</th>
+              <th>联系电话</th>
+              <th>默认交易地点</th>
+              <th>注册时间</th>
+              <th class="w-16 text-right">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="loading && customers.length === 0">
+              <td colspan="5" class="text-sm text-base-content/60">加载中…</td>
+            </tr>
+            <tr v-else-if="customers.length === 0 && !error">
+              <td colspan="5" class="text-sm text-base-content/60">{{ M10.emptyCustomers }}</td>
+            </tr>
+            <tr
+              v-for="customer in customers"
+              v-else
+              :key="customer.id"
+              class="cursor-pointer hover:bg-base-200"
+              tabindex="0"
+              :aria-label="`查看 ${customer.username} 的详情`"
+              @click="viewDetail(customer.id)"
+              @keydown.enter.prevent="viewDetail(customer.id)"
+            >
+              <td class="font-medium">{{ customer.username }}</td>
+              <td>{{ customer.phone }}</td>
+              <td>{{ customer.default_location ?? '—' }}</td>
+              <td class="text-base-content/70">{{ formatDateTime(customer.create_at) }}</td>
+              <td class="text-right">
+                <button
+                  type="button"
+                  class="btn btn-square btn-xs btn-ghost text-base-content/50 hover:text-primary"
+                  title="查看详情"
+                  aria-hidden="true"
+                  tabindex="-1"
+                  @click.stop="viewDetail(customer.id)"
+                >
+                  <AppIcon name="arrow-right" class="text-[13px]" />
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
 
     <Pagination
       v-if="total > PAGE_SIZE"
-      class="page__pagination"
       :page="page"
       :page-size="PAGE_SIZE"
       :total="total"
@@ -96,27 +119,3 @@ function viewDetail(id: string): void {
     />
   </div>
 </template>
-
-<style scoped>
-.page__title {
-  margin-bottom: 8px;
-}
-
-.page__hint {
-  margin: 0 0 16px;
-  font-size: 13px;
-}
-
-.page__error {
-  margin: 0 0 16px;
-  padding: 10px 12px;
-  border: 1px solid #fecaca;
-  border-radius: 6px;
-  background: #fef2f2;
-  color: var(--danger);
-}
-
-.page__pagination {
-  margin-top: 12px;
-}
-</style>
