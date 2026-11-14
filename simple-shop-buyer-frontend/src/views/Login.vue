@@ -32,7 +32,9 @@ async function onSubmit() {
   errorText.value = ''
   try {
     await auth.login({ username: u, password: password.value })
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+    const raw = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+    // 只接受站内路径：`//evil.com` 是协议相对地址，浏览器会当成外站跳走。
+    const redirect = raw.startsWith('/') && !raw.startsWith('//') ? raw : ''
     router.replace(redirect || { name: 'goods-list' })
   } catch (err) {
     errorText.value = describeError(err)

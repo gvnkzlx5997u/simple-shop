@@ -19,6 +19,30 @@ const router = createRouter({
       meta: { title: '商品详情' },
     },
     {
+      path: '/cart',
+      name: 'cart',
+      component: () => import('../views/Cart.vue'),
+      meta: { title: '购物车', requiresAuth: true },
+    },
+    {
+      path: '/favorites',
+      name: 'favorites',
+      component: () => import('../views/Favorites.vue'),
+      meta: { title: '我的收藏', requiresAuth: true },
+    },
+    {
+      path: '/orders',
+      name: 'orders',
+      component: () => import('../views/Orders.vue'),
+      meta: { title: '我的订单', requiresAuth: true },
+    },
+    {
+      path: '/orders/:id',
+      name: 'order-detail',
+      component: () => import('../views/OrderDetail.vue'),
+      meta: { title: '订单详情', requiresAuth: true },
+    },
+    {
       path: '/login',
       name: 'login',
       component: () => import('../views/Login.vue'),
@@ -30,19 +54,13 @@ const router = createRouter({
       component: () => import('../views/Register.vue'),
       meta: { title: '注册' },
     },
-    {
-      path: '/history',
-      name: 'history',
-      component: () => import('../views/History.vue'),
-      meta: { title: '我的历史', requiresAuth: true },
-    },
     { path: '/:pathMatch(.*)*', redirect: '/goods' },
   ],
 })
 
 /**
- * 只有「我的历史」需要登录（浏览与详情免登录）。
- * 未登录时带 redirect，登录后回到原页面。
+ * 登录守卫：`meta.requiresAuth` 为真的页面未登录时跳登录，并带 redirect 回原页。
+ * 需要登录的是购物车、收藏、订单列表与订单详情四处，都靠同一个 meta 标记。
  */
 router.beforeEach((to) => {
   const auth = useAuthStore()

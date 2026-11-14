@@ -1,10 +1,8 @@
 import { del, get, post } from './http'
 import type {
-  BuyerHistoryEntry,
   CategoryNode,
   GoodsDetail,
   GoodsSummary,
-  IntentionAccepted,
   LoginData,
   LoginRequest,
   PageData,
@@ -12,8 +10,8 @@ import type {
 } from './types'
 
 /**
- * 买家端只涉及 6 个接口，全部集中在 `simple-shop-doc/阶段二/前端交接文档.md` 4.2 节。
- * 浏览类走 /api/public/**（免令牌），其余走 /api/buyer/**（需登录）。
+ * 买家端接口：浏览类走 /api/public/**（免令牌），账号类走 /api/buyer/**（需登录）。
+ * 字段名、枚举值与错误码以 simple-shop-doc/阶段三/契约交接.md 与 openapi.json 为准。
  */
 
 /** 商品列表/搜索：仅在售；keyword 与 category_id 可叠加。 */
@@ -26,7 +24,7 @@ export function fetchGoods(params: {
   return get<PageData<GoodsSummary>>('/public/goods', params)
 }
 
-/** 商品详情：在售、交易中可见；下架/归档返回 404。 */
+/** 商品详情：仅在售可见；已下架或不存在返回 404 + 20011。 */
 export function fetchGoodsDetail(id: string): Promise<GoodsDetail> {
   return get<GoodsDetail>('/public/goods/' + encodeURIComponent(id))
 }
@@ -49,17 +47,4 @@ export function login(payload: LoginRequest): Promise<LoginData> {
 /** 退出登录。 */
 export function logout(): Promise<null> {
   return del<null>('/buyer/auth/session')
-}
-
-/**
- * 提交购买意向：请求体只有 goods_id，不需要任何表单。
- * 响应只含意向 id 与创建时间，**不含排队位次**，界面不得展示位置。
- */
-export function submitIntention(goodsId: string): Promise<IntentionAccepted> {
-  return post<IntentionAccepted>('/buyer/intentions', { goods_id: goodsId })
-}
-
-/** 我的历史：只含已结束的记录，按下单时间倒序。 */
-export function fetchHistory(page = 1, pageSize = 10): Promise<PageData<BuyerHistoryEntry>> {
-  return get<PageData<BuyerHistoryEntry>>('/buyer/history', { page, page_size: pageSize })
 }

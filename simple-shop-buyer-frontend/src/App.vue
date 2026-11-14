@@ -19,7 +19,9 @@ async function onLogout() {
 
       <nav class="nav">
         <RouterLink to="/goods">商品</RouterLink>
-        <RouterLink v-if="auth.isLoggedIn" to="/history">我的历史</RouterLink>
+        <RouterLink v-if="auth.isLoggedIn" to="/cart">购物车</RouterLink>
+        <RouterLink v-if="auth.isLoggedIn" to="/favorites">收藏</RouterLink>
+        <RouterLink v-if="auth.isLoggedIn" to="/orders">订单</RouterLink>
       </nav>
 
       <div class="account">
@@ -42,7 +44,7 @@ async function onLogout() {
 
 <style scoped>
 .site-header {
-  background: #fff;
+  background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -65,6 +67,23 @@ async function onLogout() {
   display: flex;
   gap: 16px;
   flex: 1;
+}
+
+/*
+ * 导航默认不用主色：主色留给「当前页」和真正的主操作（加入购物车、去结算）。
+ * 四个链接全铺主色会让主色失去强调作用，也看不出当前在哪一页。
+ */
+.nav a {
+  color: var(--color-text-weak);
+}
+
+.nav a:hover {
+  color: var(--color-text);
+}
+
+.nav a.router-link-active {
+  color: var(--color-primary);
+  font-weight: 600;
 }
 
 .account {
