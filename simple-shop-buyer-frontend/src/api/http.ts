@@ -74,18 +74,28 @@ function unwrap<T>(res: AxiosResponse<ApiResponse<T>>): T {
   fail(CLIENT_ERROR.UNEXPECTED, 'unexpected response shape', res.status)
 }
 
-/** 把任何异常统一成 ApiError，调用方只处理一种错误类型。 */
+/**
+ * 把任何异常统一成 ApiError，调用方只处理一种错误类型。
+ *
+ * 注意：会话失效必须走 `fail()` 而不是直接 `return new ApiError(...)`。
+ * 后端把 10002 配成 HTTP 401，axios 会先抛错，于是**根本走不到 `unwrap()`**，
+ * 这里若只是造个错误返回，就既不清理令牌也不触发跳登录——
+ * 表现出来就是「令牌过期后页面一直报错、停在原地」。
+ */
 function toApiError(err: unknown): ApiError {
   if (err instanceof ApiError) return err
   const e = err as { response?: { status: number; data?: ApiResponse<unknown> }; message?: string }
   if (e?.response) {
     const body = e.response.data
     if (body && typeof body.code === 'number') {
+      if (body.code === ApiCode.SESSION_INVALID) {
+        fail(body.code, body.message || 'session invalid', e.response.status)
+      }
       return new ApiError(body.code, body.message || 'biz error', e.response.status)
     }
-    // 401 裸响应：按会话失效处理。
+    // 401 裸响应：按会话失效处理，同样要清令牌并通知跳登录。
     if (e.response.status === 401) {
-      return new ApiError(ApiCode.SESSION_INVALID, 'session invalid', 401)
+      fail(ApiCode.SESSION_INVALID, 'session invalid', 401)
     }
     return new ApiError(CLIENT_ERROR.UNEXPECTED, 'http ' + e.response.status, e.response.status)
   }

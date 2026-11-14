@@ -1,15 +1,19 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 
+import { ApiError } from '../api/http'
+import { ApiCode } from '../api/types'
 import { describeError } from '../stores/auth'
 import { useCartStore } from '../stores/cart'
 import type { CartRow } from '../stores/cart'
 import { formatMoney, formatTime } from '../utils/format'
 
 const cart = useCartStore()
+const router = useRouter()
 
 const submitting = ref(false)
+const movingFav = ref(false)
 const notice = ref('')
 const actionError = ref('')
 
@@ -55,12 +59,45 @@ async function onSubmit(): Promise<void> {
   notice.value = ''
   try {
     const placed = await cart.submitOrder()
-    notice.value = '下单成功，订单号 ' + placed.order_no + '，合计 ¥' + formatMoney(placed.total_amount)
+    // D2-5：成功直接进订单详情——那里有订单号、状态和逐件明细，
+    // 比在购物车页弹一句话让人放心；购物车里的行已经由 store 清掉了。
+    void router.push({ name: 'order-detail', params: { id: placed.order_id } })
   } catch (err) {
-    // 失败时勾选与数量都不动，用户可以就地调整（D2-5 的验收口径）。
-    actionError.value = describeError(err)
+    actionError.value = submitFailText(err)
+    // 失败后重新拉一次购物车：失败多半是「提交瞬间商品下架 / 库存变了」，
+    // 不刷新的话页面上还是旧库存，用户照着旧数字再点一次还是失败。
+    // 刷新只影响失效行（会被取消勾选），有效行的勾选与数量由 syncLocal 原样保留。
+    await cart.load()
   } finally {
     submitting.value = false
+  }
+}
+
+/** 下单失败的提示。参数类错误单独说，因为后端那句话是给表单用的，放在下单场景看不懂。 */
+function submitFailText(err: unknown): string {
+  if (err instanceof ApiError && err.code === ApiCode.PARAM_INVALID) {
+    return '下单信息有误，请回购物车重新勾选后再提交'
+  }
+  return describeError(err)
+}
+
+/**
+ * 勾选行转收藏（D4-4）。
+ * 后端「写收藏 + 删购物车行」在一个事务里，成功就会顺带把行删掉；
+ * 若批次里有已下架商品，后端整批拒绝，此时购物车一行不动。
+ */
+async function onMoveToFavorites(): Promise<void> {
+  if (checkedLineCount.value === 0) return
+  movingFav.value = true
+  actionError.value = ''
+  notice.value = ''
+  try {
+    const moved = await cart.moveCheckedToFavorites()
+    notice.value = moved > 0 ? '已把 ' + moved + ' 件商品移到收藏' : '这些商品已不在购物车里'
+  } catch (err) {
+    actionError.value = describeError(err)
+  } finally {
+    movingFav.value = false
   }
 }
 
@@ -187,8 +224,16 @@ onMounted(() => {
         </div>
 
         <button
+          class="to-fav"
+          :disabled="checkedLineCount === 0 || movingFav || submitting"
+          @click="onMoveToFavorites"
+        >
+          {{ movingFav ? '转移中…' : '转收藏' }}
+        </button>
+
+        <button
           class="primary checkout"
-          :disabled="checkedLineCount === 0 || submitting"
+          :disabled="checkedLineCount === 0 || submitting || movingFav"
           @click="onSubmit"
         >
           {{ submitting ? '提交中…' : '去结算' }}
@@ -281,7 +326,7 @@ onMounted(() => {
 }
 
 .row-item.disabled {
-  background: #fafafa;
+  background: var(--color-fill);
 }
 
 .row-item.disabled .name,
@@ -294,7 +339,7 @@ onMounted(() => {
   height: 64px;
   object-fit: cover;
   border-radius: 4px;
-  background: #f1f2f4;
+  background: var(--color-fill);
 }
 
 .thumb.placeholder {

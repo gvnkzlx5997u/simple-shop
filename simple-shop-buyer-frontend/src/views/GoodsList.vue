@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import { fetchCategories, fetchGoods } from '../api/buyer'
 import type { CategoryNode, GoodsSummary } from '../api/types'
 import { describeError } from '../stores/auth'
+import { formatMoney } from '../utils/format'
 
 const router = useRouter()
 
@@ -145,7 +146,7 @@ onMounted(() => {
         <div v-else class="thumb placeholder">暂无图片</div>
         <div class="info">
           <div class="name">{{ g.name }}</div>
-          <div class="price">¥{{ g.price }}</div>
+          <div class="price">¥{{ formatMoney(g.price) }}</div>
           <div class="muted">
             {{ g.category?.l1_name ?? '未分类' }} / {{ g.category?.l2_name ?? '' }}
           </div>
@@ -181,7 +182,7 @@ onMounted(() => {
 
 .select:disabled {
   color: var(--color-text-weak);
-  background: #f7f8fa;
+  background: var(--color-bg);
 }
 
 /* 搜索按钮不被输入框挤压，文字不换行 */
@@ -207,7 +208,7 @@ onMounted(() => {
   aspect-ratio: 4 / 3;
   object-fit: cover;
   display: block;
-  background: #f1f2f4;
+  background: var(--color-fill);
 }
 
 .thumb.placeholder {

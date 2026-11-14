@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { fetchGoodsDetail } from '../api/buyer'
+import { addFavorite, fetchFavoriteStatus, removeFavorite } from '../api/favorite'
 import { ApiError } from '../api/http'
 import { ApiCode } from '../api/types'
 import type { GoodsDetail } from '../api/types'
 import { describeError, useAuthStore } from '../stores/auth'
 import { useCartStore } from '../stores/cart'
+import { formatMoney } from '../utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -23,8 +25,14 @@ const notFound = ref(false)
 
 const adding = ref(false)
 const notice = ref('')
-/** 加购失败单独一份，避免和「详情加载失败」互相覆盖。 */
+/** 提示后面跟的跳转入口：加购给「去购物车」、收藏给「去我的收藏」，取消类操作不给。 */
+const noticeTarget = ref<{ to: string; text: string } | null>(null)
+/** 加购或收藏失败单独一份，避免和「详情加载失败」互相覆盖。 */
 const actionError = ref('')
+
+/** 收藏态：进入详情先问一次后端，没登录就不问。 */
+const favorited = ref(false)
+const favoriteBusy = ref(false)
 
 const goodsId = computed(() => String(route.params.id ?? ''))
 const allImages = computed(() => {
@@ -37,7 +45,13 @@ const allImages = computed(() => {
   return list
 })
 
-/** 能进详情页的商品后端只放行在售，这里再按状态判一次，避免按钮在异常数据下亮着。 */
+/**
+ * 加购入口是否显示。
+ *
+ * 这里**故意不用**后端的 `purchasable`：`purchasable` 是「在售**且**有库存」，
+ * 而加购允许缺货商品先入车等补货（见下面的 outOfStock 提示），
+ * 所以按「是否在售」判断。能不能真下单仍由后端在提交时把关。
+ */
 const canAddToCart = computed(() => goods.value?.status === 'ON_SALE')
 /** 在售但没货：可以加进购物车等补货，但要先说明白。 */
 const outOfStock = computed(() => !!goods.value && goods.value.status === 'ON_SALE' && goods.value.stock <= 0)
@@ -49,6 +63,7 @@ async function load() {
   try {
     goods.value = await fetchGoodsDetail(goodsId.value)
     activeImage.value = goods.value.main_image_url || allImages.value[0] || ''
+    void loadFavoriteStatus()
   } catch (err) {
     goods.value = null
     // 买家只在售商品可见；下架后详情返回 404 + 20011，不是故障。
@@ -62,6 +77,49 @@ async function load() {
   }
 }
 
+/**
+ * 查收藏状态。失败就当没收藏——这只影响按钮文案，不该让整页报错。
+ * 未登录不问，避免必定的 401 打日志。
+ */
+async function loadFavoriteStatus(): Promise<void> {
+  if (!auth.isLoggedIn) return
+  try {
+    const data = await fetchFavoriteStatus(goodsId.value)
+    favorited.value = data.favorited
+  } catch {
+    favorited.value = false
+  }
+}
+
+async function onToggleFavorite(): Promise<void> {
+  if (!auth.isLoggedIn) {
+    router.push({ name: 'login', query: { redirect: route.fullPath } })
+    return
+  }
+  // 连点保护：收藏接口本身幂等，但按钮连点会让文案在「已收藏/未收藏」之间跳。
+  if (favoriteBusy.value) return
+  favoriteBusy.value = true
+  notice.value = ''
+  noticeTarget.value = null
+  actionError.value = ''
+  try {
+    if (favorited.value) {
+      await removeFavorite(goodsId.value)
+      favorited.value = false
+      notice.value = '已取消收藏'
+    } else {
+      await addFavorite(goodsId.value)
+      favorited.value = true
+      notice.value = '已加入收藏'
+      noticeTarget.value = { to: '/favorites', text: '去我的收藏' }
+    }
+  } catch (err) {
+    actionError.value = describeError(err)
+  } finally {
+    favoriteBusy.value = false
+  }
+}
+
 async function onAddToCart() {
   if (!auth.isLoggedIn) {
     // 未登录不拦在详情页，跳登录后回原页（阶段D §2.2 的统一守卫口径）。
@@ -70,11 +128,13 @@ async function onAddToCart() {
   }
   adding.value = true
   notice.value = ''
+  noticeTarget.value = null
   actionError.value = ''
   try {
     const result = await cart.add(goodsId.value)
     // 后端加购幂等，重复点不会产生第二行，这里只是把结果说清楚。
     notice.value = result === 'existed' ? '这件商品已经在购物车里了' : '已加入购物车'
+    noticeTarget.value = { to: '/cart', text: '去购物车' }
   } catch (err) {
     actionError.value = describeError(err)
   } finally {
@@ -83,6 +143,18 @@ async function onAddToCart() {
 }
 
 onMounted(load)
+
+/**
+ * 同一组件内从 /goods/A 跳到 /goods/B 时 Vue 会复用组件，onMounted 不再触发。
+ * 不监听参数的话页面会继续显示上一个商品的名称与价格——数据看着对，其实不是这件商品。
+ */
+watch(goodsId, () => {
+  favorited.value = false
+  notice.value = ''
+  noticeTarget.value = null
+  actionError.value = ''
+  void load()
+})
 </script>
 
 <template>
@@ -121,7 +193,7 @@ onMounted(load)
 
         <div class="summary">
           <h1 class="title">{{ goods.name }}</h1>
-          <div class="price">¥{{ goods.price }}</div>
+          <div class="price">¥{{ formatMoney(goods.price) }}</div>
           <div class="muted">
             {{ goods.category?.l1_name ?? '未分类' }} / {{ goods.category?.l2_name ?? '' }}
           </div>
@@ -129,18 +201,23 @@ onMounted(load)
 
           <p v-if="outOfStock" class="warn">当前缺货，可以先加入购物车，等补货后再下单</p>
 
-          <button
-            v-if="canAddToCart"
-            class="primary buy"
-            :disabled="adding"
-            @click="onAddToCart"
-          >
-            {{ adding ? '加入中…' : '加入购物车' }}
-          </button>
+          <div class="actions">
+            <button
+              v-if="canAddToCart"
+              class="primary buy"
+              :disabled="adding"
+              @click="onAddToCart"
+            >
+              {{ adding ? '加入中…' : '加入购物车' }}
+            </button>
+            <button class="fav" :disabled="favoriteBusy" @click="onToggleFavorite">
+              {{ favorited ? '已收藏' : '收藏' }}
+            </button>
+          </div>
 
           <p v-if="notice" class="notice">
             {{ notice }}
-            <RouterLink to="/cart">去购物车</RouterLink>
+            <RouterLink v-if="noticeTarget" :to="noticeTarget.to">{{ noticeTarget.text }}</RouterLink>
           </p>
           <p v-if="actionError" class="error">{{ actionError }}</p>
         </div>
@@ -188,7 +265,7 @@ onMounted(load)
   aspect-ratio: 4 / 3;
   object-fit: cover;
   border-radius: 6px;
-  background: #f1f2f4;
+  background: var(--color-fill);
 }
 
 .main-image.placeholder {
@@ -236,9 +313,20 @@ onMounted(load)
 }
 
 .buy {
-  width: 100%;
+  flex: 1;
   margin-top: 16px;
   padding: 10px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.fav {
+  margin-top: 16px;
+  padding: 10px 16px;
+  white-space: nowrap;
 }
 
 .notice {

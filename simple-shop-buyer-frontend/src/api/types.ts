@@ -20,6 +20,10 @@ export const ApiCode = {
   USERNAME_INVALID: 10006,
   PHONE_INVALID: 10007,
   DEFAULT_LOCATION_INVALID: 10008,
+  /** 账号已不存在（令牌还在但账号被删）；后端回 HTTP 404。 */
+  ACCOUNT_NOT_FOUND: 10009,
+  /** 账号标识格式不合法。 */
+  ACCOUNT_INVALID: 10010,
   /** 商品不存在或已下架；后端同时回 HTTP 404。 */
   GOODS_NOT_FOUND: 20011,
   /** 下单数量超过库存。 */
@@ -38,6 +42,7 @@ export const ApiCode = {
   CART_TO_FAVORITE_REJECTED: 70003,
   TOO_MANY_REQUESTS: 50001,
   PARAM_INVALID: 50002,
+  INTERNAL_ERROR: 50000,
 } as const
 
 /** 分页响应。page 从 1 起，page_size 默认 10。 */
@@ -167,6 +172,29 @@ export interface MoveToFavoritesData {
   moved_count: number
 }
 
+/**
+ * 收藏行。商品信息是**实时读取**的，商品改价改名这里会跟着变。
+ *
+ * `detail_available` 的口径是「商品在售」，与购物车的 `selectable` 相同；
+ * 为 false 时不给跳详情（后端详情会返回 404 + 20011）。
+ */
+export interface FavoriteItemData {
+  goods_id: string
+  name: string
+  price: number
+  stock: number
+  status: GoodsStatus
+  off_shelf_reason: OffShelfReason | null
+  main_image_url: string
+  detail_available: boolean
+  favorited_at: string
+}
+
+/** 某件商品当前是否已被收藏，详情页据此显示「收藏 / 已收藏」。 */
+export interface FavoriteStatusData {
+  favorited: boolean
+}
+
 /** 订单状态，与后端 `OrderStatus` 六个值逐字一致。 */
 export type OrderStatus =
   | 'PENDING_CONFIRM'
@@ -189,4 +217,47 @@ export interface OrderPlacedData {
   total_amount: number
   status: OrderStatus
   create_at: string
+}
+
+/** 订单所属买家。买家端自己看不显示，字段仍按后端保留。 */
+export interface OrderBuyerRef {
+  id: string
+  username: string
+}
+
+/**
+ * 订单头。**不含明细**——明细要按订单 id 单独查一次（见 `OrderItemsData`），
+ * 所以类型上也刻意分成两种结构，不合成一个。
+ */
+export interface OrderData {
+  order_id: string
+  order_no: string
+  status: OrderStatus
+  total_amount: number
+  item_count: number
+  create_at: string
+  update_at: string
+  buyer: OrderBuyerRef
+}
+
+/** 订单明细行。`amount` 是后端按单价×数量算好的，前端不重算。 */
+export interface OrderItemData {
+  goods_id: string
+  goods_name: string
+  unit_price: number
+  quantity: number
+  amount: number
+}
+
+/** 明细列表：不分页，一次给全。 */
+export interface OrderItemsData {
+  items: OrderItemData[]
+}
+
+/** 取消订单后的状态回执。 */
+export interface OrderStatusData {
+  order_id: string
+  order_no: string
+  status: OrderStatus
+  update_at: string
 }

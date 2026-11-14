@@ -234,6 +234,28 @@ export const useCartStore = defineStore('cart', () => {
     return placed
   }
 
+  /**
+   * 把勾选的行转成收藏（D4-4）。
+   *
+   * 后端在同一个事务里「写收藏 → 删对应购物车行」，删几行就回几件，
+   * 所以前端不用自己再删一次，只要把本地状态同步跟上。
+   *
+   * 若批次里混进已下架商品，后端整批拒绝（70003），此时**购物车行保持原样**。
+   */
+  async function moveCheckedToFavorites(): Promise<number> {
+    const targets = checkedRows.value
+    if (targets.length === 0) {
+      throw new Error('empty selection')
+    }
+    const data = await api.moveToFavorites(targets.map((r) => r.goods_id))
+    const next = { ...local.value }
+    for (const r of targets) delete next[r.goods_id]
+    local.value = next
+    persist()
+    await load()
+    return data.moved_count
+  }
+
   /** 退出登录时由 auth 之外的地方兜底调用（auth 已自行清理，这里用于切账号场景）。 */
   function reset(): void {
     items.value = []
@@ -262,6 +284,7 @@ export const useCartStore = defineStore('cart', () => {
     toggleChecked,
     toggleAll,
     submitOrder,
+    moveCheckedToFavorites,
     reset,
   }
 })

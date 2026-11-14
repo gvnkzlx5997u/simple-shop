@@ -11,9 +11,8 @@ import { clearCartLocal } from '../utils/cartStorage'
 /**
  * 登录态。
  *
- * 说明：后端没有"查当前登录态"的接口（见交接文档 4.2，买家端只有 6 个接口），
- * 所以刷新页面后只能靠 localStorage 里有没有 token 判断已登录；
- * 令牌真失效时由第一个请求返回 401（code 10002）触发统一跳登录。
+ * 后端没有「查当前登录态」的接口，所以刷新页面后只能靠 localStorage 里有没有 token
+ * 判断已登录；令牌真失效时由第一个业务请求返回 401 / code 10002 触发统一跳登录。
  */
 export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(getToken())
@@ -84,11 +83,18 @@ export function describeError(err: unknown): string {
       case ApiCode.USERNAME_TAKEN:
         return '这个用户名已经被注册了，换一个试试'
       case ApiCode.USERNAME_INVALID:
+        // 依据后端 AccountRules.loginName：非空、≤50 字、不含尖括号与换行、
+        // 且任意位置不能出现空白字符或控制字符（有 isWhitespace / isISOControl 检查）。
         return '用户名不符合要求：不能为空，不能含空格或尖括号，最长 50 字'
       case ApiCode.PHONE_INVALID:
         return '电话格式不对：请填 7~20 位数字，可含短横'
       case ApiCode.DEFAULT_LOCATION_INVALID:
         return '默认交易地点不符合要求：最多 50 字，不能含换行'
+      case ApiCode.ACCOUNT_INVALID:
+        return '账号信息不符合要求'
+      case ApiCode.ACCOUNT_NOT_FOUND:
+        // 后端回 HTTP 404，但**不能**让下面的 404 兜底把它说成商品。
+        return '账号不存在，请重新登录'
       case ApiCode.GOODS_NOT_FOUND:
         return '商品不存在或已下架'
       case ApiCode.CART_GOODS_NOT_SELECTABLE:
@@ -99,13 +105,27 @@ export function describeError(err: unknown): string {
         return '库存不足，请回购物车调整数量'
       case ApiCode.ORDER_STOCK_SHORTAGE:
         return '卖家库存不足，订单未完成'
+      case ApiCode.FAVORITE_GOODS_NOT_SELECTABLE:
+        return '商品已下架，无法收藏'
+      case ApiCode.CART_TO_FAVORITE_REJECTED:
+        return '有商品已下架，未转收藏'
+      case ApiCode.ORDER_NOT_FOUND:
+        return '订单不存在'
+      case ApiCode.ORDER_STATUS_INVALID:
+        return '订单状态已变化，请刷新后重试'
+      case ApiCode.ORDER_NOT_CANCELABLE:
+        return '已发货，不能取消'
       case ApiCode.TOO_MANY_REQUESTS:
         return '操作太频繁了，请稍后再试'
       case ApiCode.PARAM_INVALID:
         return '填写的内容不符合要求'
+      case ApiCode.INTERNAL_ERROR:
+        return '服务器出错了，请稍后再试'
     }
     // 兜底：后端也可能只给 HTTP 状态码、业务码不在上面清单里。
-    if (err.httpStatus === 404) return '商品不存在或已下架'
+    // 注意 404 不能硬说成「商品」——账号、订单、通用资源都可能是 404，
+    // 具体是哪一种由上面的业务码决定；走到这里说明是还没登记的码。
+    if (err.httpStatus === 404) return '内容不存在或已被移除'
     return '操作失败，请稍后再试'
   }
   return '网络异常，请检查后重试'
