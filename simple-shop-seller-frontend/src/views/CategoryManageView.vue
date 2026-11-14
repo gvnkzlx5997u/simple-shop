@@ -6,15 +6,15 @@ import {
   createCategoryL2,
   deleteCategoryL1,
   deleteCategoryL2,
-  listCategoryTree,
   renameCategoryL1,
   renameCategoryL2,
 } from '../api/category'
-import type { CategoryNodeData } from '../api/types'
 import CategoryCard from '../components/category/CategoryCard.vue'
+import type { CategoryEditTarget } from '../components/category/categoryEdit'
 import AppIcon from '../components/common/AppIcon.vue'
 import ConfirmDialog from '../components/common/ConfirmDialog.vue'
 import { M10, apiCodeMessage } from '../constants/messages'
+import { useCategoryTree } from '../composables/useCategoryTree'
 import { useToast } from '../composables/useToast'
 import { errorMessage } from '../utils/error'
 import { validateCategoryName } from '../validation'
@@ -31,12 +31,13 @@ interface CategoryTarget {
 
 const toast = useToast()
 
-const tree = ref<CategoryNodeData[]>([])
-const loading = ref(false)
+const { tree, loading, error, refresh } = useCategoryTree()
 const busy = ref(false)
-const error = ref<string | null>(null)
 
 const newL1Name = ref('')
+
+/** 全局同一时刻只允许一个行内编辑；开始新编辑自动收起上一个（草稿丢弃）。 */
+const activeEdit = ref<CategoryEditTarget | null>(null)
 
 const pendingDelete = ref<CategoryTarget | null>(null)
 
@@ -50,25 +51,14 @@ const deleteMessage = computed(() => {
     : `确定删除二级类别「${target.name}」？仍被商品引用时会删除失败。`
 })
 
-async function load(): Promise<void> {
-  loading.value = true
-  error.value = null
-  try {
-    tree.value = await listCategoryTree()
-  } catch (caught) {
-    error.value = errorMessage(caught)
-  } finally {
-    loading.value = false
-  }
-}
-
-onMounted(load)
+// 类别管理是增删改入口：每次进入强制刷新，保证看到的是最新树，并更新共享缓存。
+onMounted(() => void refresh())
 
 async function run(action: () => Promise<unknown>, successText: string): Promise<boolean> {
   busy.value = true
   try {
     await action()
-    await load()
+    await refresh()
     toast.success(successText)
     return true
   } catch (caught) {
@@ -92,29 +82,43 @@ function submitNewL1(): void {
   })
 }
 
-/** 卡片只负责收集输入，校验与请求由页面统一处理，成功才让卡片收起编辑态。 */
-function onRename(target: CategoryTarget, done: (ok: boolean) => void): void {
-  const result = validateCategoryName(target.name)
+function startEdit(target: CategoryEditTarget): void {
+  activeEdit.value = target
+}
+
+function cancelEdit(): void {
+  activeEdit.value = null
+}
+
+/** 卡片只负责收集输入，校验与请求由页面统一处理，成功才收起编辑态；失败保留输入可重试。 */
+function onRename(target: { level: Level; id: string }, name: string): void {
+  const result = validateCategoryName(name)
   if (!result.ok) {
     toast.error(apiCodeMessage(result.code))
-    done(false)
     return
   }
   const action =
     target.level === 'l1'
       ? () => renameCategoryL1(target.id, result.value)
       : () => renameCategoryL2(target.id, result.value)
-  void run(action, '已改名').then(done)
+  void run(action, '已改名').then((ok) => {
+    if (ok) {
+      activeEdit.value = null
+    }
+  })
 }
 
-function onCreate(payload: { l1Id: string; name: string }, done: (ok: boolean) => void): void {
-  const result = validateCategoryName(payload.name)
+function onCreate(l1Id: string, name: string): void {
+  const result = validateCategoryName(name)
   if (!result.ok) {
     toast.error(apiCodeMessage(result.code))
-    done(false)
     return
   }
-  void run(() => createCategoryL2(payload.l1Id, result.value), '已创建二级类别').then(done)
+  void run(() => createCategoryL2(l1Id, result.value), '已创建二级类别').then((ok) => {
+    if (ok) {
+      activeEdit.value = null
+    }
+  })
 }
 
 function onRemove(target: CategoryTarget): void {
@@ -180,19 +184,23 @@ function confirmDelete(): void {
       {{ M10.emptyCategories }}
     </div>
 
+    <!-- 多列瀑布流：卡片按内容自然高度排列，不再被同行最高卡片撑高；列优先顺序对无序类别可接受。 -->
     <div
       v-else
-      class="grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] items-stretch gap-4"
+      class="columns-[240px] gap-4 [&>*]:mb-4 [&>*]:break-inside-avoid"
       :class="{ 'pointer-events-none opacity-60': busy }"
     >
       <CategoryCard
         v-for="l1 in tree"
         :key="l1.id"
         :l1="l1"
+        :active-edit="activeEdit"
         :busy="busy"
+        @edit="startEdit"
+        @cancel-edit="cancelEdit"
         @rename="onRename"
-        @remove="onRemove"
         @create="onCreate"
+        @remove="onRemove"
       />
     </div>
 

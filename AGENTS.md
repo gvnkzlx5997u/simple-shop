@@ -44,7 +44,8 @@ mvn spring-boot:run              # 启动，默认连本机 simple_shop
 cd simple-shop-seller-frontend
 npm ci
 npm run build                    # 类型检查 + 生产构建
-npm test                         # Vitest
+npm run test:unit                # 单元测试（test/ 目录，无需后端）
+npm run test:api                 # 接口连通性（需后端，不可达自动跳过）
 
 # 买家前端
 cd simple-shop-buyer-frontend
@@ -140,7 +141,7 @@ npx playwright test
 - 后端提交前至少跑 `mvn clean verify`；默认路径需要 Docker。没有 Docker 时用 `mvn -Plocal-mysql clean verify`，并在交付说明里写清用了哪条路径。
 - 架构规则由 ArchUnit 守门；改包结构、Controller 依赖或跨功能调用后，务必跑完整 verify，不要只跑单个测试类。
 - **测试不断言审计日志与运行日志**：不用 logback appender 抓日志，也不断言日志条数或文案。日志是排查手段，不是契约，断言日志是过度测试；要验证副作用就断言业务状态、返回码与库内数据。
-- 卖家前端改完跑 `npm run build`，涉及逻辑再跑 `npm test`；买家前端改完跑 `npm run build`。
+- 卖家前端改完跑 `npm run build`，涉及逻辑再跑 `npm run test:unit`；买家前端改完跑 `npm run build`。
 - E2E 用 `workers:1` 串行，默认用系统 Edge；阶段三正在重写用例，spec 与条数以该目录实际为准。跑前按 E2E 目录的说明重建 `simple_shop_e2e`、启动三个服务并关闭限流。
 - 阶段一的旧 E2E 用例在 `archive/`，**不要移回 `tests/`**，否则会被 Playwright 误跑。
 - 不要声称“测试通过”而没有实际执行；环境不具备时，说明哪些没跑、原因是什么。

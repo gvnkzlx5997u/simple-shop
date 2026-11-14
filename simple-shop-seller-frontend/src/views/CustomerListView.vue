@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { listCustomers } from '../api/customer'
@@ -7,32 +7,16 @@ import type { CustomerSummaryData } from '../api/types'
 import AppIcon from '../components/common/AppIcon.vue'
 import Pagination from '../components/common/Pagination.vue'
 import { M10 } from '../constants/messages'
-import { errorMessage } from '../utils/error'
+import { usePagedList } from '../composables/usePagedList'
 import { formatDateTime } from '../utils/format'
 
 const PAGE_SIZE = 10
 
 const router = useRouter()
 
-const customers = ref<CustomerSummaryData[]>([])
-const total = ref(0)
-const page = ref(1)
-const loading = ref(false)
-const error = ref<string | null>(null)
-
-async function load(): Promise<void> {
-  loading.value = true
-  error.value = null
-  try {
-    const data = await listCustomers(page.value, PAGE_SIZE)
-    customers.value = data.items
-    total.value = data.total
-  } catch (caught) {
-    error.value = errorMessage(caught)
-  } finally {
-    loading.value = false
-  }
-}
+const { items: customers, total, page, loading, error, load } = usePagedList<CustomerSummaryData>(
+  (currentPage) => listCustomers(currentPage, PAGE_SIZE),
+)
 
 onMounted(load)
 

@@ -44,6 +44,8 @@ export const M10 = {
   stockZeroHint: '保存后库存为 0，商品会自动下架（原因：库存耗尽）',
   emptyDescription: '无描述',
   confirmPublish: '发布后名称、价格、描述与图片均不可修改，请确认无误',
+  confirmPublishRetry: '已上传的媒体不会重复上传，只补齐剩余部分。确认重试发布？',
+  confirmLeavePublish: '内容尚未发布，离开将丢失已填写的内容（包括已选图片与描述）。确定离开？',
   publishSuccess: '发布成功，商品已上架',
   categoryLoadFailed: '类别加载失败，请刷新重试',
   categoryRequiredFirst: '请先在「类别管理」中创建类别',

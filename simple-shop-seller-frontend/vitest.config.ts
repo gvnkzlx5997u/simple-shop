@@ -8,6 +8,6 @@ export default {
   test: {
     environment: 'node',
     pool: 'threads',
-    include: ['src/**/__tests__/**/*.spec.ts'],
+    include: ['src/**/__tests__/**/*.spec.ts', 'test/**/*.spec.ts'],
   },
 }
