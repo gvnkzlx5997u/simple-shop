@@ -1,54 +1,42 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 
 import { fetchFavorites, removeFavorite } from '../api/favorite'
 import type { FavoriteItemData } from '../api/types'
+import { usePagedList } from '../composables/usePagedList'
 import { describeError } from '../stores/auth'
 import { formatMoney, formatTime } from '../utils/format'
 
 const PAGE_SIZE = 12
 
-const items = ref<FavoriteItemData[]>([])
-const page = ref(1)
-const total = ref(0)
-const loading = ref(false)
-const errorText = ref('')
 /** 操作结果（取消收藏、点失效行）统一走这一条，避免页面到处飘提示。 */
 const notice = ref('')
 const actionError = ref('')
 const busyId = ref('')
 
-const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
-const canPrev = computed(() => page.value > 1 && !loading.value)
-const canNext = computed(() => page.value < totalPages.value && !loading.value)
-
-async function load(): Promise<void> {
-  loading.value = true
-  errorText.value = ''
-  try {
-    // 最多回退一次：当前页被别处删空时退到真正的最后一页，再空就是真的没有收藏。
-    // 不处理的话，第 2 页被删光会显示「还没有收藏任何商品」——那是假话，收藏还在第 1 页。
-    for (let guard = 0; guard < 2; guard += 1) {
-      const data = await fetchFavorites({ page: page.value, page_size: PAGE_SIZE })
-      items.value = data.items ?? []
-      total.value = data.total ?? 0
-      const lastPage = Math.max(1, Math.ceil(total.value / PAGE_SIZE))
-      if (items.value.length > 0 || page.value <= lastPage) return
-      page.value = lastPage
-    }
-  } catch (err) {
-    errorText.value = describeError(err)
-    items.value = []
-  } finally {
-    loading.value = false
-  }
-}
+/** 分页与加载交给公共 composable。 */
+const {
+  items,
+  total,
+  page,
+  loading,
+  errorText,
+  totalPages,
+  canPrev,
+  canNext,
+  hasPager,
+  load,
+  goPage,
+} = usePagedList<FavoriteItemData>(
+  (pageNo) => fetchFavorites({ page: pageNo, page_size: PAGE_SIZE }),
+  // 收藏要空页回退：把第 2 页删空时，应退回第 1 页而不是显示「还没有收藏任何商品」。
+  { pageSize: PAGE_SIZE, emptyPageFallback: true },
+)
 
 function go(nextPage: number): void {
-  page.value = nextPage
   notice.value = ''
-  void load()
+  goPage(nextPage)
 }
 
 async function onRemove(item: FavoriteItemData): Promise<void> {
@@ -76,7 +64,9 @@ function onUnavailable(item: FavoriteItemData): void {
   notice.value = '《' + item.name + '》已下架，暂时看不了详情'
 }
 
-onMounted(load)
+onMounted(() => {
+  void load()
+})
 </script>
 
 <template>
@@ -152,10 +142,11 @@ onMounted(load)
         </div>
       </div>
 
+      <!-- 页码保留，按钮只在一页以上时出现 -->
       <div class="pager">
-        <button :disabled="!canPrev" @click="go(page - 1)">上一页</button>
+        <button v-if="hasPager" :disabled="!canPrev" @click="go(page - 1)">上一页</button>
         <span class="muted small">第 {{ page }} / {{ totalPages }} 页</span>
-        <button :disabled="!canNext" @click="go(page + 1)">下一页</button>
+        <button v-if="hasPager" :disabled="!canNext" @click="go(page + 1)">下一页</button>
       </div>
     </template>
   </div>
