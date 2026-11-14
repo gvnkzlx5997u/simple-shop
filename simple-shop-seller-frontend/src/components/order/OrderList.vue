@@ -10,7 +10,7 @@ import {
   ORDER_STATUS_TONES,
 } from '../../constants/labels'
 import { M10 } from '../../constants/messages'
-import { errorMessage } from '../../utils/error'
+import { usePagedList } from '../../composables/usePagedList'
 import { formatDateTime, formatPrice } from '../../utils/format'
 import AppIcon from '../common/AppIcon.vue'
 import Pagination from '../common/Pagination.vue'
@@ -69,12 +69,18 @@ function isOrderStatus(value: string): value is OrderStatus {
 // 初值从 URL 恢复（仅独立页面）：刷新、分享都能还原同一视图。
 const initialStatus = props.syncQuery ? queryValue('status') : ''
 const status = ref<OrderStatus | ''>(isOrderStatus(initialStatus) ? initialStatus : '')
-const page = ref(props.syncQuery ? Math.max(1, Number(queryValue('page')) || 1) : 1)
 
-const items = ref<OrderData[]>([])
-const total = ref(0)
-const loading = ref(false)
-const error = ref<string | null>(null)
+const { items, total, page, loading, error, load } = usePagedList<OrderData>(
+  (currentPage) =>
+    listOrders({
+      status: status.value || undefined,
+      buyer_id: props.buyerId ?? undefined,
+      goods_id: props.goodsId ?? undefined,
+      page: currentPage,
+      page_size: props.pageSize,
+    }),
+  { initialPage: props.syncQuery ? Number(queryValue('page')) || 1 : 1 },
+)
 
 /** 只有状态 tab 算「用户在筛」；buyer_id / goods_id 是入口自带的固定条件，不提示换条件。 */
 const statusFiltered = computed(() => status.value !== '')
@@ -103,28 +109,6 @@ function writeQuery(): void {
     query.page = String(page.value)
   }
   void router.replace({ query })
-}
-
-async function load(): Promise<void> {
-  loading.value = true
-  error.value = null
-  try {
-    const data = await listOrders({
-      status: status.value || undefined,
-      buyer_id: props.buyerId ?? undefined,
-      goods_id: props.goodsId ?? undefined,
-      page: page.value,
-      page_size: props.pageSize,
-    })
-    items.value = data.items
-    total.value = data.total
-  } catch (caught) {
-    error.value = errorMessage(caught)
-    items.value = []
-    total.value = 0
-  } finally {
-    loading.value = false
-  }
 }
 
 onMounted(load)

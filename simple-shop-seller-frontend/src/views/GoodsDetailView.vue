@@ -19,6 +19,7 @@ import {
 } from '../constants/labels'
 import type { TagTone } from '../constants/labels'
 import { M10 } from '../constants/messages'
+import { useRequestSequence } from '../composables/useRequestSequence'
 import { useToast } from '../composables/useToast'
 import { errorMessage } from '../utils/error'
 import { formatDateTime, formatPrice } from '../utils/format'
@@ -33,16 +34,28 @@ const error = ref<string | null>(null)
 
 const goodsId = computed(() => (typeof route.params.id === 'string' ? route.params.id : ''))
 
+const loadSeq = useRequestSequence()
+
 async function loadGoods(): Promise<void> {
+  const token = loadSeq.begin()
   loadingGoods.value = true
   error.value = null
   try {
-    goods.value = await getGoods(goodsId.value)
+    const data = await getGoods(goodsId.value)
+    if (!loadSeq.isCurrent(token)) {
+      return
+    }
+    goods.value = data
   } catch (caught) {
+    if (!loadSeq.isCurrent(token)) {
+      return
+    }
     error.value = errorMessage(caught)
     goods.value = null
   } finally {
-    loadingGoods.value = false
+    if (loadSeq.isCurrent(token)) {
+      loadingGoods.value = false
+    }
   }
 }
 

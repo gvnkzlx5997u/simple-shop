@@ -1,5 +1,6 @@
 import { ApiCode } from '../api/types'
 import type { DescriptionBlockRequest } from '../api/types'
+import { apiCodeMessage, M10 } from '../constants/messages'
 import { countChars, fail, hasAngleBracket, hasLineBreak, ok, trimToNull } from './shared'
 import type { Validated } from './shared'
 
@@ -152,9 +153,75 @@ export function validateImageSelection(
     if (url == null) {
       continue
     }
-    if (!url.startsWith(MEDIA_URL_PREFIX) || !seen.add(url)) {
+    if (!url.startsWith(MEDIA_URL_PREFIX) || seen.has(url)) {
       return fail(ApiCode.IMAGE_INVALID)
     }
+    seen.add(url)
   }
   return ok(undefined)
+}
+
+export interface PublishFormInput {
+  name: string
+  price: string
+  stock: number | ''
+  categoryL1: string | null
+  categoryL2: string | null
+}
+
+export interface PublishFormErrors {
+  name?: string
+  price?: string
+  stock?: string
+  category?: string
+}
+
+export interface PublishFormValues {
+  name: string
+  price: number
+  stock: number
+  categoryId: string
+}
+
+/**
+ * 发布表单基础字段一次性校验：返回逐字段错误文案与归一化后的值。
+ * 任一字段不通过时 values 为 null；描述与图片的预检不在此处（发布页与上传后终检负责）。
+ */
+export function validatePublishForm(form: PublishFormInput): {
+  errors: PublishFormErrors
+  values: PublishFormValues | null
+} {
+  const nameResult = validateGoodsName(form.name)
+  const priceResult = validatePrice(form.price)
+  const stockResult = validatePublishStock(form.stock)
+  const errors: PublishFormErrors = {
+    name: nameResult.ok
+      ? undefined
+      : nameResult.code === ApiCode.PARAM_INVALID
+        ? M10.nameRequired
+        : apiCodeMessage(nameResult.code),
+    price: priceResult.ok
+      ? undefined
+      : priceResult.code === ApiCode.PARAM_INVALID
+        ? M10.priceRequired
+        : apiCodeMessage(priceResult.code),
+    stock: stockResult.ok ? undefined : apiCodeMessage(stockResult.code),
+    category: form.categoryL1
+      ? form.categoryL2
+        ? undefined
+        : M10.categoryL2Required
+      : M10.categoryL1Required,
+  }
+  if (!nameResult.ok || !priceResult.ok || !stockResult.ok || !form.categoryL2) {
+    return { errors, values: null }
+  }
+  return {
+    errors,
+    values: {
+      name: nameResult.value,
+      price: Number(priceResult.value),
+      stock: stockResult.value,
+      categoryId: form.categoryL2,
+    },
+  }
 }

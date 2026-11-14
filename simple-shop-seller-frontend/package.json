@@ -9,8 +9,9 @@
     "preview": "vite preview",
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
-    "test": "vitest run",
-    "test:watch": "vitest",
+    "test:unit": "vitest run test/",
+    "test:api": "vitest run src/api/__tests__/",
+    "test:watch": "vitest test/",
     "format": "prettier --write --experimental-cli src/"
   },
   "dependencies": {

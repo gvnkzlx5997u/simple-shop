@@ -9,18 +9,29 @@ import {
   checkMediaFile,
   countDescriptionText,
   createMediaLine,
-  createTextLine,
+  insertMediaAtCaret,
+  mergeAtBoundary,
+  removeMediaLine,
 } from './descriptionEditor'
-import type { DescriptionEditorLine } from './descriptionEditor'
+import type { DescriptionEditorLine, MediaLine } from './descriptionEditor'
 
 /**
  * 描述块编辑器：视觉上是一个连续编辑区，内部是行序列（文本行 + 原子媒体行）。
  *
  * - 媒体在编辑期不上传、不预览，显示为「文件名行」，发布编排统一上传并回填 url；
  * - 插入发生在当前光标处（把聚焦的文本行按光标切分为两段）；
- * - 媒体行可聚焦，Backspace／Delete 或右侧 × 删除；
+ * - 媒体行可聚焦，Backspace／Delete 或右侧删除按钮移除；
+ * - 行的切分／合并／删除是 descriptionEditor.ts 的纯函数，本组件只负责 DOM 焦点与自动增高；
  * - 组件不做提交校验（尖括号、累计长度超限由发布页拦截），只在角落展示累计字数。
  */
+const props = withDefaults(
+  defineProps<{
+    /** 发布提交进行中锁定编辑，避免上传途中增删媒体行。 */
+    disabled?: boolean
+  }>(),
+  { disabled: false },
+)
+
 const lines = defineModel<DescriptionEditorLine[]>({ required: true })
 
 const toast = useToast()
@@ -56,17 +67,12 @@ function onTextInput(event: Event): void {
 }
 
 /**
- * 媒体在视觉上是「整块」的，用户自然会用 Backspace／Delete 删它。
- * 光标在文本行首按 Backspace、行尾按 Delete 时，直接删掉相邻的媒体行，
- * 不再要求先把焦点移到媒体块上。
- */
-/**
  * 媒体在视觉上是「整块」的，用户自然会用 Backspace／Delete 删它；
  * 文本行之间也要能像普通文本那样前后相连（行首 Backspace / 行尾 Delete 合并两行），
  * 否则删完媒体会留下两个互不相通的文本框。
  */
 function onTextKeydown(event: KeyboardEvent, line: DescriptionEditorLine, index: number): void {
-  if (line.kind !== 'text') {
+  if (props.disabled || line.kind !== 'text') {
     return
   }
   const el = event.target as HTMLTextAreaElement
@@ -77,41 +83,35 @@ function onTextKeydown(event: KeyboardEvent, line: DescriptionEditorLine, index:
   const atEnd = el.selectionStart === el.value.length
 
   if (event.key === 'Backspace' && atStart && index > 0) {
-    const previous = lines.value[index - 1]
-    if (!previous) {
-      return
-    }
-    event.preventDefault()
-    if (previous.kind !== 'text') {
-      removeMedia(previous.id)
-      return
-    }
-    // 上一行也是文本：把当前行并进去。空行因此能被 Backspace 删掉。
-    const caret = previous.content.length
-    previous.content = previous.content + line.content
-    lines.value.splice(index, 1)
-    focusText(previous.id, caret)
+    applyBoundaryMerge(event, index, 'backward')
     return
   }
-
   if (event.key === 'Delete' && atEnd && index < lines.value.length - 1) {
-    const next = lines.value[index + 1]
-    if (!next) {
-      return
-    }
-    event.preventDefault()
-    if (next.kind !== 'text') {
-      removeMedia(next.id)
-      return
-    }
-    const caret = line.content.length
-    line.content = line.content + next.content
-    lines.value.splice(index + 1, 1)
-    focusText(line.id, caret)
+    applyBoundaryMerge(event, index, 'forward')
+  }
+}
+
+function applyBoundaryMerge(
+  event: KeyboardEvent,
+  index: number,
+  direction: 'backward' | 'forward',
+): void {
+  const result = mergeAtBoundary(lines.value, index, direction)
+  if (!result) {
+    return
+  }
+  event.preventDefault()
+  if (result.kind === 'media') {
+    removeMedia(result.mediaId)
+  } else {
+    focusText(result.focusId, result.caret)
   }
 }
 
 function pickFiles(kind: 'IMAGE' | 'VIDEO'): void {
+  if (props.disabled) {
+    return
+  }
   // mousedown.prevent 保住文本行焦点与光标，插入位置才正确。
   if (kind === 'IMAGE') {
     imageInput.value?.click()
@@ -127,10 +127,10 @@ function onFilesPicked(event: Event): void {
 }
 
 function insertFiles(fileList: FileList | null): void {
-  if (!fileList || fileList.length === 0) {
+  if (props.disabled || !fileList || fileList.length === 0) {
     return
   }
-  const accepted = []
+  const accepted: MediaLine[] = []
   for (const file of Array.from(fileList)) {
     const check = checkMediaFile(file)
     if (!check.ok) {
@@ -145,76 +145,24 @@ function insertFiles(fileList: FileList | null): void {
   insertAtCaret(accepted)
 }
 
-function insertAtCaret(media: ReturnType<typeof createMediaLine>[]): void {
-  const index = lines.value.findIndex((line) => line.id === focusedTextId)
-  if (index === -1) {
-    // 没有聚焦的文本行：追加到末尾，并保证末尾留一个可继续输入的文本行。
-    const tail = createTextLine()
-    lines.value.push(...media, tail)
-    focusText(tail.id, 'start')
-    return
+function insertAtCaret(media: MediaLine[]): void {
+  const target = lines.value.find((line) => line.id === focusedTextId)
+  const textTarget = target?.kind === 'text' ? target : undefined
+  const el = textTarget ? textareas.get(textTarget.id) : undefined
+  const caret = el?.selectionStart ?? textTarget?.content.length ?? 0
+  const focusId = insertMediaAtCaret(lines.value, focusedTextId, caret, media)
+  if (focusId !== null) {
+    focusText(focusId, 'start')
   }
-  const target = lines.value[index]
-  if (target === undefined || target.kind !== 'text') {
-    return
-  }
-  const el = textareas.get(target.id)
-  const caret = el ? (el.selectionStart ?? target.content.length) : target.content.length
-  const before = createTextLine(target.content.slice(0, caret))
-  const after = createTextLine(target.content.slice(caret))
-  lines.value.splice(index, 1, before, ...media, after)
-  focusText(after.id, 'start')
-}
-
-/**
- * 去掉媒体后，若它左右都是文本行就并成一行。
- * 不合并的话会留下两个互不相通的文本框：方向键跨不过去，空行也删不掉。
- * 返回合并后的行 id 与接缝处光标位置。
- */
-function mergeNeighbours(index: number): { id: number; caret: number } | null {
-  const previous = lines.value[index - 1]
-  const next = lines.value[index]
-  if (!previous || !next || previous.kind !== 'text' || next.kind !== 'text') {
-    return null
-  }
-  const caret = previous.content.length
-  previous.content = previous.content + next.content
-  lines.value.splice(index, 1)
-  return { id: previous.id, caret }
 }
 
 function removeMedia(id: number): void {
-  const index = lines.value.findIndex((line) => line.id === id)
-  if (index === -1) {
+  if (props.disabled) {
     return
   }
-  lines.value.splice(index, 1)
-
-  if (lines.value.length === 0) {
-    const tail = createTextLine()
-    lines.value.push(tail)
-    focusText(tail.id, 'start')
-    return
-  }
-
-  const merged = mergeNeighbours(index)
-  if (merged) {
-    focusText(merged.id, merged.caret)
-    return
-  }
-
-  // 两侧不都是文本：焦点落到后面最近的文本行，没有就落到前面的。
-  const nextText = lines.value.slice(index).find((line) => line.kind === 'text')
-  if (nextText) {
-    focusText(nextText.id, 'start')
-    return
-  }
-  const previousText = lines.value
-    .slice(0, index)
-    .reverse()
-    .find((line) => line.kind === 'text')
-  if (previousText) {
-    focusText(previousText.id, 'end')
+  const focus = removeMediaLine(lines.value, id)
+  if (focus) {
+    focusText(focus.focusId, focus.position)
   }
 }
 
@@ -246,10 +194,22 @@ function mediaTypeLabel(mediaType: 'IMAGE' | 'VIDEO'): string {
 <template>
   <div class="desc-editor" data-testid="description-editor">
     <div class="desc-editor__toolbar">
-      <button type="button" class="btn btn-sm btn-outline" @mousedown.prevent @click="pickFiles('IMAGE')">
+      <button
+        type="button"
+        class="btn btn-sm btn-outline"
+        :disabled="disabled"
+        @mousedown.prevent
+        @click="pickFiles('IMAGE')"
+      >
         在光标处插入图片
       </button>
-      <button type="button" class="btn btn-sm btn-outline" @mousedown.prevent @click="pickFiles('VIDEO')">
+      <button
+        type="button"
+        class="btn btn-sm btn-outline"
+        :disabled="disabled"
+        @mousedown.prevent
+        @click="pickFiles('VIDEO')"
+      >
         在光标处插入视频
       </button>
       <span class="desc-editor__counter" :class="{ 'desc-editor__counter--over': overLimit }">
@@ -265,6 +225,7 @@ function mediaTypeLabel(mediaType: 'IMAGE' | 'VIDEO'): string {
           v-model="line.content"
           class="desc-editor__text"
           rows="1"
+          :readonly="disabled"
           :placeholder="
             index === 0 && lines.length === 1
               ? '填写商品描述，可用上方按钮在光标处插入图片／视频…'
@@ -296,6 +257,7 @@ function mediaTypeLabel(mediaType: 'IMAGE' | 'VIDEO'): string {
           <button
             type="button"
             class="btn btn-sm desc-editor__remove"
+            :disabled="disabled"
             @click="removeMedia(line.id)"
           >
             删除

@@ -25,6 +25,7 @@ import {
 } from '../constants/labels'
 import type { TagTone } from '../constants/labels'
 import { M10 } from '../constants/messages'
+import { useRequestSequence } from '../composables/useRequestSequence'
 import { useToast } from '../composables/useToast'
 import { errorMessage } from '../utils/error'
 import { formatDateTime, formatPrice } from '../utils/format'
@@ -50,32 +51,54 @@ const items = ref<OrderItemData[]>([])
 const itemsLoading = ref(false)
 const itemsError = ref<string | null>(null)
 
+const orderSeq = useRequestSequence()
+const itemsSeq = useRequestSequence()
+
 async function loadOrder(): Promise<void> {
+  const token = orderSeq.begin()
   orderLoading.value = true
   orderError.value = null
   orderMissing.value = false
   try {
-    order.value = await getOrder(orderId.value)
+    const data = await getOrder(orderId.value)
+    if (!orderSeq.isCurrent(token)) {
+      return
+    }
+    order.value = data
   } catch (caught) {
+    if (!orderSeq.isCurrent(token)) {
+      return
+    }
     order.value = null
     orderError.value = errorMessage(caught)
     orderMissing.value = caught instanceof ApiError && caught.code === ApiCode.ORDER_NOT_FOUND
   } finally {
-    orderLoading.value = false
+    if (orderSeq.isCurrent(token)) {
+      orderLoading.value = false
+    }
   }
 }
 
 async function loadItems(): Promise<void> {
+  const token = itemsSeq.begin()
   itemsLoading.value = true
   itemsError.value = null
   try {
     const data = await listOrderItems(orderId.value)
+    if (!itemsSeq.isCurrent(token)) {
+      return
+    }
     items.value = data.items
   } catch (caught) {
+    if (!itemsSeq.isCurrent(token)) {
+      return
+    }
     items.value = []
     itemsError.value = errorMessage(caught)
   } finally {
-    itemsLoading.value = false
+    if (itemsSeq.isCurrent(token)) {
+      itemsLoading.value = false
+    }
   }
 }
 

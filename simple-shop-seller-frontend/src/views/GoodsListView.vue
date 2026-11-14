@@ -9,7 +9,7 @@ import Pagination from '../components/common/Pagination.vue'
 import CategoryCascadeSelect from '../components/goods/CategoryCascadeSelect.vue'
 import GoodsCard from '../components/goods/GoodsCard.vue'
 import { M10 } from '../constants/messages'
-import { errorMessage } from '../utils/error'
+import { usePagedList } from '../composables/usePagedList'
 
 const PAGE_SIZE = 12
 
@@ -41,18 +41,12 @@ function queryValue(key: string): string {
   return typeof value === 'string' ? value : ''
 }
 
-const items = ref<GoodsSummaryData[]>([])
-const total = ref(0)
-const loading = ref(false)
-const error = ref<string | null>(null)
-
 // 初值从 URL 恢复，刷新与分享后仍是同一个视图。
 const statusFilter = ref(queryValue('status') + (queryValue('reason') ? ':' + queryValue('reason') : ''))
 const filterL1Id = ref<string | null>(queryValue('l1') || null)
 const filterL2Id = ref<string | null>(queryValue('l2') || null)
 const keywordInput = ref(queryValue('keyword'))
 const appliedKeyword = ref(queryValue('keyword'))
-const page = ref(Number(queryValue('page')) || 1)
 
 const hasFilters = computed(
   () => statusFilter.value !== '' || !!filterL1Id.value || !!appliedKeyword.value,
@@ -79,29 +73,22 @@ function syncQuery(): void {
   void router.replace({ query })
 }
 
-async function load(): Promise<void> {
-  loading.value = true
-  error.value = null
-  try {
+const { items, total, page, loading, error, load } = usePagedList<GoodsSummaryData>(
+  (currentPage) => {
     const { status, reason } = splitStatus(statusFilter.value)
-    const data = await listGoods({
+    return listGoods({
       status,
       // 原因必须与已下架一起传，单独传会被后端按参数错误拒绝。
       off_shelf_reason: reason,
       // 后端接受一级或二级 id，一级会匹配其下全部二级。
       category_id: filterL2Id.value ?? filterL1Id.value ?? undefined,
       keyword: appliedKeyword.value || undefined,
-      page: page.value,
+      page: currentPage,
       page_size: PAGE_SIZE,
     })
-    items.value = data.items
-    total.value = data.total
-  } catch (caught) {
-    error.value = errorMessage(caught)
-  } finally {
-    loading.value = false
-  }
-}
+  },
+  { initialPage: Number(queryValue('page')) || 1 },
+)
 
 onMounted(load)
 

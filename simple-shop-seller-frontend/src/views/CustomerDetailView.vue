@@ -6,6 +6,7 @@ import { getCustomerDetail } from '../api/customer'
 import type { CustomerDetailData } from '../api/types'
 import AppIcon from '../components/common/AppIcon.vue'
 import OrderList from '../components/order/OrderList.vue'
+import { useRequestSequence } from '../composables/useRequestSequence'
 import { errorMessage } from '../utils/error'
 import { formatDateTime } from '../utils/format'
 
@@ -17,16 +18,28 @@ const data = ref<CustomerDetailData | null>(null)
 const loading = ref(false)
 const error = ref<string | null>(null)
 
+const loadSeq = useRequestSequence()
+
 async function load(): Promise<void> {
+  const token = loadSeq.begin()
   loading.value = true
   error.value = null
   try {
-    data.value = await getCustomerDetail(customerId.value)
+    const detail = await getCustomerDetail(customerId.value)
+    if (!loadSeq.isCurrent(token)) {
+      return
+    }
+    data.value = detail
   } catch (caught) {
+    if (!loadSeq.isCurrent(token)) {
+      return
+    }
     error.value = errorMessage(caught)
     data.value = null
   } finally {
-    loading.value = false
+    if (loadSeq.isCurrent(token)) {
+      loading.value = false
+    }
   }
 }
 

@@ -1,38 +1,29 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { onBeforeRouteLeave, useRouter } from 'vue-router'
+import type { RouteLocationNormalized } from 'vue-router'
 
-import { publishGoods } from '../api/goods'
-import { uploadMedia } from '../api/media'
-import { ApiCode } from '../api/types'
-import type { GoodsPublishRequest, MediaPurpose } from '../api/types'
+import type { GoodsPublishRequest } from '../api/types'
 import AppIcon from '../components/common/AppIcon.vue'
 import ConfirmDialog from '../components/common/ConfirmDialog.vue'
 import CategoryCascadeSelect from '../components/goods/CategoryCascadeSelect.vue'
 import DescriptionBlockEditor from '../components/goods/DescriptionBlockEditor.vue'
 import ImageFilePicker from '../components/goods/ImageFilePicker.vue'
-import {
-  countDescriptionText,
-  createTextLine,
-  pendingMediaLines,
-  toDescriptionBlocks,
-} from '../components/goods/descriptionEditor'
+import { countDescriptionText, createTextLine } from '../components/goods/descriptionEditor'
 import type { DescriptionEditorLine, PickedImage } from '../components/goods/descriptionEditor'
-import { apiCodeMessage, M10 } from '../constants/messages'
+import { usePublishFlow } from '../composables/usePublishFlow'
+import { M10 } from '../constants/messages'
 import { useToast } from '../composables/useToast'
-import { errorMessage } from '../utils/error'
 import {
-  validateDescriptionBlocks,
-  validateGoodsName,
-  validateImageSelection,
-  validatePrice,
-  validatePublishStock,
-} from '../validation'
-import { DESCRIPTION_TOTAL_MAX_CHARS } from '../validation/goods'
-import { hasAngleBracket } from '../validation/shared'
+  DESCRIPTION_TOTAL_MAX_CHARS,
+  GOODS_NAME_MAX_CHARS,
+  validatePublishForm,
+} from '../validation/goods'
+import { countChars, hasAngleBracket } from '../validation/shared'
 
 const router = useRouter()
 const toast = useToast()
+const { submitting, phase, uploadedCount, uploadTotal, attemptFailed, run } = usePublishFlow()
 
 const name = ref('')
 const price = ref('')
@@ -45,40 +36,90 @@ const editorLines = ref<DescriptionEditorLine[]>([createTextLine()])
 
 const errors = ref<{ name?: string; price?: string; stock?: string; category?: string }>({})
 const confirmOpen = ref(false)
-const submitting = ref(false)
-const progressText = ref('')
 
 /** 校验通过后暂存的发布基干,确认弹窗后使用。 */
 const pendingPayload = ref<GoodsPublishRequest | null>(null)
 
-const submitLabel = computed(() =>
-  submitting.value ? progressText.value || '处理中…' : '发布商品',
+// ---- 离开保护：脏表单且未发布成功时拦截，防误丢内容 ----
+
+const published = ref(false)
+const leaveConfirmOpen = ref(false)
+let leaveTarget: RouteLocationNormalized | null = null
+let allowLeave = false
+
+const isDirty = computed(
+  () =>
+    name.value.trim() !== '' ||
+    price.value.trim() !== '' ||
+    stock.value !== 1 ||
+    categoryL1.value !== null ||
+    mainImages.value.length > 0 ||
+    galleryImages.value.length > 0 ||
+    editorLines.value.some((line) => line.kind === 'media' || line.content.trim() !== ''),
 )
 
-function onSubmit(): void {
-  const nameResult = validateGoodsName(name.value)
-  const priceResult = validatePrice(price.value)
-  const stockResult = validatePublishStock(stock.value)
-
-  errors.value = {
-    name: nameResult.ok
-      ? undefined
-      : nameResult.code === ApiCode.PARAM_INVALID
-        ? M10.nameRequired
-        : apiCodeMessage(nameResult.code),
-    price: priceResult.ok
-      ? undefined
-      : priceResult.code === ApiCode.PARAM_INVALID
-        ? M10.priceRequired
-        : apiCodeMessage(priceResult.code),
-    stock: stockResult.ok ? undefined : apiCodeMessage(stockResult.code),
-    category: categoryL1.value
-      ? categoryL2.value
-        ? undefined
-        : M10.categoryL2Required
-      : M10.categoryL1Required,
+onBeforeRouteLeave((to) => {
+  if (published.value || !isDirty.value || allowLeave) {
+    return true
   }
-  if (!nameResult.ok || !priceResult.ok || !stockResult.ok || !categoryL2.value) {
+  leaveTarget = to
+  leaveConfirmOpen.value = true
+  return false
+})
+
+function confirmLeave(): void {
+  leaveConfirmOpen.value = false
+  allowLeave = true
+  if (leaveTarget) {
+    void router.push(leaveTarget).finally(() => {
+      allowLeave = false
+    })
+  }
+}
+
+function onBeforeUnload(event: BeforeUnloadEvent): void {
+  if (isDirty.value && !published.value) {
+    event.preventDefault()
+  }
+}
+
+onMounted(() => window.addEventListener('beforeunload', onBeforeUnload))
+onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload))
+
+// ---- 表单展示与提交 ----
+
+const nameCharCount = computed(() => countChars(name.value.trim()))
+const nameOverLimit = computed(() => nameCharCount.value > GOODS_NAME_MAX_CHARS)
+
+const progressText = computed(() => {
+  if (phase.value === 'uploading') {
+    return uploadTotal.value > 0
+      ? `上传媒体 ${uploadedCount.value}/${uploadTotal.value}…`
+      : '准备中…'
+  }
+  if (phase.value === 'publishing') {
+    return '发布中…'
+  }
+  return ''
+})
+
+const submitLabel = computed(() => {
+  if (submitting.value) {
+    return progressText.value || '处理中…'
+  }
+  return attemptFailed.value ? '重试发布' : '发布商品'
+})
+
+function onSubmit(): void {
+  const result = validatePublishForm({
+    name: name.value,
+    price: price.value,
+    stock: stock.value,
+    categoryL1: categoryL1.value,
+    categoryL2: categoryL2.value,
+  })
+  errors.value = result.errors
+  if (!result.values) {
     return
   }
 
@@ -87,10 +128,7 @@ function onSubmit(): void {
     toast.error(M10.descriptionInvalid)
     return
   }
-  const textHasBracket = editorLines.value.some(
-    (line) => line.kind === 'text' && hasAngleBracket(line.content),
-  )
-  if (textHasBracket) {
+  if (editorLines.value.some((line) => line.kind === 'text' && hasAngleBracket(line.content))) {
     toast.error(M10.descriptionInvalid)
     return
   }
@@ -100,10 +138,10 @@ function onSubmit(): void {
   }
 
   pendingPayload.value = {
-    name: nameResult.value,
-    price: Number(priceResult.value),
-    stock: stockResult.value,
-    category_id: categoryL2.value,
+    name: result.values.name,
+    price: result.values.price,
+    stock: result.values.stock,
+    category_id: result.values.categoryId,
   }
   confirmOpen.value = true
 }
@@ -114,80 +152,15 @@ async function doPublish(): Promise<void> {
     return
   }
   confirmOpen.value = false
-  submitting.value = true
-  try {
-    // 1) 统一上传:主图 → 图集 → 描述媒体(按行序)。串行上传便于进度提示;
-    //    失败即中止,已成功者的 url 已缓存,重试只传剩余。
-    const uploads: { purpose: MediaPurpose; run: () => Promise<void> }[] = []
-    for (const item of mainImages.value) {
-      if (!item.url) {
-        uploads.push({
-          purpose: 'GOODS_IMAGE',
-          run: async () => {
-            item.url = (await uploadMedia(item.file, 'GOODS_IMAGE')).url
-          },
-        })
-      }
-    }
-    for (const item of galleryImages.value) {
-      if (!item.url) {
-        uploads.push({
-          purpose: 'GOODS_IMAGE',
-          run: async () => {
-            item.url = (await uploadMedia(item.file, 'GOODS_IMAGE')).url
-          },
-        })
-      }
-    }
-    for (const line of pendingMediaLines(editorLines.value)) {
-      uploads.push({
-        purpose: 'DESCRIPTION_MEDIA',
-        run: async () => {
-          line.url = (await uploadMedia(line.file, 'DESCRIPTION_MEDIA')).url
-        },
-      })
-    }
-
-    for (let i = 0; i < uploads.length; i += 1) {
-      progressText.value = `上传媒体 ${i + 1}/${uploads.length}…`
-      const task = uploads[i]
-      if (task) {
-        await task.run()
-      }
-    }
-
-    // 2) 终检:此刻所有 URL 已回填,结构与前缀校验完整可做。
-    const mainUrl = mainImages.value[0]?.url ?? null
-    const galleryUrls = galleryImages.value
-      .map((item) => item.url)
-      .filter((url): url is string => url != null)
-    const imageCheck = validateImageSelection(mainUrl, galleryUrls)
-    if (!imageCheck.ok) {
-      toast.error(apiCodeMessage(imageCheck.code))
-      return
-    }
-    const blocks = toDescriptionBlocks(editorLines.value)
-    const descCheck = validateDescriptionBlocks(blocks)
-    if (!descCheck.ok) {
-      toast.error(apiCodeMessage(descCheck.code))
-      return
-    }
-
-    // 3) 发布
-    progressText.value = '发布中…'
-    await publishGoods({
-      ...payload,
-      description: blocks,
-      main_image: mainUrl,
-      gallery_images: galleryUrls,
-    })
+  const ok = await run(payload, {
+    mainImages: mainImages.value,
+    galleryImages: galleryImages.value,
+    lines: editorLines.value,
+  })
+  if (ok) {
+    published.value = true
     toast.success(M10.publishSuccess)
     await router.replace({ name: 'goods-list' })
-  } catch (caught) {
-    toast.error(errorMessage(caught))
-  } finally {
-    submitting.value = false
-    progressText.value = ''
   }
 }
 </script>
@@ -218,7 +191,15 @@ async function doPublish(): Promise<void> {
           maxlength="60"
           :disabled="submitting"
         />
-        <p v-if="errors.name" class="mt-1 text-xs text-error">{{ errors.name }}</p>
+        <div class="mt-1 flex items-baseline gap-2">
+          <p v-if="errors.name" class="m-0 text-xs text-error">{{ errors.name }}</p>
+          <span
+            class="ml-auto text-xs tabular-nums"
+            :class="nameOverLimit ? 'font-semibold text-error' : 'text-base-content/60'"
+          >
+            {{ nameCharCount }}/{{ GOODS_NAME_MAX_CHARS }}
+          </span>
+        </div>
       </fieldset>
 
       <div class="grid gap-4 sm:grid-cols-2">
@@ -279,7 +260,7 @@ async function doPublish(): Promise<void> {
 
       <fieldset class="fieldset">
         <legend class="fieldset-legend text-xs">商品描述</legend>
-        <DescriptionBlockEditor v-model="editorLines" />
+        <DescriptionBlockEditor v-model="editorLines" :disabled="submitting" />
       </fieldset>
 
       <div class="flex justify-end pt-1">
@@ -287,15 +268,34 @@ async function doPublish(): Promise<void> {
           {{ submitLabel }}
         </button>
       </div>
+
+      <div v-if="submitting" class="flex flex-col gap-1.5" role="status">
+        <progress
+          class="progress progress-primary w-full"
+          :value="phase === 'uploading' && uploadTotal > 0 ? uploadedCount : undefined"
+          :max="uploadTotal || undefined"
+        ></progress>
+        <p class="m-0 text-xs text-base-content/60">{{ progressText }}</p>
+      </div>
     </form>
 
     <ConfirmDialog
       :open="confirmOpen"
-      :message="M10.confirmPublish"
-      confirm-text="确认发布"
+      :message="attemptFailed ? M10.confirmPublishRetry : M10.confirmPublish"
+      :confirm-text="attemptFailed ? '确认重试' : '确认发布'"
       :loading="submitting"
       @confirm="doPublish"
       @cancel="confirmOpen = false"
+    />
+
+    <ConfirmDialog
+      :open="leaveConfirmOpen"
+      :message="M10.confirmLeavePublish"
+      confirm-text="离开"
+      cancel-text="留下"
+      danger
+      @confirm="confirmLeave"
+      @cancel="leaveConfirmOpen = false"
     />
   </div>
 </template>
