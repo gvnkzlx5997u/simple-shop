@@ -2,20 +2,23 @@ import { expect, test } from '@playwright/test';
 
 import { buyerLogin, call, newApi, newBuyer, sellerLogin } from '../helpers/api';
 import { buyerFixture } from '../helpers/data';
-import { BUYER_URL, SELLER_URL } from '../helpers/config';
+import { SELLER_URL } from '../helpers/config';
 import { buyerLoginUi, buyerRegisterUi, sellerLoginUi } from '../helpers/ui';
 
 /**
  * 01 认证与令牌隔离
  *
- * 对应阶段二：买家从「口令码」改为「账号体系」，买家/卖家令牌不能互用。
- * 旧套件 01-buyer 的 A2~A9 全部依赖口令码，已作废（见 E2E旧用例对照表）。
+ * 阶段三口径没变：买家账号体系 + 买卖家令牌不能互用。
+ * 变化只有选择器（卖家端换 daisyUI，表单是 fieldset/legend，用 id 定位）与被调接口
+ * （阶段二的 `/api/buyer/intentions` 已下线，换成 `/api/buyer/cart`）。
  */
 test.describe('01 认证与令牌隔离', () => {
   test('T01-01 卖家未登录访问后台 → 跳登录页', async ({ page }) => {
     await page.goto(`${SELLER_URL}/`);
     await expect(page).toHaveURL(/\/login/);
-    await expect(page.getByRole('heading', { name: 'SimpleShop 卖家后台' })).toBeVisible();
+    // 登录页没有 h1：品牌名与「卖家后台」是两个 <p>，用输入框 + 文案双重确认
+    await expect(page.locator('#account')).toBeVisible();
+    await expect(page.getByText('卖家后台')).toBeVisible();
   });
 
   test('T01-02 卖家登录成功 → 进入商品列表', async ({ page }) => {
@@ -26,12 +29,13 @@ test.describe('01 认证与令牌隔离', () => {
 
   test('T01-03 卖家密码错误 → 停留在登录页', async ({ page }) => {
     await page.goto(`${SELLER_URL}/login`);
-    await page.getByLabel('账号').fill('seller');
-    await page.getByLabel('密码').fill('definitely-wrong-password');
+    await page.locator('#account').fill('seller');
+    await page.locator('#password').fill('definitely-wrong-password');
     await page.getByRole('button', { name: '登录', exact: true }).click();
 
+    // 10001 回填到密码字段下方，而不是弹 toast
+    await expect(page.getByText('账号或密码错误')).toBeVisible();
     await expect(page).toHaveURL(/\/login/);
-    // 不应进入后台
     await expect(page.getByRole('heading', { name: '商品列表' })).toHaveCount(0);
   });
 
@@ -44,7 +48,6 @@ test.describe('01 认证与令牌隔离', () => {
       location: fixture.default_location,
     });
     await expect(page).toHaveURL(/\/goods/);
-    // 列表页存在（无商品也应有搜索区）
     await expect(page.getByPlaceholder('搜索商品名称或描述')).toBeVisible();
   });
 
@@ -64,9 +67,9 @@ test.describe('01 认证与令牌隔离', () => {
     const buyerToken = await newBuyer(ctx, fixture);
 
     const result = await call(ctx, 'GET', '/api/seller/customers', undefined, { token: buyerToken });
-    // 约定：401 + 10002；只要不是"成功拿到数据"即算拦住
+    // 约定：401 + 10002（角色不匹配与未登录同码）
     expect(
-      result.status === 401 || result.body.code === 10002 || result.body.code === 10001,
+      result.status === 401 || result.body.code === 10002,
       `买家令牌不应能访问卖家接口，实际 HTTP ${result.status} code ${result.body.code}`,
     ).toBeTruthy();
 
@@ -76,13 +79,13 @@ test.describe('01 认证与令牌隔离', () => {
   test('T01-07 卖家令牌调买家接口 → 拒绝', async () => {
     const ctx = await newApi();
     const sellerToken = await sellerLogin(ctx);
-    const fixture = buyerFixture('cross2');
 
-    const result = await call(ctx, 'POST', '/api/buyer/intentions', { goods_id: 'NOT-EXIST' }, {
+    // 阶段二这里打的是 /api/buyer/intentions（已下线），换成仍然存在的加购接口
+    const result = await call(ctx, 'POST', '/api/buyer/cart', { goods_id: 'NOT-EXIST' }, {
       token: sellerToken,
     });
     expect(
-      result.status === 401 || result.body.code === 10002 || result.body.code === 10001,
+      result.status === 401 || result.body.code === 10002,
       `卖家令牌不应能调买家接口，实际 HTTP ${result.status} code ${result.body.code}`,
     ).toBeTruthy();
 

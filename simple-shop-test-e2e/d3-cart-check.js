@@ -8,32 +8,35 @@
  * 用法：node d3-cart-check.js
  */
 const { chromium } = require('playwright')
-const { execSync } = require('child_process')
+const db = require('./scripts/db')
 
-const BASE = process.env.BUYER_BASE_URL || 'http://localhost:5174'
-const DB = process.env.TEST_DB || 'simple_shop_d1'
-const MYSQL = process.env.MYSQL_BIN || 'mysql'
-const DB_USER = process.env.DB_USER || 'root'
-const DB_PASSWORD = process.env.DB_PASSWORD || ''
+// 地址与 Playwright 共用 .env 里的 BUYER_URL；旧名 BUYER_BASE_URL 仍兼容。
+const BASE = process.env.BUYER_URL || process.env.BUYER_BASE_URL || 'http://localhost:5174'
+/**
+ * 夹具库（.env 的 E2E_FIXTURE_DB_NAME），不是 E2E 主库 simple_shop_e2e：
+ * 本脚本要用的 GD-D1-* 商品在夹具库里，两套数据不能混。
+ */
+const DB_NAME = process.env.E2E_FIXTURE_DB_NAME || process.env.TEST_DB || 'simple_shop_d1'
 
 /**
- * 单行 SQL 才能通过 cmd.exe 传参——多行会被拆成多条命令，只执行第一段。
- * 查询失败返回 SQLERR 而不是抛出，让整轮验证能跑完再报问题。
+ * 单值查询：走 node 直连（scripts/db.js），不再拼 `mysql -e` 过 cmd.exe。
+ * 返回字符串（NULL → 空串），与原来 `mysql -N -B` 的输出口径一致，
+ * 所以下面所有 `=== '1'` / `=== '230.00'` 的断言不需要改。
+ * 库名固定为 TEST_DB，避免与 E2E 主库 simple_shop_e2e 混淆。
  */
-function sql(q) {
-  const cmd = `${MYSQL} -u${DB_USER} -p${DB_PASSWORD} -N -B --default-character-set=utf8mb4 ${DB} -e "${q}" 2>nul`
-  try {
-    return execSync(cmd, { shell: 'cmd.exe' }).toString().trim()
-  } catch (e) {
-    const msg = String(e.message).split('\n').filter((l) => l.includes('ERROR')).join(' ')
-    return 'SQLERR ' + msg.slice(0, 120)
-  }
-}
+const sql = (q) => db.scalar(q, [], { database: DB_NAME })
 
 const log = []
 const step = (s) => log.push(s)
 
 async function main() {
+  // 先探活：连不上库时立刻停下，别等到登录完才发现对账查不了。
+  const health = await db.probe({ database: DB_NAME })
+  if (!health.ok) {
+    console.error(`[E2E] 连不上数据库 ${health.target}：${health.reason}`)
+    process.exit(2)
+  }
+
   const browser = await chromium.launch({ channel: 'msedge' })
   const ctx = await browser.newContext()
   const page = await ctx.newPage()
@@ -59,7 +62,7 @@ async function main() {
   await ins.nth(3).fill('验证地点')
   await page.click('button.primary')
   await page.waitForTimeout(1800)
-  const dbUser = sql(`SELECT COUNT(*) FROM simpleshop_buyer_account WHERE username='${user}'`)
+  const dbUser = await sql(`SELECT COUNT(*) FROM simpleshop_buyer_account WHERE username='${user}'`)
   step(`[1] 注册 ${user} → 数据库查到该账号 ${dbUser} 条`)
 
   // 2. 加购两件
@@ -68,8 +71,8 @@ async function main() {
     await page.click('button:has-text("加入购物车")')
     await page.waitForTimeout(900)
   }
-  const cartCount = sql(`SELECT COUNT(*) FROM simpleshop_cart_item c ${byUser}`)
-  const cartGoods = sql(
+  const cartCount = await sql(`SELECT COUNT(*) FROM simpleshop_cart_item c ${byUser}`)
+  const cartGoods = await sql(
     `SELECT GROUP_CONCAT(c.fk_goods_id SEPARATOR ',') FROM simpleshop_cart_item c ${byUser}`,
   )
   step(`[2] 加购 2 件 → 数据库购物车 ${cartCount} 行：[${cartGoods}]`)
@@ -88,9 +91,9 @@ async function main() {
   await page.locator('.row-item', { hasText: '测试耳机在售' }).locator('.row-check').uncheck()
   await page.waitForTimeout(400)
   const uiTotal1 = await total()
-  const cartCount2 = sql(`SELECT COUNT(*) FROM simpleshop_cart_item c ${byUser}`)
-  const qtyCols = sql(
-    `SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='${DB}' AND table_name='simpleshop_cart_item' AND column_name IN ('quantity','checked')`,
+  const cartCount2 = await sql(`SELECT COUNT(*) FROM simpleshop_cart_item c ${byUser}`)
+  const qtyCols = await sql(
+    `SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='${DB_NAME}' AND table_name='simpleshop_cart_item' AND column_name IN ('quantity','checked')`,
   )
   step(`[4] 改数量=2、取消勾选耳机 → 页面合计 ${uiTotal1}（应 = 15.50×2 = 31.00）`)
   step(`    同时数据库购物车仍 ${cartCount2} 行；购物车表数量/勾选列数 = ${qtyCols}（0 = 后端确实不存）`)
@@ -102,21 +105,21 @@ async function main() {
   step(`[5] 勾回耳机 → 页面合计 ${uiTotal2}（应 = 199×1 + 15.50×2 = 230.00）`)
 
   // 5. 结算
-  const orderBefore = sql(
+  const orderBefore = await sql(
     `SELECT COUNT(*) FROM simpleshop_order o JOIN simpleshop_buyer_account b ON b.id=o.fk_buyer_id WHERE b.username='${user}'`,
   )
   await page.click('button.checkout')
   await page.waitForTimeout(2500)
   const uiAfter = await body()
-  const orderAfter = sql(
+  const orderAfter = await sql(
     `SELECT COUNT(*) FROM simpleshop_order o JOIN simpleshop_buyer_account b ON b.id=o.fk_buyer_id WHERE b.username='${user}'`,
   )
   const orderNo = (uiAfter.match(/订单号\s*(SO\d+)/) || [])[1] || '(未捕获)'
-  const dbTotal = sql(`SELECT total_amount FROM simpleshop_order WHERE order_no='${orderNo}'`)
-  const dbItems = sql(
+  const dbTotal = await sql(`SELECT total_amount FROM simpleshop_order WHERE order_no='${orderNo}'`)
+  const dbItems = await sql(
     `SELECT GROUP_CONCAT(CONCAT(i.goods_name,' ',i.unit_price,'x',i.quantity) SEPARATOR ' + ') FROM simpleshop_order_item i JOIN simpleshop_order o ON o.id=i.fk_order_id WHERE o.order_no='${orderNo}'`,
   )
-  const dbSum = sql(
+  const dbSum = await sql(
     `SELECT SUM(i.unit_price*i.quantity) FROM simpleshop_order_item i JOIN simpleshop_order o ON o.id=i.fk_order_id WHERE o.order_no='${orderNo}'`,
   )
   step(`[6] 点结算 → 页面出现订单号 ${orderNo}`)
@@ -124,7 +127,7 @@ async function main() {
   step(`    数据库明细：${dbItems}；明细金额之和 = ${dbSum}`)
 
   // 6. 收尾
-  const cartAfter = sql(`SELECT COUNT(*) FROM simpleshop_cart_item c ${byUser}`)
+  const cartAfter = await sql(`SELECT COUNT(*) FROM simpleshop_cart_item c ${byUser}`)
   const uiEmpty = (await body()).includes('购物车是空的')
   step(`[7] 下单后 → 页面空态=${uiEmpty}；数据库购物车剩 ${cartAfter} 行`)
 
@@ -155,10 +158,12 @@ async function main() {
   errs.slice(0, 5).forEach((e) => console.log('  ' + e))
 
   await browser.close()
+  await db.close()
   process.exit(pass === checks.length ? 0 : 1)
 }
 
-main().catch((e) => {
+main().catch(async (e) => {
   console.error('脚本异常：', e.message)
+  await db.close()
   process.exit(2)
 })

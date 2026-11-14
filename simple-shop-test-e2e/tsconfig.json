@@ -1,0 +1,21 @@
+{
+  "//": "E2E 工程自己的类型检查配置。Playwright 运行时只做转译、不做类型检查，所以用 tsc --noEmit 单独把关（npm run typecheck）。module 取 commonjs 与 Playwright 的转译方式一致，__dirname 等 CJS 全局也才有类型。",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023", "DOM"],
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "types": ["node"],
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "resolveJsonModule": true
+  },
+  "include": ["tests/**/*.ts", "helpers/**/*.ts", "playwright.config.ts"],
+  "exclude": ["node_modules", "archive", "report", "evidence"]
+}
