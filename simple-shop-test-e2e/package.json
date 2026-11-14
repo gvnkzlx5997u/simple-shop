@@ -12,6 +12,7 @@
     "test:auth": "playwright test tests/01-auth.spec.ts",
     "typecheck": "tsc --noEmit",
     "clean": "node scripts/clean.js",
+    "perf": "node scripts/perf.mjs",
     "report": "playwright show-report report",
     "db:reset": "node scripts/reset-e2e-db.js",
     "db:probe": "node scripts/reset-e2e-db.js --dry-run",

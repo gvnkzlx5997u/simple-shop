@@ -231,3 +231,41 @@ simple-shop-test-e2e/
 - 分页翻页与多页边界（当前数据量不足以触发第二页）；
 - 浏览器返回/刷新深链、多标签页并发；
 - 移动端适配（本轮不做）。
+
+---
+
+## 七、性能测量（`npm run perf`）
+
+E2E 工程里带了一个首屏测量脚本，量的是**构建产物**（`npm run preview`），不是 dev server：
+
+```bash
+# 前置：后端 8080；卖家端 npm run build && npm run preview（预览已配 /api 代理）
+npm run perf -- --url=http://localhost:4173/login --name=卖家登录
+npm run perf -- --url=http://localhost:4173/ --auth=seller --name=卖家首页
+npm run perf -- --url=... --runs=7 --settle=1500 --budget-lcp=2.5   # 当门禁用
+```
+
+默认条件：**CPU 4× 降速 + Slow 4G（150ms RTT / 1.6Mbps）· 冷缓存 · 5 次**，
+输出每次的 TTFB/FCP/LCP/CLS/TBT/请求数/传输量，再给中位数、p75、极差与 **LCP 元素**。
+`--auth=seller` 会先调接口拿令牌写进 localStorage，用来测登录后的页面。
+
+### 为什么不用 DevTools 手点
+
+| 手工测量的问题 | 这里的做法 |
+| --- | --- |
+| CPU/网络限速经常在导航之后才生效，前几帧是满速跑的 | 用 CDP 在 `goto` **之前**打限速 |
+| 单次结果方差极大（同一页面 1.2s 与 1.9s 都出现过） | 跑 N 次取中位数 + p75 + 极差 |
+| LCP 在首次交互/页面隐藏时才定稿，读早了拿到的是候选值 | `PerformanceObserver(buffered)` + load 后再等 `--settle` |
+| `npm run preview` 默认没有 /api 代理，首页可能量在「接口 404」的画面上 | preview 复用 server 的代理配置；首页用真实令牌登录后再测 |
+| 只看一个秒数，不知道是谁拖慢的 | 同时报 LCP 元素（标签 + 尺寸 + 文本）与请求数、传输量、长任务 |
+
+如果某次运行 FCP/LCP 为 0，脚本会提示：多半是**首屏被整页淡入/白屏包住**（合成器动画不产生 paint，
+Chromium 就不报 FCP），可以用 `--motion=reduce` 复测确认。卖家端就踩过这个坑，已在 `main.ts`
+改成 `router.isReady()` 后再挂载，详见卖家端 README §7.1。
+
+### 与 Lighthouse 的关系
+
+- 本脚本是「真实加载 + 应用限速」，测的是**这台机器上这个构建**的实际表现，适合改完代码立刻对比；
+- Lighthouse 的 `--throttling-method=simulate` 用 Lantern 模拟，跨机器可比性更好，适合对外汇报；
+  想跑就 `npx lighthouse http://localhost:4173/login --preset=desktop --view`（不装依赖，临时下载）。
+- 两者都只能代表实验室数据；有真实用户后应该上 `web-vitals` 上报，看字段数据（p75）。

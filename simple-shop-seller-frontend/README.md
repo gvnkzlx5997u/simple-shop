@@ -266,6 +266,39 @@ validation/ 按域拆分（login/goods/category），规则与后端一致：名
 - **连通性测试**默认访问 http://localhost:8080，验证登录与受保护接口的 10002 语义；后端不可达时**自动跳过**并打印提示，不会让测试变红。可用环境变量覆盖：SMOKE_BASE_URL、SMOKE_ACCOUNT、SMOKE_PASSWORD。
 - vitest.config.ts 同时收集 `src/**/__tests__` 与 `test/` 两处；两个 npm 命令用路径过滤各取所需。
 
+### 7.1 首屏性能（LCP / FCP）
+
+用 E2E 工程里的 perf 脚本量**构建产物**，不要用 dev server，也不要在 DevTools 里手点：
+
+```bash
+# 前置：后端 8080 起着；本工程 npm run build && npm run preview（预览已配 /api 代理）
+cd ../simple-shop-test-e2e
+npm run perf -- --url=http://localhost:4173/login --name=卖家登录
+npm run perf -- --url=http://localhost:4173/ --name=卖家首页 --auth=seller --runs=5
+```
+
+条件：CPU 4× 降速 + Slow 4G（150ms RTT / 1.6Mbps），冷缓存，跑 5 次取中位数并报 LCP 元素。
+加 `--budget-lcp=2.5` 可当门禁（超预算退出码 1）。
+
+**基线（2026-11-14，本机）**
+
+| 页面 | TTFB | FCP | LCP（中位） | LCP 元素 | CLS |
+| --- | --- | --- | --- | --- | :---: |
+| `/login` | 0.15s | 1.27s | **1.27s** | `p` SimpleShop 87×24 | 0 |
+| `/`（登录态） | 0.15s | 1.65s | **1.84s** | 商品卡主图 `img` 209×209 | 0 |
+
+首页的 LCP 是列表接口返回后加载的主图，所以「接口慢 / 图大」会直接反映在 LCP 上；
+登录页几乎没有图片，LCP 就是标题文字，主要成本在「下载 JS + 4× 降速下解析执行」。
+
+**已修：首帧整页淡入导致 FCP/LCP 无法测量**
+
+之前 `<RouterView>` 外包着 `<Transition name="fade">`，而 `app.mount()` 不等路由就绪：
+首次渲染拿不到目标组件，等路由解析完再「进场」，整页从 `opacity:0` 淡到 1。
+合成器驱动的透明度动画不产生新的 paint，Chromium 因此**只报 first-paint、不报 FCP/LCP**
+（实测：默认动效偏好下 `performance.getEntriesByType('paint')` 永远只有 first-paint，
+把系统改成「减少动效」才出现 FCP）。修法是在 `main.ts` 里 `router.isReady()` 后再挂载，
+首屏直接渲染目标页面，`<Transition>` 看到的是首次渲染而不是进场。
+
 ---
 
 ## 八、已知偏离与限制
