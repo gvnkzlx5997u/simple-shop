@@ -1,28 +1,22 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
-import {
-  createL1,
-  createL2,
-  newApi,
-  newBuyer,
-  publishGoods,
-  sellerLogin,
-  submitIntention,
-} from '../helpers/api';
-import { buyerFixture, goodsFixture, uniqueName } from '../helpers/data';
+import { createL1, createL2, newApi, publishGoods, sellerLogin } from '../helpers/api';
+import { goodsFixture, uniqueName } from '../helpers/data';
 import { BUYER_URL } from '../helpers/config';
-import { buyerLoginUi, buyerOpenGoods } from '../helpers/ui';
+import { buyerOpenGoods, buyerSearch } from '../helpers/ui';
 
 /**
- * 02 买家端：列表 / 搜索 / 类别筛选 / 详情 / 提交意向 / 我的历史
+ * 02 买家端：列表 / 搜索 / 类别筛选 / 详情
+ *
+ * 阶段二的两条「提交意向」「我的历史」已删除：阶段三买家走购物车下单，
+ * `/history` 整页下线。购物车与订单行为留给买家端自己的 spec（下一轮并入）。
  *
  * 造数全部走接口（快且稳），被测流程走真实 UI。
  * 关键口径：
- *  - 买家匿名可看在售商品（人工分析 §15；基线 AC-12 已作废）
- *  - 搜索只匹配名称（Backlog ID6）
- *  - 提交意向不等于下单完成，历史里看不到（分析§5、澄清#16）
+ *  - 买家匿名可看在售商品
+ *  - 搜索只匹配名称（后端 `g.name like`，描述不参与）
  */
-test.describe('02 买家端浏览与下单', () => {
+test.describe('02 买家端浏览与搜索', () => {
   let ctx: APIRequestContext;
   let sellerToken: string;
   let l1Name: string;
@@ -54,13 +48,13 @@ test.describe('02 买家端浏览与下单', () => {
     otherL2Id = l2b.id;
 
     keyword = uniqueName('kw');
-    // A：名称含搜索词；B：名称不含，但描述含 —— 用来验证"只匹配名称"
-    goodsA = await publishGoods(
+    // A：名称含搜索词；B：名称不含，但描述含 —— 用来验证「只匹配名称」
+    const a = await publishGoods(
       ctx,
       sellerToken,
       goodsFixture(`商品A-${keyword}`, l2Id, { stock: 2, price: '99.90' }),
     );
-    goodsB = await publishGoods(
+    const b = await publishGoods(
       ctx,
       sellerToken,
       goodsFixture(uniqueName('商品B'), otherL2Id, {
@@ -68,6 +62,8 @@ test.describe('02 买家端浏览与下单', () => {
         description: [{ type: 'TEXT', text: `描述里含关键字 ${keyword}` }],
       }),
     );
+    goodsA = { id: a.id, name: a.name };
+    goodsB = { id: b.id, name: b.name };
   });
 
   test.afterAll(async () => {
@@ -76,16 +72,14 @@ test.describe('02 买家端浏览与下单', () => {
 
   test('T02-01 匿名可看在售列表，且能搜到名称命中的商品', async ({ page }) => {
     await page.goto(`${BUYER_URL}/goods`);
-    await page.getByPlaceholder('搜索商品名称或描述').fill(keyword);
-    await page.getByRole('button', { name: '搜索' }).click();
+    await buyerSearch(page, keyword);
 
     await expect(page.locator('.goods-card').filter({ hasText: goodsA.name })).toHaveCount(1);
   });
 
   test('T02-02 搜索不匹配描述（只匹配名称）', async ({ page }) => {
     await page.goto(`${BUYER_URL}/goods`);
-    await page.getByPlaceholder('搜索商品名称或描述').fill(keyword);
-    await page.getByRole('button', { name: '搜索' }).click();
+    await buyerSearch(page, keyword);
     await expect(page.locator('.goods-card').filter({ hasText: goodsA.name })).toHaveCount(1);
 
     // B 的描述里有同一个词，但名称没有 —— 不应出现在结果里
@@ -107,36 +101,9 @@ test.describe('02 买家端浏览与下单', () => {
     await buyerOpenGoods(page, goodsA.name);
 
     await expect(page.locator('.summary .title')).toHaveText(goodsA.name);
-    // 注：后端返回 99.90，前端当作数字渲染成「¥99.9」—— 末尾 0 不保留（见 README「已知现象」）
-    await expect(page.locator('.summary .price')).toContainText(/¥\s*99\.9/);
+    // 买家端金额统一两位小数（formatMoney → toFixed(2)），不再出现阶段二的 ¥99.9
+    await expect(page.locator('.summary .price')).toContainText('¥99.90');
     await expect(page.locator('.summary')).toContainText('库存 2');
-    await expect(page.getByRole('heading', { name: '商品描述' })).toBeVisible();
     await expect(page.locator('.description')).toContainText('E2E 自动创建的商品描述');
-  });
-
-  test('T02-05 登录后提交意向 → 提示已提交', async ({ page }) => {
-    const fixture = buyerFixture('want');
-    await newBuyer(ctx, fixture);
-
-    await buyerLoginUi(page, fixture.username, fixture.password);
-    await page.goto(`${BUYER_URL}/goods`);
-    await buyerOpenGoods(page, goodsA.name);
-
-    await page.getByRole('button', { name: '我要购买' }).click();
-    await expect(page.locator('.notice')).toContainText('已提交购买意向');
-  });
-
-  test('T02-06 我的历史：排队中的意向不可见', async ({ page }) => {
-    const fixture = buyerFixture('hist');
-    const token = await newBuyer(ctx, fixture);
-    // 先制造一条"排队中"的意向
-    await submitIntention(ctx, token, goodsA.id);
-
-    await buyerLoginUi(page, fixture.username, fixture.password);
-    await page.goto(`${BUYER_URL}/history`);
-
-    // 没有终态记录 → 空态提示，且不出现商品名
-    await expect(page.locator('.muted').filter({ hasText: '还没有已结束的下单记录' })).toBeVisible();
-    await expect(page.locator('table')).toHaveCount(0);
   });
 });

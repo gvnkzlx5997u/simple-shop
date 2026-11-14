@@ -15,27 +15,23 @@
  * 跑法：node d5-full-regression.js
  */
 const { chromium } = require('playwright');
-const { execSync } = require('child_process');
+const db = require('./scripts/db');
 
-const BASE = process.env.E2E_BASE_URL || 'http://localhost:5174';
-const DB = process.env.E2E_DB_NAME || 'simple_shop_d1';
-const PASS = process.env.E2E_DB_PASSWORD || process.env.DB_PASSWORD;
-if (!PASS) {
-  console.error('缺少环境变量 E2E_DB_PASSWORD');
-  process.exit(2);
-}
+// 地址与 Playwright 共用 .env 里的 BUYER_URL；旧名 E2E_BASE_URL 仍兼容。
+const BASE = process.env.BUYER_URL || process.env.E2E_BASE_URL || 'http://localhost:5174';
+/**
+ * 固定连买家端夹具库（.env 的 E2E_FIXTURE_DB_NAME，默认 simple_shop_d1），
+ * 与 E2E 主库 simple_shop_e2e 分开。注意**不能**读 E2E_DB_NAME——
+ * 那是 db:reset 用的主库，混用会把夹具数据和对账对象搞错。
+ */
+const DB_NAME = process.env.E2E_FIXTURE_DB_NAME || process.env.TEST_DB || 'simple_shop_d1';
 
-/** 所有 SQL 必须单行：cmd.exe 会把换行当命令分隔符。 */
-const SQL = (q) => {
-  try {
-    return execSync(
-      `mysql -uroot -p${PASS} -N -B --default-character-set=utf8mb4 ${DB} -e "${q}" 2>nul`,
-      { shell: 'cmd.exe' },
-    ).toString().trim();
-  } catch (e) {
-    return 'SQLERR';
-  }
-};
+/**
+ * 单值查询：走 node 直连（scripts/db.js），不再拼 `mysql -e` 过 cmd.exe。
+ * 返回字符串（NULL → 空串），与原来 `mysql -N -B` 的输出口径一致，
+ * 所以下面 `=== '1'`、`=== '230.00'` 这类断言不用改。
+ */
+const SQL = (q) => db.scalar(q, [], { database: DB_NAME });
 
 const results = [];
 const t = async (name, fn) => {
@@ -47,27 +43,28 @@ const t = async (name, fn) => {
 };
 const ok = (r) => String(r).startsWith('PASS');
 
-function resetFixtures() {
-  SQL(`UPDATE simpleshop_goods SET status='ON_SALE', off_shelf_reason=NULL, off_shelf_at=NULL WHERE id LIKE 'GD-%'`);
-  SQL(`UPDATE simpleshop_goods_stock SET available=5 WHERE fk_goods_id='GD-D1-ON'`);
-  SQL(`UPDATE simpleshop_goods_stock SET available=3 WHERE fk_goods_id='GD-D1-ON3'`);
-  SQL(`UPDATE simpleshop_goods_stock SET available=0 WHERE fk_goods_id='GD-D1-ON2'`);
-  SQL(`UPDATE simpleshop_goods_stock SET available=5 WHERE fk_goods_id LIKE 'GD-FAV-%'`);
-  SQL(`UPDATE simpleshop_goods SET status='OFF_SHELF', off_shelf_reason='MANUAL', off_shelf_at=UTC_TIMESTAMP() WHERE id='GD-D1-OFF'`);
+async function resetFixtures() {
+  await SQL(`UPDATE simpleshop_goods SET status='ON_SALE', off_shelf_reason=NULL, off_shelf_at=NULL WHERE id LIKE 'GD-%'`);
+  await SQL(`UPDATE simpleshop_goods_stock SET available=5 WHERE fk_goods_id='GD-D1-ON'`);
+  await SQL(`UPDATE simpleshop_goods_stock SET available=3 WHERE fk_goods_id='GD-D1-ON3'`);
+  await SQL(`UPDATE simpleshop_goods_stock SET available=0 WHERE fk_goods_id='GD-D1-ON2'`);
+  await SQL(`UPDATE simpleshop_goods_stock SET available=5 WHERE fk_goods_id LIKE 'GD-FAV-%'`);
+  await SQL(`UPDATE simpleshop_goods SET status='OFF_SHELF', off_shelf_reason='MANUAL', off_shelf_at=UTC_TIMESTAMP() WHERE id='GD-D1-OFF'`);
 }
 
-function cleanupUser(username) {
-  const id = SQL(`SELECT id FROM simpleshop_buyer_account WHERE username='${username}'`);
-  if (!id || id === 'SQLERR' || !id.trim()) return;
-  SQL(`DELETE i FROM simpleshop_order_item i JOIN simpleshop_order o ON o.id=i.fk_order_id WHERE o.fk_buyer_id='${id}'`);
-  SQL(`DELETE FROM simpleshop_order WHERE fk_buyer_id='${id}'`);
-  SQL(`DELETE FROM simpleshop_favorite WHERE fk_buyer_id='${id}'`);
-  SQL(`DELETE FROM simpleshop_cart_item WHERE fk_buyer_id='${id}'`);
-  SQL(`DELETE FROM simpleshop_buyer_account WHERE id='${id}'`);
+async function cleanupUser(username) {
+  const id = await SQL(`SELECT id FROM simpleshop_buyer_account WHERE username='${username}'`);
+  // 查不到就没什么可清（查库失败会直接抛，不再像以前那样静默返回 SQLERR）。
+  if (!id) return;
+  await SQL(`DELETE i FROM simpleshop_order_item i JOIN simpleshop_order o ON o.id=i.fk_order_id WHERE o.fk_buyer_id='${id}'`);
+  await SQL(`DELETE FROM simpleshop_order WHERE fk_buyer_id='${id}'`);
+  await SQL(`DELETE FROM simpleshop_favorite WHERE fk_buyer_id='${id}'`);
+  await SQL(`DELETE FROM simpleshop_cart_item WHERE fk_buyer_id='${id}'`);
+  await SQL(`DELETE FROM simpleshop_buyer_account WHERE id='${id}'`);
 }
 
 (async () => {
-  resetFixtures();
+  await resetFixtures();
   const browser = await chromium.launch({ channel: 'msedge' });
   const user = 'd5' + Date.now().toString().slice(-7);
   const pageErrors = [];
@@ -124,8 +121,9 @@ function cleanupUser(username) {
     await anon.click('button.primary');
     await anon.waitForTimeout(1800);
     const b = await ab();
-    const db = SQL(`SELECT COUNT(*) FROM simpleshop_buyer_account WHERE username='${user}'`);
-    return b.includes(user) && db === '1' ? 'PASS 注册并入库' : `FAIL db=${db}`;
+    // 变量名不叫 db：会遮住上面 require 进来的连接模块。
+    const dbCount = await SQL(`SELECT COUNT(*) FROM simpleshop_buyer_account WHERE username='${user}'`);
+    return b.includes(user) && dbCount === '1' ? 'PASS 注册并入库' : `FAIL db=${dbCount}`;
   });
 
   await t('[A6] 未登录·退出后重新登录', async () => {
@@ -180,8 +178,8 @@ function cleanupUser(username) {
     await page.click('button:has-text("加入购物车")');
     await page.waitForTimeout(780);
   };
-  const cartRows = () =>
-    SQL(`SELECT COUNT(*) FROM simpleshop_cart_item c JOIN simpleshop_buyer_account b ON b.id=c.fk_buyer_id WHERE b.username='${user}'`);
+  const cartRows = async () =>
+    await SQL(`SELECT COUNT(*) FROM simpleshop_cart_item c JOIN simpleshop_buyer_account b ON b.id=c.fk_buyer_id WHERE b.username='${user}'`);
 
   // 先登录（A 组已注册并登录，但换了 context，这里重新登录）
   await page.goto(BASE + '/login', { waitUntil: 'networkidle' });
@@ -208,7 +206,8 @@ function cleanupUser(username) {
   await t('[B3] 重复加购提示已在车里', async () => {
     await page.click('button:has-text("加入购物车")');
     await page.waitForTimeout(900);
-    return (await body()).includes('已经在购物车里了') && cartRows() === '1' ? 'PASS 数据库仍 1 行' : 'FAIL ' + cartRows();
+    const rows = await cartRows();
+    return (await body()).includes('已经在购物车里了') && rows === '1' ? 'PASS 数据库仍 1 行' : 'FAIL ' + rows;
   });
 
   await t('[B4] 加购第二件', async () => {
@@ -262,7 +261,7 @@ function cleanupUser(username) {
   });
 
   await t('[B10] 失效行灰掉锁住并提示', async () => {
-    SQL(`UPDATE simpleshop_goods SET status='OFF_SHELF', off_shelf_reason='MANUAL', off_shelf_at=UTC_TIMESTAMP() WHERE id='GD-D1-ON3'`);
+    await SQL(`UPDATE simpleshop_goods SET status='OFF_SHELF', off_shelf_reason='MANUAL', off_shelf_at=UTC_TIMESTAMP() WHERE id='GD-D1-ON3'`);
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForTimeout(1000);
     const row = page.locator('.row-item', { hasText: '测试数据线' }).first();
@@ -278,7 +277,7 @@ function cleanupUser(username) {
     const tl = await total();
     return tl === '¥199.00' ? 'PASS ¥199.00' : 'FAIL ' + tl;
   });
-  SQL(`UPDATE simpleshop_goods SET status='ON_SALE', off_shelf_reason=NULL, off_shelf_at=NULL WHERE id='GD-D1-ON3'`);
+  await SQL(`UPDATE simpleshop_goods SET status='ON_SALE', off_shelf_reason=NULL, off_shelf_at=NULL WHERE id='GD-D1-ON3'`);
 
   await t('[B12] 删除单行', async () => {
     await page.reload({ waitUntil: 'networkidle' });
@@ -287,12 +286,13 @@ function cleanupUser(username) {
     await page.locator('.row-item', { hasText: '测试数据线在售' }).locator('button.remove').click();
     await page.waitForTimeout(1400);
     const after = await page.locator('.row-item').count();
-    return before === 2 && after === 1 && cartRows() === '1' ? 'PASS 2→1，库内1行' : `FAIL ${before}→${after} db=${cartRows()}`;
+    const dbRows = await cartRows();
+    return before === 2 && after === 1 && dbRows === '1' ? 'PASS 2→1，库内1行' : `FAIL ${before}→${after} db=${dbRows}`;
   });
 
   // ==================== C 组：下单 ====================
-  const orderCount = () =>
-    SQL(`SELECT COUNT(*) FROM simpleshop_order o JOIN simpleshop_buyer_account b ON b.id=o.fk_buyer_id WHERE b.username='${user}'`);
+  const orderCount = async () =>
+    await SQL(`SELECT COUNT(*) FROM simpleshop_order o JOIN simpleshop_buyer_account b ON b.id=o.fk_buyer_id WHERE b.username='${user}'`);
 
   await t('[C1] 单件下单并跳详情', async () => {
     // 购物车此时只剩耳机 1 件
@@ -331,7 +331,7 @@ function cleanupUser(username) {
     await page.goto(BASE + '/cart', { waitUntil: 'networkidle' });
     await page.waitForTimeout(800);
     // 勾好后下架其中一件
-    SQL(`UPDATE simpleshop_goods SET status='OFF_SHELF', off_shelf_reason='MANUAL', off_shelf_at=UTC_TIMESTAMP() WHERE id='GD-D1-ON3'`);
+    await SQL(`UPDATE simpleshop_goods SET status='OFF_SHELF', off_shelf_reason='MANUAL', off_shelf_at=UTC_TIMESTAMP() WHERE id='GD-D1-ON3'`);
     await page.locator('.bar .check-all input').check().catch(() => {});
     await page.waitForTimeout(400);
     await page.click('button.checkout');
@@ -346,7 +346,7 @@ function cleanupUser(username) {
     const dis = await row.locator('.row-check').isDisabled();
     return txt.includes('已下架') && dis ? 'PASS 该行标已下架并锁住' : `FAIL dis=${dis} txt=${txt.replace(/\n/g, '|').slice(0, 40)}`;
   });
-  SQL(`UPDATE simpleshop_goods SET status='ON_SALE', off_shelf_reason=NULL, off_shelf_at=NULL WHERE id='GD-D1-ON3'`);
+  await SQL(`UPDATE simpleshop_goods SET status='ON_SALE', off_shelf_reason=NULL, off_shelf_at=NULL WHERE id='GD-D1-ON3'`);
 
   await t('[C5] 库存不足被拒并提示', async () => {
     await page.goto(BASE + '/cart', { waitUntil: 'networkidle' });
@@ -356,7 +356,7 @@ function cleanupUser(username) {
     await row.locator('.qty-input').fill('3');
     await row.locator('.qty-input').blur();
     await page.waitForTimeout(400);
-    SQL(`UPDATE simpleshop_goods_stock SET available=1 WHERE fk_goods_id='GD-D1-ON3'`);
+    await SQL(`UPDATE simpleshop_goods_stock SET available=1 WHERE fk_goods_id='GD-D1-ON3'`);
     await page.locator('.bar .check-all input').check();
     await page.waitForTimeout(400);
     await page.click('button.checkout');
@@ -364,20 +364,20 @@ function cleanupUser(username) {
     const b = await body();
     return b.includes('库存不足') ? 'PASS 提示「库存不足」' : 'FAIL ' + b.slice(0, 130).replace(/\n/g, '|');
   });
-  SQL(`UPDATE simpleshop_goods_stock SET available=3 WHERE fk_goods_id='GD-D1-ON3'`);
+  await SQL(`UPDATE simpleshop_goods_stock SET available=3 WHERE fk_goods_id='GD-D1-ON3'`);
 
   // ==================== D 组：订单 ====================
   await t('[D1] 订单列表可见已下的单', async () => {
     await page.goto(BASE + '/orders', { waitUntil: 'networkidle' });
     await page.waitForTimeout(1000);
     const n = await page.locator('.order-row').count();
-    const db = orderCount();
+    const db = await orderCount();
     return n >= 2 && n === Number(db) ? `PASS 列表 ${n} 笔 = 数据库 ${db} 笔` : `FAIL 列表=${n} 库=${db}`;
   });
 
   await t('[D2] 订单列表分页（补到 12 笔）', async () => {
-    const bid = SQL(`SELECT id FROM simpleshop_buyer_account WHERE username='${user}'`);
-    SQL(`INSERT INTO simpleshop_order (id, order_no, fk_buyer_id, total_amount, status, create_at, update_at) SELECT CONCAT('D5', LPAD(n,2,'0'), '${user.slice(-4)}'), CONCAT('SOFILL', LPAD(n,4,'0')), '${bid}', 100+n, CASE WHEN n<=4 THEN 'CONFIRMED' WHEN n<=6 THEN 'SHIPPED' WHEN n<=8 THEN 'COMPLETED' ELSE 'CANCELED' END, DATE_ADD('2026-11-11 07:00:00', INTERVAL n MINUTE), DATE_ADD('2026-11-11 07:00:00', INTERVAL n MINUTE) FROM (SELECT 1 n UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9 UNION SELECT 10) t`);
+    const bid = await SQL(`SELECT id FROM simpleshop_buyer_account WHERE username='${user}'`);
+    await SQL(`INSERT INTO simpleshop_order (id, order_no, fk_buyer_id, total_amount, status, create_at, update_at) SELECT CONCAT('D5', LPAD(n,2,'0'), '${user.slice(-4)}'), CONCAT('SOFILL', LPAD(n,4,'0')), '${bid}', 100+n, CASE WHEN n<=4 THEN 'CONFIRMED' WHEN n<=6 THEN 'SHIPPED' WHEN n<=8 THEN 'COMPLETED' ELSE 'CANCELED' END, DATE_ADD('2026-11-11 07:00:00', INTERVAL n MINUTE), DATE_ADD('2026-11-11 07:00:00', INTERVAL n MINUTE) FROM (SELECT 1 n UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9 UNION SELECT 10) t`);
     await page.goto(BASE + '/orders', { waitUntil: 'networkidle' });
     await page.waitForTimeout(1100);
     const n = await page.locator('.order-row').count();
@@ -444,7 +444,7 @@ function cleanupUser(username) {
     const confirmShown = (await body()).includes('确认取消');
     await page.click('button:has-text("确认取消")');
     await page.waitForTimeout(1800);
-    const st = SQL(`SELECT status FROM simpleshop_order WHERE id='${id}'`);
+    const st = await SQL(`SELECT status FROM simpleshop_order WHERE id='${id}'`);
     return confirmShown && st === 'CANCELED' && (await body()).includes('已取消')
       ? 'PASS 二次确认 + 数据库 CANCELED' : `FAIL confirm=${confirmShown} st=${st}`;
   });
@@ -463,8 +463,8 @@ function cleanupUser(username) {
   await t('[D10] 打开后被发货→点取消提示已发货', async () => {
     await page.goto(BASE + '/orders', { waitUntil: 'networkidle' });
     await page.waitForTimeout(900);
-    const bid = SQL(`SELECT id FROM simpleshop_buyer_account WHERE username='${user}'`);
-    SQL(`UPDATE simpleshop_order SET status='PENDING_CONFIRM' WHERE order_no='SOFILL0001'`);
+    const bid = await SQL(`SELECT id FROM simpleshop_buyer_account WHERE username='${user}'`);
+    await SQL(`UPDATE simpleshop_order SET status='PENDING_CONFIRM' WHERE order_no='SOFILL0001'`);
     await page.goto(BASE + '/orders', { waitUntil: 'networkidle' });
     await page.waitForTimeout(900);
     await page.selectOption('.filter select', 'PENDING_CONFIRM');
@@ -472,7 +472,7 @@ function cleanupUser(username) {
     await page.locator('.order-row').first().click();
     await page.waitForTimeout(1600);
     const id = page.url().split('/orders/')[1];
-    SQL(`UPDATE simpleshop_order SET status='SHIPPED' WHERE id='${id}'`);
+    await SQL(`UPDATE simpleshop_order SET status='SHIPPED' WHERE id='${id}'`);
     await page.click('button:has-text("取消订单")');
     await page.waitForTimeout(400);
     await page.click('button:has-text("确认取消")');
@@ -506,7 +506,7 @@ function cleanupUser(username) {
   });
 
   await t('[E4] 失效商品保留并标注', async () => {
-    SQL(`UPDATE simpleshop_goods SET status='OFF_SHELF', off_shelf_reason='MANUAL', off_shelf_at=UTC_TIMESTAMP() WHERE id='GD-FAV-01'`);
+    await SQL(`UPDATE simpleshop_goods SET status='OFF_SHELF', off_shelf_reason='MANUAL', off_shelf_at=UTC_TIMESTAMP() WHERE id='GD-FAV-01'`);
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForTimeout(1000);
     const card = page.locator('.fav-card').first();
@@ -518,10 +518,10 @@ function cleanupUser(username) {
   await t('[E5] 取消收藏', async () => {
     await page.locator('.fav-card').first().locator('button.remove').click();
     await page.waitForTimeout(1400);
-    const n = SQL(`SELECT COUNT(*) FROM simpleshop_favorite f JOIN simpleshop_buyer_account b ON b.id=f.fk_buyer_id WHERE b.username='${user}'`);
+    const n = await SQL(`SELECT COUNT(*) FROM simpleshop_favorite f JOIN simpleshop_buyer_account b ON b.id=f.fk_buyer_id WHERE b.username='${user}'`);
     return n === '0' ? 'PASS 数据库 0 条' : 'FAIL ' + n;
   });
-  SQL(`UPDATE simpleshop_goods SET status='ON_SALE', off_shelf_reason=NULL, off_shelf_at=NULL WHERE id='GD-FAV-01'`);
+  await SQL(`UPDATE simpleshop_goods SET status='ON_SALE', off_shelf_reason=NULL, off_shelf_at=NULL WHERE id='GD-FAV-01'`);
 
   await t('[E6] 购物车转收藏', async () => {
     await addToCart('GD-D1-ON');
@@ -530,11 +530,11 @@ function cleanupUser(username) {
     await page.waitForTimeout(900);
     await page.locator('.bar .check-all input').check();
     await page.waitForTimeout(400);
-    const cartBefore = cartRows();
+    const cartBefore = await cartRows();
     await page.click('button.to-fav');
     await page.waitForTimeout(2200);
-    const cartAfter = cartRows();
-    const favs = SQL(`SELECT COUNT(*) FROM simpleshop_favorite f JOIN simpleshop_buyer_account b ON b.id=f.fk_buyer_id WHERE b.username='${user}'`);
+    const cartAfter = await cartRows();
+    const favs = await SQL(`SELECT COUNT(*) FROM simpleshop_favorite f JOIN simpleshop_buyer_account b ON b.id=f.fk_buyer_id WHERE b.username='${user}'`);
     const b = await body();
     return Number(cartBefore) >= 2 && cartAfter === '0' && Number(favs) >= 2 && b.includes('移到收藏')
       ? `PASS 购物车 ${cartBefore}→0，收藏 ${favs} 条` : `FAIL cart ${cartBefore}→${cartAfter} fav=${favs}`;
@@ -571,13 +571,16 @@ function cleanupUser(username) {
   pageErrors.slice(0, 8).forEach((e) => console.log('  ' + e));
 
   await browser.close();
-  cleanupUser(user);
-  resetFixtures();
+  await cleanupUser(user);
+  await resetFixtures();
   console.log('测试账号 ' + user + ' 及其订单/购物车/收藏已清理');
 
+  // 连接池不主动关，node 会一直等 socket，脚本跑完不退出。
+  await db.close();
   console.log('\nRESULT: ' + (bad.length === 0 ? 'ALL CHECKS PASSED' : 'FAILED'));
   process.exitCode = bad.length === 0 ? 0 : 1;
-})().catch((e) => {
+})().catch(async (e) => {
   console.error('SCRIPT FAIL:', e.message);
+  await db.close();
   process.exit(1);
 });

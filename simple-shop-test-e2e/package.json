@@ -1,7 +1,7 @@
 {
   "name": "simple-shop-test-e2e",
   "version": "2.0.0",
-  "description": "Phase-2 end-to-end acceptance tests: Playwright drives Microsoft Edge over the running simple-shop app.",
+  "description": "Phase-3 end-to-end acceptance tests: Playwright drives Microsoft Edge over the running simple-shop app.",
   "main": "index.js",
   "directories": {
     "test": "tests"
@@ -10,12 +10,20 @@
     "test": "playwright test",
     "test:headed": "playwright test --headed",
     "test:auth": "playwright test tests/01-auth.spec.ts",
-    "report": "playwright show-report report"
+    "typecheck": "tsc --noEmit",
+    "clean": "node scripts/clean.js",
+    "report": "playwright show-report report",
+    "db:reset": "node scripts/reset-e2e-db.js",
+    "db:probe": "node scripts/reset-e2e-db.js --dry-run",
+    "verify:cart": "node d3-cart-check.js",
+    "verify:regression": "node d5-full-regression.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@playwright/test": "^1.64.0"
+    "@playwright/test": "^1.64.0",
+    "mysql2": "^3.24.6",
+    "typescript": "^5.9.3"
   }
 }

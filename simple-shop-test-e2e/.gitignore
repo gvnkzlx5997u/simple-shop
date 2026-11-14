@@ -7,7 +7,10 @@ test-results/
 playwright-report/
 data/
 
-# ---- local credentials (real passwords; template: local-config.example.bat) ----
+# ---- local config (real passwords; template: .env.example) ----
+.env
+.env.*.local
+# 旧的 Windows 配置方式，已由 .env 取代；文件若还在也不再被脚本读取
 local-config.bat
 
 # ---- editors ----

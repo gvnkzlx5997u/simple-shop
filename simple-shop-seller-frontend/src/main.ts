@@ -5,6 +5,7 @@ import router from './router'
 import './assets/base.css'
 import { onUnauthorized } from './api/http'
 import { useToast } from './composables/useToast'
+import { M10 } from './constants/messages'
 import { pinia } from './stores'
 
 const app = createApp(App)
@@ -21,7 +22,7 @@ onUnauthorized(() => {
     return
   }
   redirectingToLogin = true
-  useToast().info('登录已超时，请重新登录')
+  useToast().info(M10.sessionExpired)
   void router.push({ name: 'login', query: { reason: 'expired' } }).finally(() => {
     redirectingToLogin = false
   })

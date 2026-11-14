@@ -1,16 +1,17 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
 import {
-  buyerLogin,
   call,
   changePassword,
   createL1,
   createL2,
   newApi,
   newBuyer,
+  offShelf,
+  placeOrder,
   publishGoods,
   sellerLogin,
-  submitIntention,
+  updateStock,
 } from '../helpers/api';
 import { buyerFixture, goodsFixture, uniqueName } from '../helpers/data';
 import { SELLER_PASSWORD } from '../helpers/config';
@@ -18,8 +19,13 @@ import { SELLER_PASSWORD } from '../helpers/config';
 /**
  * 06 服务端拦截（绕过前端的负向调用）
  *
- * 对应旧套件 03-security：D2（解冻）、D4（单商品）已作废，
- * 其余保留并换成阶段二的错误码。
+ * 阶段三口径：
+ *  - 有未完成订单（待确认~已发货）时，手动下架与手动清零都被拒（20020），成交扣减到 0 不在此限；
+ *  - 商品只有两态，下架后买家既不能加购（70001）也不能下单（20019）；
+ *  - 改密会让该账号全部会话立即失效。
+ *
+ * 阶段二删除两条：T06-02「冻结期提交意向」与 T06-03「非队首 30002」——
+ * 商品冻结、意向队列在阶段三都不存在了。
  */
 test.describe.serial('06 服务端拦截', () => {
   let ctx: APIRequestContext;
@@ -39,72 +45,65 @@ test.describe.serial('06 服务端拦截', () => {
     await ctx.dispose();
   });
 
-  test('T06-01 队列非空时绕过前端下架 → 拒绝（20022）', async () => {
+  test('T06-01 有未完成订单时绕过前端下架 / 清零 → 20020', async () => {
     const goods = await publishGoods(
       ctx,
       sellerToken,
       goodsFixture(uniqueName('拦截下架'), l2Id, { stock: 2 }),
     );
-    const buyer = buyerFixture('q1');
-    const token = await newBuyer(ctx, buyer);
-    await submitIntention(ctx, token, goods.id);
+    const buyerToken = await newBuyer(ctx, buyerFixture('q1'));
+    await placeOrder(ctx, buyerToken, [{ goods_id: goods.id, quantity: 1 }]);
 
-    const result = await call(ctx, 'POST', `/api/seller/goods/${goods.id}/off-shelf`, {}, {
+    const off = await call(ctx, 'POST', `/api/seller/goods/${goods.id}/off-shelf`, {}, {
       token: sellerToken,
     });
-    expect(result.body.code).toBe(20022);
+    expect(off.body.code, '有未完成订单时手动下架应被拒').toBe(20020);
+
+    const zero = await call(ctx, 'PUT', `/api/seller/goods/${goods.id}/stock`, { stock: 0 }, {
+      token: sellerToken,
+    });
+    expect(zero.body.code, '有未完成订单时手动清零应被拒').toBe(20020);
+
+    // 改成其他正数不受限
+    const plus = await updateStock(ctx, sellerToken, goods.id, 5);
+    expect(plus.stock).toBe(5);
+    expect(plus.status).toBe('ON_SALE');
   });
 
-  test('T06-02 冻结期绕过前端提交意向 → 拒绝（20019）', async () => {
+  test('T06-02 已下架商品：加购 70001、下单 20019', async () => {
     const goods = await publishGoods(
       ctx,
       sellerToken,
-      goodsFixture(uniqueName('拦截冻结'), l2Id, { stock: 2 }),
+      goodsFixture(uniqueName('拦截下架购买'), l2Id, { stock: 2 }),
     );
-    const first = await newBuyer(ctx, buyerFixture('q2'));
-    await submitIntention(ctx, first, goods.id);
+    await offShelf(ctx, sellerToken, goods.id);
 
-    // 卖家对队首进入交易 → 商品冻结
-    const list = (await call<{ items: Array<{ id: string }> }>(
-      ctx,
-      'GET',
-      `/api/seller/goods/${goods.id}/intentions`,
-      undefined,
-      { token: sellerToken },
-    )).body.data.items;
-    await call(ctx, 'POST', `/api/seller/intentions/${list[0].id}/trade`, {}, { token: sellerToken });
+    const buyerToken = await newBuyer(ctx, buyerFixture('q2'));
 
-    // 另一个买家再提交 → 被拒
-    const other = await newBuyer(ctx, buyerFixture('q3'));
-    const result = await call(ctx, 'POST', '/api/buyer/intentions', { goods_id: goods.id }, {
-      token: other,
+    const cart = await call(ctx, 'POST', '/api/buyer/cart', { goods_id: goods.id }, {
+      token: buyerToken,
     });
-    expect(result.body.code).toBe(20019);
-  });
+    expect(cart.body.code, '已下架商品不能加购').toBe(70001);
 
-  test('T06-03 对非队首进入交易 → 拒绝（30002）', async () => {
-    const goods = await publishGoods(
+    const order = await call(
+      ctx,
+      'POST',
+      '/api/buyer/orders',
+      { items: [{ goods_id: goods.id, quantity: 1 }] },
+      { token: buyerToken },
+    );
+    expect(order.body.code, '已下架商品不能下单').toBe(20019);
+
+    // 顺带确认加购接口对在售商品是通的，避免上面两条因为别的原因失败而"看起来正确"
+    const saleGoods = await publishGoods(
       ctx,
       sellerToken,
-      goodsFixture(uniqueName('拦截队首'), l2Id, { stock: 3 }),
+      goodsFixture(uniqueName('拦截可加购'), l2Id, { stock: 2 }),
     );
-    const a = await newBuyer(ctx, buyerFixture('q4'));
-    const b = await newBuyer(ctx, buyerFixture('q5'));
-    await submitIntention(ctx, a, goods.id);
-    await submitIntention(ctx, b, goods.id);
-
-    const list = (await call<{ items: Array<{ id: string }> }>(
-      ctx,
-      'GET',
-      `/api/seller/goods/${goods.id}/intentions`,
-      undefined,
-      { token: sellerToken },
-    )).body.data.items;
-
-    const result = await call(ctx, 'POST', `/api/seller/intentions/${list[1].id}/trade`, {}, {
-      token: sellerToken,
+    const added = await call(ctx, 'POST', '/api/buyer/cart', { goods_id: saleGoods.id }, {
+      token: buyerToken,
     });
-    expect(result.body.code).toBe(30002);
+    expect(added.body.code, '在售商品应能加购（对照组）').toBe(0);
   });
 
   test('T06-04 改密后旧令牌立即失效（用完即恢复原口令）', async () => {
@@ -129,7 +128,7 @@ test.describe.serial('06 服务端拦截', () => {
       expect(oldPasswordFailed, '旧口令应无法登录').toBeTruthy();
 
       // 新口令可以登录
-      const fresh = await buyerLoginSafe(ctx, temp);
+      const fresh = await sellerLoginWith(ctx, temp);
       expect(fresh).toBeTruthy();
     } finally {
       // 无论断言是否失败，都把口令改回去
@@ -154,9 +153,4 @@ async function sellerLoginWith(ctx: APIRequestContext, password: string): Promis
   });
   if (data.body.code !== 0) throw new Error(`卖家登录失败: ${data.body.message}`);
   return data.body.data.token;
-}
-
-/** 语义化别名：验证"新口令能登录" */
-async function buyerLoginSafe(ctx: APIRequestContext, password: string): Promise<string> {
-  return sellerLoginWith(ctx, password);
 }

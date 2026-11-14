@@ -67,6 +67,8 @@ E2E 需要后端、买家 SPA、卖家 SPA 三个服务先启动，并连接**�
 ```bash
 cd simple-shop-test-e2e
 npm ci
+npm run clean          # 清上一轮的 report/evidence/test-results（只删生成物）
+npm run typecheck      # Playwright 只转译不查类型，类型错误靠这一步拦
 npx playwright test
 ```
 
@@ -142,8 +144,8 @@ npx playwright test
 - 架构规则由 ArchUnit 守门；改包结构、Controller 依赖或跨功能调用后，务必跑完整 verify，不要只跑单个测试类。
 - **测试不断言审计日志与运行日志**：不用 logback appender 抓日志，也不断言日志条数或文案。日志是排查手段，不是契约，断言日志是过度测试；要验证副作用就断言业务状态、返回码与库内数据。
 - 卖家前端改完跑 `npm run build`，涉及逻辑再跑 `npm run test:unit`；买家前端改完跑 `npm run build`。
-- E2E 用 `workers:1` 串行，默认用系统 Edge；阶段三正在重写用例，spec 与条数以该目录实际为准。跑前按 E2E 目录的说明重建 `simple_shop_e2e`、启动三个服务并关闭限流。
-- 阶段一的旧 E2E 用例在 `archive/`，**不要移回 `tests/`**，否则会被 Playwright 误跑。
+- E2E 用 `workers:1` 串行，默认用系统 Edge；阶段三正在按新口径重写用例，spec 与条数以该目录实际为准。跑前按 E2E 目录的说明重建 `simple_shop_e2e`、启动三个服务并关闭限流。
+- 历史用例在 `archive/阶段一/` 与 `archive/阶段二/`（对照关系见 `archive/目录.md`），**不要移回 `tests/`**，否则会被 Playwright 误跑；归档里的选择器与接口都已失效，只能作追溯用。
 - 不要声称“测试通过”而没有实际执行；环境不具备时，说明哪些没跑、原因是什么。
 
 ## 8. 部署与运行

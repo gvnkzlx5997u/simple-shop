@@ -8,7 +8,10 @@ echo  D3 cart end-to-end verification
 echo ============================================
 echo.
 
-echo [1/3] checking services...
+rem 配置（数据库口令 / 夹具库 / 地址）全部来自项目根的 .env，模板见 .env.example。
+rem 本脚本只做两件事：检查服务在不在、然后跑 node 脚本。
+
+echo [1/2] checking services...
 netstat -ano | findstr ":8080 " | findstr LISTENING >nul
 if errorlevel 1 (
   echo    FAIL: backend not listening on 8080
@@ -24,22 +27,7 @@ if errorlevel 1 (
 echo    OK: 8080 and 5174 are both up
 echo.
 
-echo [2/3] loading database password from local-config.bat...
-if not exist local-config.bat (
-  echo    FAIL: local-config.bat not found
-  echo    copy archive\local-config.example.bat to local-config.bat and fill in the password
-  goto :fail
-)
-call local-config.bat
-set "DB_PASSWORD=%E2E_DB_PASSWORD%"
-if "%DB_PASSWORD%"=="" (
-  echo    FAIL: E2E_DB_PASSWORD is empty in local-config.bat
-  goto :fail
-)
-echo    OK: password loaded ^(not printed^)
-echo.
-
-echo [3/3] running verification...
+echo [2/2] running verification...
 echo.
 node d3-cart-check.js
 set "RC=%ERRORLEVEL%"
