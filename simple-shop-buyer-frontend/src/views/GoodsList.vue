@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 
 import { fetchCategories, fetchGoods } from '../api/buyer'
 import type { CategoryNode, GoodsSummary } from '../api/types'
-import { describeError } from '../stores/auth'
+import { usePagedList } from '../composables/usePagedList'
 import { formatMoney } from '../utils/format'
 
 const router = useRouter()
@@ -12,16 +12,28 @@ const router = useRouter()
 const keyword = ref('')
 const l1Id = ref('')
 const l2Id = ref('')
-const page = ref(1)
 // 12 = 列表 3 行 × 4 列刚好排满一屏，不留残缺。
 // 后端 simplexhop.pagination.max-size = 100，超过会返回 400。
 const pageSize = 12
 
-const items = ref<GoodsSummary[]>([])
-const total = ref(0)
 const categories = ref<CategoryNode[]>([])
-const loading = ref(false)
-const errorText = ref('')
+
+/**
+ * 分页状态交给公共 composable；筛选条件仍留在页面里，
+ * fetcher 通过闭包读当前的 keyword / 类别，只把页码交给它。
+ */
+const { items, total, page, loading, errorText, hasPager, load, reloadFromFirstPage, goPage } =
+  usePagedList<GoodsSummary>(
+    (pageNo) =>
+      fetchGoods({
+        keyword: keyword.value.trim() || undefined,
+        category_id: categoryParam(),
+        page: pageNo,
+        page_size: pageSize,
+      }),
+    // 商品列表的特点：失败时连 total 一起归零，分页条随之隐藏。
+    { pageSize, resetTotalOnError: true },
+  )
 
 /**
  * 两级类别分开筛选。
@@ -47,35 +59,13 @@ async function loadCategories() {
   }
 }
 
-async function loadGoods() {
-  loading.value = true
-  errorText.value = ''
-  try {
-    const data = await fetchGoods({
-      keyword: keyword.value.trim() || undefined,
-      category_id: categoryParam(),
-      page: page.value,
-      page_size: pageSize,
-    })
-    items.value = data.items
-    total.value = data.total
-  } catch (err) {
-    errorText.value = describeError(err)
-    items.value = []
-    total.value = 0
-  } finally {
-    loading.value = false
-  }
-}
-
 function search() {
-  page.value = 1
-  loadGoods()
+  // 换关键字或类别必须回到第 1 页。
+  reloadFromFirstPage()
 }
 
 function changePage(next: number) {
-  page.value = next
-  loadGoods()
+  goPage(next)
 }
 
 /**
@@ -94,8 +84,8 @@ function onL2Change() {
 }
 
 onMounted(() => {
-  loadCategories()
-  loadGoods()
+  void loadCategories()
+  void load()
 })
 </script>
 
@@ -154,10 +144,12 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="total > pageSize" class="row pager">
-      <button :disabled="page <= 1" @click="changePage(page - 1)">上一页</button>
+    <!-- 页码始终告诉用户「现在在第几页」，按钮只在真有多页时出现：
+         一页时两个按钮都是灰的，摆在那儿像坏了。 -->
+    <div v-if="items.length" class="row pager">
+      <button v-if="hasPager" :disabled="page <= 1" @click="changePage(page - 1)">上一页</button>
       <span class="muted">第 {{ page }} 页 / 共 {{ Math.ceil(total / pageSize) }} 页</span>
-      <button :disabled="page * pageSize >= total" @click="changePage(page + 1)">
+      <button v-if="hasPager" :disabled="page * pageSize >= total" @click="changePage(page + 1)">
         下一页
       </button>
     </div>

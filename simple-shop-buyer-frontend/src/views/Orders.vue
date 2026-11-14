@@ -4,55 +4,46 @@ import { RouterLink } from 'vue-router'
 
 import { fetchOrders } from '../api/order'
 import type { OrderData, OrderStatus } from '../api/types'
-import { describeError } from '../stores/auth'
+import { usePagedList } from '../composables/usePagedList'
 import { formatMoney, formatTime } from '../utils/format'
 import { ORDER_STATUS_FILTERS, orderStatusText } from '../utils/orderStatus'
 
 const PAGE_SIZE = 10
 
-const items = ref<OrderData[]>([])
-const page = ref(1)
-const total = ref(0)
 const status = ref<OrderStatus | ''>('')
-const loading = ref(false)
-const errorText = ref('')
 
-const totalPages = computed(() => Math.max(1, Math.ceil(total.value / PAGE_SIZE)))
-const canPrev = computed(() => page.value > 1 && !loading.value)
-const canNext = computed(() => page.value < totalPages.value && !loading.value)
+/** 筛选条件留在页面里，分页与加载交给公共 composable。 */
+const {
+  items,
+  total,
+  page,
+  loading,
+  errorText,
+  totalPages,
+  canPrev,
+  canNext,
+  hasPager,
+  load,
+  reloadFromFirstPage,
+  goPage,
+} = usePagedList<OrderData>(
+  (pageNo) =>
+    fetchOrders({
+      status: status.value || undefined,
+      page: pageNo,
+      page_size: PAGE_SIZE,
+    }),
+  // 订单要空页回退：刚取消的订单可能让当前页变空，这时应退到最后一页而不是报「还没有订单」。
+  { pageSize: PAGE_SIZE, emptyPageFallback: true },
+)
+
 const filterLabel = computed(
   () => ORDER_STATUS_FILTERS.find((o) => o.value === status.value)?.label ?? '全部状态',
 )
 
-async function load(): Promise<void> {
-  loading.value = true
-  errorText.value = ''
-  try {
-    // 最多回退一次：当前页被删空（比如刚取消的订单不满足筛选）时退到真正的最后一页。
-    for (let guard = 0; guard < 2; guard += 1) {
-      const data = await fetchOrders({
-        status: status.value || undefined,
-        page: page.value,
-        page_size: PAGE_SIZE,
-      })
-      items.value = data.items ?? []
-      total.value = data.total ?? 0
-      const lastPage = Math.max(1, Math.ceil(total.value / PAGE_SIZE))
-      if (items.value.length > 0 || page.value <= lastPage) return
-      page.value = lastPage
-    }
-  } catch (err) {
-    errorText.value = describeError(err)
-    items.value = []
-  } finally {
-    loading.value = false
-  }
-}
-
 function onFilterChange(): void {
   // 换筛选必须回到第 1 页：第 3 页的新筛选结果可能只有 1 页，会看到空白。
-  page.value = 1
-  void load()
+  reloadFromFirstPage()
 }
 
 /**
@@ -64,18 +55,18 @@ function onFilterChange(): void {
  */
 function onClearFilter(): void {
   status.value = ''
-  page.value = 1
-  void load()
+  reloadFromFirstPage()
 }
 
 function go(nextPage: number): void {
-  page.value = nextPage
   // 翻页后回到列表顶部，否则 10 条之外的用户点完还停在页脚，以为没反应。
   window.scrollTo({ top: 0, behavior: 'smooth' })
-  void load()
+  goPage(nextPage)
 }
 
-onMounted(load)
+onMounted(() => {
+  void load()
+})
 </script>
 
 <template>
@@ -134,10 +125,11 @@ onMounted(load)
         </RouterLink>
       </div>
 
+      <!-- 页码保留，按钮只在一页以上时出现 -->
       <div class="pager">
-        <button :disabled="!canPrev" @click="go(page - 1)">上一页</button>
+        <button v-if="hasPager" :disabled="!canPrev" @click="go(page - 1)">上一页</button>
         <span class="muted small">第 {{ page }} / {{ totalPages }} 页 · 共 {{ total }} 笔</span>
-        <button :disabled="!canNext" @click="go(page + 1)">下一页</button>
+        <button v-if="hasPager" :disabled="!canNext" @click="go(page + 1)">下一页</button>
       </div>
     </template>
   </div>
