@@ -62,6 +62,9 @@ const router = createRouter({
         },
       ],
     },
+    // 未知路径（含阶段二遗留的 /history、/orders 外的旧深链）统一回商品列表：
+    // 没有兜底路由时 Vue Router 只会在控制台警告并渲染空白页，用户看到的是「页面坏了」。
+    { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 })
 

@@ -6,7 +6,8 @@ export const M10 = {
   sessionExpired: '登录已超时，请重新登录',
   loginFailed: '账号或密码错误',
   oldPasswordMismatch: '原密码不正确',
-  newPasswordTooShort: '新密码至少 8 位',
+  /** 10004：后端同时拒「不足 8 位」与「超过 BCrypt 有效上限 72 字节」，文案要把两条都说清。 */
+  newPasswordTooShort: '新密码至少 8 位，且不超过 72 字节',
   passwordMismatch: '两次输入的新密码不一致',
   changePasswordSuccess: '密码已修改，所有会话已失效，请重新登录',
   confirmChangePassword: '修改后所有登录会话将失效，需要重新登录，确定修改？',
@@ -87,6 +88,15 @@ const API_CODE_MESSAGES: Partial<Record<number, string>> = {
   [ApiCode.SESSION_INVALID]: M10.sessionExpired,
   [ApiCode.OLD_PASSWORD_MISMATCH]: M10.oldPasswordMismatch,
   [ApiCode.PASSWORD_INVALID]: M10.newPasswordTooShort,
+  // 10005~10008 只在买家注册时产生，卖家端 UI 到不了；仍然登记，避免落到通用兜底时文不对题。
+  [ApiCode.USERNAME_TAKEN]: '用户名已被占用',
+  [ApiCode.USERNAME_INVALID]: '用户名不合法（1~50 个字符，不含空格与 < >）',
+  [ApiCode.PHONE_INVALID]: '联系电话格式不正确（7~20 位数字或 -）',
+  [ApiCode.DEFAULT_LOCATION_INVALID]: '默认交易地点不超过 50 个字符，不能包含 < >',
+  // 卖家端唯一来源是「客户详情」：传入的买家不存在（HTTP 404）。
+  [ApiCode.ACCOUNT_NOT_FOUND]: '客户不存在或已被删除，请刷新客户列表',
+  // 卖家登录时账号字段被后端判为不合法（含空白、尖括号、控制字符）。
+  [ApiCode.ACCOUNT_INVALID]: '账号格式不正确（1~50 个字符，不含空格与 < >）',
   [ApiCode.CATEGORY_NOT_FOUND]: '类别不存在或已被删除，请刷新',
   [ApiCode.CATEGORY_NOT_LEAF]: '只能选择二级类别',
   [ApiCode.CATEGORY_NAME_INVALID]: M10.categoryNameInvalid,
@@ -116,9 +126,14 @@ const API_CODE_MESSAGES: Partial<Record<number, string>> = {
   [ApiCode.INTERNAL_ERROR]: '服务端内部错误，请稍后重试',
   [ApiCode.PARAM_INVALID]: M10.paramInvalid,
   [ApiCode.RESOURCE_NOT_FOUND]: '请求的资源不存在',
+  [ApiCode.METHOD_NOT_ALLOWED]: '接口不支持该请求方式，请刷新页面后重试',
+  [ApiCode.UNSUPPORTED_MEDIA_TYPE]: '请求格式不受支持（上传须为 multipart/form-data）',
 }
 
-/** 业务码 → 界面文案；未登记的码退化为通用提示。 */
+/**
+ * 业务码 → 界面文案；未登记的码退化为通用失败提示。
+ * 兜底文案不能是「请检查输入内容」——未登记的码多半不是用户输入问题，那样会把责任推错方向。
+ */
 export function apiCodeMessage(code: number): string {
-  return API_CODE_MESSAGES[code] ?? M10.paramInvalid
+  return API_CODE_MESSAGES[code] ?? '操作失败，请稍后重试'
 }

@@ -9,6 +9,16 @@ export interface ApiResponse<T> {
   code: number
   message: string
   data: T
+  /**
+   * 参数校验错误明细，只在 HTTP 400（50002）时可能返回。
+   * 卖家端不逐字段展示：能到这里的都是前端校验漏掉的输入，按业务码给一句中文提示即可。
+   */
+  errors?: FieldErrorData[]
+}
+
+export interface FieldErrorData {
+  field: string
+  message: string
 }
 
 /**

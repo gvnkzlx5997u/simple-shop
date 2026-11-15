@@ -180,7 +180,11 @@ function confirmDelete(): void {
 
     <p v-if="loading && tree.length === 0" class="text-sm text-base-content/60">加载中…</p>
 
-    <div v-else-if="tree.length === 0" class="panel py-14 text-center text-sm text-base-content/60">
+    <!-- 失败时只显示错误横幅：此时「暂无一级类别」是假信息，会让人以为类别被清空了 -->
+    <div
+      v-else-if="tree.length === 0 && !error"
+      class="panel py-14 text-center text-sm text-base-content/60"
+    >
       {{ M10.emptyCategories }}
     </div>
 

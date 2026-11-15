@@ -11,7 +11,8 @@
 ## 技术栈
 
 Vue 3 + Vite + TypeScript + Pinia + Vue Router + Axios。
-不引入 UI 组件库，样式沿用 `assets/base.css` 的原生 CSS 约定。
+样式：Tailwind CSS 4 + daisyUI 5，唯一入口 `assets/base.css`（`shop-light` / `shop-dark` 双主题，token 与卖家端同值；买家用默认尺寸，不取后台 `-sm` 密度）。
+单元测试：Vitest（`test/` 目录，node 环境，无需后端）。
 
 ## 功能域
 
@@ -70,6 +71,7 @@ Vue 3 + Vite + TypeScript + Pinia + Vue Router + Axios。
 | `simple-shop.buyer.token` | 会话令牌 | 登录/注册成功 | 退出登录、收到 401 / 业务码 10002 |
 | `simple-shop.buyer.expire-at` | 令牌到期时间 | 同上 | 同上 |
 | `simple-shop.buyer.username` | 用户名（用于隔离购物车本地状态、顶栏展示） | 同上 | 同上 |
+| `simple-shop.buyer.theme` | 主题偏好 `shop-light` / `shop-dark` | 手动切换主题 | 不清（跟随系统时不写） |
 | `simple-shop.buyer.cart.<username>` | `{ "<goods_id>": { "quantity": 2, "checked": true } }` | 改数量、勾选、加购后 | 退出登录；或该用户名下购物车已空 |
 
 约定细节：
@@ -85,7 +87,7 @@ Vue 3 + Vite + TypeScript + Pinia + Vue Router + Axios。
 
 ## 错误码映射
 
-界面**不展示后端 `message` 原文**，一律按业务码映射成中文（`stores/auth.ts` 的 `describeError`）。
+界面**不展示后端 `message` 原文**，一律按业务码映射成中文（`utils/errorText.ts` 的 `describeError`）。
 下表左侧为后端 `ErrorCode` 的全量清单，右侧「买家端文案」为空表示该码只在卖家端出现、买家端映射里不写。
 
 | 码 | 后端枚举 | 买家端文案 | 买家端是否会遇到 |
@@ -156,17 +158,31 @@ src/
 │   ├── favorite.ts     收藏接口（收藏、列表、状态、取消）
 │   └── order.ts        订单接口（下单、列表、详情、明细、取消）
 ├── stores/
-│   ├── auth.ts         登录态 + 业务码 → 中文文案（describeError）
+│   ├── auth.ts         登录态（会话持久化、退出清本地）
 │   └── cart.ts         服务端购物车行 + 本地数量勾选 → 展示行；下单、转收藏
+├── components/
+│   ├── common/         AppIcon / StatusTag / Pagination / EmptyState
+│   ├── goods/          GoodsCard / GoodsGallery / DescriptionBlocks
+│   ├── cart/           CartRow / CartSummaryBar
+│   ├── favorite/       FavoriteCard
+│   └── order/          OrderRow / OrderItemsTable
+├── composables/
+│   ├── usePagedList.ts 分页列表公共状态（空页回退等选项）
+│   └── useTheme.ts     双主题切换与持久化（键 simple-shop.buyer.theme）
+├── validation/
+│   └── register.ts     注册字段校验（规则与后端 AccountRules 对齐）
 ├── utils/
 │   ├── cartStorage.ts  购物车本地状态的读写（按用户名隔离）
 │   ├── format.ts       UTC 时间转本地展示、金额两位小数
-│   └── orderStatus.ts  订单六态中文名、买家可取消判断、筛选项
+│   ├── orderStatus.ts  订单六态中文名、可取消判断、筛选项、徽章 tone
+│   ├── errorText.ts    业务码 → 中文文案（describeError / describeSubmitError）
+│   └── redirect.ts     登录回跳地址消毒（拒协议相对地址）
 ├── router/index.ts     路由与登录守卫
 ├── views/              GoodsList / GoodsDetail / Cart / Favorites / Orders / OrderDetail / Login / Register
-├── App.vue             顶栏（商品 / 购物车 / 收藏 / 订单 / 登录退出）
-├── assets/base.css     全局基础样式
+├── App.vue             顶栏（商品 / 购物车 / 收藏 / 订单 / 主题切换 / 登录退出）
+├── assets/base.css     Tailwind + daisyUI 唯一 CSS 入口（双主题 + .panel/.muted）
 └── main.ts             入口；注册 401 统一跳登录
+test/                   Vitest 单元测试（utils / validation / composables / stores）
 ```
 
 ## 本地开发
@@ -209,9 +225,19 @@ npm run dev      # http://localhost:5174
 ### 3. 构建与类型检查
 
 ```bash
-npm run build        # 含 vue-tsc 类型检查，输出到 dist/
-npm run type-check   # 只做类型检查
+npm run build        # 含 vue-tsc 类型检查（test/ 也纳入），输出到 dist/
 ```
+
+### 4. 单元测试
+
+```bash
+npm run test:unit    # Vitest 跑 test/，无需后端
+npm run test:watch   # watch 模式
+```
+
+覆盖 utils（format / orderStatus / cartStorage / errorText / redirect）、validation/register、
+composables/usePagedList、stores/cart 与 stores/auth。node 环境 + 内存 localStorage 桩
+（`test/setup.ts`），api 模块用 `vi.mock`;**不连数据库、不起浏览器**。
 
 ## 实现约定
 

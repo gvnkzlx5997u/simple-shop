@@ -111,6 +111,7 @@ watch(tree, pruneSelection)
   flex-basis: 100%;
   margin: 0;
   font-size: 13px;
-  color: var(--warning);
+  /* daisyUI 5 的主题变量带 --color- 前缀；写 --warning 会取到空值，颜色声明被整条丢弃。 */
+  color: var(--color-warning);
 }
 </style>

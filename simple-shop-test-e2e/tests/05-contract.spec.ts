@@ -1,22 +1,18 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 
-import {
-  call,
-  createL1,
-  createL2,
-  newApi,
-  publishGoods,
-  sellerLogin,
-} from '../helpers/api';
+import { call, createL1, createL2, newApi, publishGoods, sellerLogin } from '../helpers/api';
 import { goodsFixture, uniqueName } from '../helpers/data';
 
 /**
  * 05 契约与参数校验
  *
- * 阶段二统一口径（交接文档 §2.2）：
+ * 统一口径：
  *  - 参数错误 → HTTP 400 + 50002 + errors[{field,message}]
- *  - 语义错误 → HTTP 200 + 领域码（如价格精度 20014、库存 20015）
- * 这是 S4 新增的行为，旧套件没有；写断言时以"能不能定位到字段"为准。
+ *  - 语义错误 → HTTP 200 + 领域码（如价格精度 20014、库存 20015、状态不允许 60002）
+ *  - 媒体上限：单文件 20MB、请求 25MB；商品图只收 JPG/PNG 且 ≤5MB
+ *
+ * 与阶段二相比只改了一条：T05-08 的「非法处置枚举」随意向接口下线，
+ * 换成阶段三仍然存在的两类参数校验（订单状态非法、下架原因缺 status）。
  */
 test.describe('05 契约与参数校验', () => {
   let ctx: APIRequestContext;
@@ -102,24 +98,20 @@ test.describe('05 契约与参数校验', () => {
     expect(result.body.code).not.toBe(0);
   });
 
-  test('T05-08 非法枚举 disposal → 400 + 50002', async () => {
-    // 先造一条意向，再拿非法处置值调用失败裁决
-    const goods = await publishGoods(
-      ctx,
-      sellerToken,
-      goodsFixture(uniqueName('枚举'), l2Id, { stock: 1 }),
-    );
-    const result = await call(
-      ctx,
-      'POST',
-      `/api/seller/intentions/ANY-ID/failure`,
-      { disposal: 'not-a-valid-disposal' },
-      { token: sellerToken },
-    );
-    expect(result.status).toBe(400);
-    expect(result.body.code).toBe(50002);
-    expect((result.body.errors ?? []).map((item) => item.field)).toContain('disposal');
-    expect(goods.id).toBeTruthy();
+  test('T05-08 非法查询参数 → 400 + 50002', async () => {
+    // 订单状态只认六个枚举值，乱传按参数错误拒绝（阶段二的 disposal 枚举已随意向接口下线）
+    const badStatus = await call(ctx, 'GET', '/api/seller/orders?status=NOT_A_STATUS', undefined, {
+      token: sellerToken,
+    });
+    expect(badStatus.status).toBe(400);
+    expect(badStatus.body.code).toBe(50002);
+
+    // 下架原因只能与「已下架」组合：单独传原因是自相矛盾的查询，直接拒绝而不是返回空列表
+    const badReason = await call(ctx, 'GET', '/api/seller/goods?off_shelf_reason=MANUAL', undefined, {
+      token: sellerToken,
+    });
+    expect(badReason.status).toBe(400);
+    expect(badReason.body.code).toBe(50002);
   });
 
   test('T05-09 未登录调卖家接口 → 401', async () => {
@@ -133,6 +125,7 @@ test.describe('05 契约与参数校验', () => {
     expect(result.body.data.page_size).toBe(10);
     expect(result.body.data.page).toBe(1);
   });
+
   test('T05-11 媒体超限：>5MB 商品图被拒（20016）', async () => {
     // 造一个 6MB 的伪 PNG（只测大小校验，不关心内容是否真能解析）
     const size = 6 * 1024 * 1024;
@@ -149,6 +142,7 @@ test.describe('05 契约与参数校验', () => {
     const body = (await res.json()) as { code: number; message: string };
     expect(body.code, `期望 20016，实际 ${body.code} ${body.message}`).toBe(20016);
   });
+
   /** 合成一个"看起来是 MP4"的缓冲：偏移 4 起 ftyp，偏移 8 起 isom 品牌 */
   function fakeMp4(bytes: number): Buffer {
     const buffer = Buffer.alloc(bytes, 0);
@@ -181,7 +175,7 @@ test.describe('05 契约与参数校验', () => {
       'DESCRIPTION_MEDIA',
     );
     // 口径差异：ErrorCode.VIDEO_INVALID(20025) 实际不可达 ——
-    // multipart 上限与业务上限同为 20MB，超限在容器层就被拦成 MEDIA_INVALID(20026)。
+    // 单文件上限（max-file-size=20MB）与业务上限同为 20MB，超限在容器层就被拦成 MEDIA_INVALID(20026)。
     expect(result.body.code).toBe(20026);
   });
 

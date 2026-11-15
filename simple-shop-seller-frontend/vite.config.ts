@@ -5,6 +5,13 @@ import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vite'
 import vueDevTools from 'vite-plugin-vue-devtools'
 
+// 开发与预览都要把接口与媒体转发到本地后端，否则 `npm run preview` 里的页面
+// 拿到的是 404，测出来的首屏指标（LCP）是在「接口报错」的画面上量的，没有意义。
+const proxy = {
+  '/api': { target: 'http://localhost:8080', changeOrigin: true },
+  '/media': { target: 'http://localhost:8080', changeOrigin: true },
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
@@ -18,11 +25,7 @@ export default defineConfig({
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
-  server: {
-    proxy: {
-      // 开发期把后端接口与媒体文件转发到本地后端，避免跨域。
-      '/api': { target: 'http://localhost:8080', changeOrigin: true },
-      '/media': { target: 'http://localhost:8080', changeOrigin: true },
-    },
-  },
+  server: { proxy },
+  // 性能测量必须在构建产物上做；preview 默认不带代理，这里显式复用同一份配置。
+  preview: { proxy },
 })

@@ -1,11 +1,23 @@
 /**
  * 全局配置：三个地址 + 卖家账号。
  *
- * 为什么全走环境变量：
+ * 来源：项目根的 `.env`（模板 `.env.example`），缺项时用下面的默认值。
+ * 优先级「真实环境变量 > .env > 默认值」——换环境只改 .env，不用在终端 export。
+ *
+ * 为什么要可配置：
  *  - 本地开发是「后端 8080 + 买家 5174 + 卖家 5173」三个地址；
- *  - 将来用 deploy/ 的 Compose 跑时，是 nginx 一个入口（买家 `/`、卖家 `/seller/`）；
- *  - 两种形态只改环境变量，不改用例。
+ *  - 用 deploy/ 的 Compose 跑时，是 nginx 一个入口（买家 `/`、卖家 `/seller/`）；
+ *  - 两种形态只改配置，不改用例。
  */
+import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+// 与 scripts/db.js 读同一个文件；playwright.config.ts 会先加载本模块，
+// 所以整套用例在启动时就拿到了 .env 里的地址与账号。
+const envFile = resolve(__dirname, '..', '.env');
+if (typeof process.loadEnvFile === 'function' && existsSync(envFile)) {
+  process.loadEnvFile(envFile);
+}
 
 /** 后端 REST 地址（浏览器请求经 Vite 代理到同一个后端） */
 export const API_URL = process.env.API_URL || 'http://localhost:8080';
