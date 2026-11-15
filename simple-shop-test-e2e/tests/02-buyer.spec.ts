@@ -3,18 +3,19 @@ import { expect, test, type APIRequestContext } from '@playwright/test';
 import { createL1, createL2, newApi, publishGoods, sellerLogin } from '../helpers/api';
 import { goodsFixture, uniqueName } from '../helpers/data';
 import { BUYER_URL } from '../helpers/config';
-import { buyerOpenGoods, buyerSearch } from '../helpers/ui';
+import { buyerGoodsCard, buyerOpenGoods, buyerSearch } from '../helpers/ui';
 
 /**
  * 02 买家端：列表 / 搜索 / 类别筛选 / 详情
  *
  * 阶段二的两条「提交意向」「我的历史」已删除：阶段三买家走购物车下单，
- * `/history` 整页下线。购物车与订单行为留给买家端自己的 spec（下一轮并入）。
+ * `/history` 整页下线。购物车与订单行为留给买家端自己的 spec（02b/02c）。
  *
  * 造数全部走接口（快且稳），被测流程走真实 UI。
  * 关键口径：
  *  - 买家匿名可看在售商品
  *  - 搜索只匹配名称（后端 `g.name like`，描述不参与）
+ * 选择器：阶段F 后统一 data-testid / role / aria-label。
  */
 test.describe('02 买家端浏览与搜索', () => {
   let ctx: APIRequestContext;
@@ -74,36 +75,43 @@ test.describe('02 买家端浏览与搜索', () => {
     await page.goto(`${BUYER_URL}/goods`);
     await buyerSearch(page, keyword);
 
-    await expect(page.locator('.goods-card').filter({ hasText: goodsA.name })).toHaveCount(1);
+    await expect(buyerGoodsCard(page, goodsA.name)).toHaveCount(1);
   });
 
   test('T02-02 搜索不匹配描述（只匹配名称）', async ({ page }) => {
     await page.goto(`${BUYER_URL}/goods`);
     await buyerSearch(page, keyword);
-    await expect(page.locator('.goods-card').filter({ hasText: goodsA.name })).toHaveCount(1);
+    await expect(buyerGoodsCard(page, goodsA.name)).toHaveCount(1);
 
     // B 的描述里有同一个词，但名称没有 —— 不应出现在结果里
-    await expect(page.locator('.goods-card').filter({ hasText: goodsB.name })).toHaveCount(0);
+    await expect(buyerGoodsCard(page, goodsB.name)).toHaveCount(0);
   });
 
   test('T02-03 两级类别筛选只出该二级下的商品', async ({ page }) => {
     await page.goto(`${BUYER_URL}/goods`);
-    const selects = page.locator('select');
-    await selects.nth(0).selectOption({ label: l1Name });
-    await selects.nth(1).selectOption({ label: l2Name });
+    await page.getByLabel('一级类别').selectOption({ label: l1Name });
+    await page.getByLabel('二级类别').selectOption({ label: l2Name });
 
-    await expect(page.locator('.goods-card').filter({ hasText: goodsA.name })).toHaveCount(1);
-    await expect(page.locator('.goods-card').filter({ hasText: goodsB.name })).toHaveCount(0);
+    await expect(buyerGoodsCard(page, goodsA.name)).toHaveCount(1);
+    await expect(buyerGoodsCard(page, goodsB.name)).toHaveCount(0);
   });
 
   test('T02-04 商品详情展示价格、库存与描述', async ({ page }) => {
     await page.goto(`${BUYER_URL}/goods`);
     await buyerOpenGoods(page, goodsA.name);
 
-    await expect(page.locator('.summary .title')).toHaveText(goodsA.name);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(goodsA.name);
     // 买家端金额统一两位小数（formatMoney → toFixed(2)），不再出现阶段二的 ¥99.9
-    await expect(page.locator('.summary .price')).toContainText('¥99.90');
+    await expect(page.getByTestId('goods-price')).toContainText('¥99.90');
     await expect(page.locator('.summary')).toContainText('库存 2');
-    await expect(page.locator('.description')).toContainText('E2E 自动创建的商品描述');
+    await expect(page.getByTestId('goods-description')).toContainText('E2E 自动创建的商品描述');
+  });
+
+  test('T02-05 搜索无结果给空态而不是报错', async ({ page }) => {
+    await page.goto(`${BUYER_URL}/goods`);
+    await buyerSearch(page, `不存在的zzz-${uniqueName('empty')}`);
+
+    await expect(page.getByTestId('goods-card')).toHaveCount(0);
+    await expect(page.getByText('还没有在售的商品')).toBeVisible();
   });
 });

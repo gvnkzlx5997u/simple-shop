@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue'
 
 import type { PageData } from '../api/types'
-import { describeError } from '../stores/auth'
+import { describeError } from '../utils/errorText'
 
 /**
  * 分页列表的公共状态与加载。

@@ -7,8 +7,12 @@ import { addFavorite, fetchFavoriteStatus, removeFavorite } from '../api/favorit
 import { ApiError } from '../api/http'
 import { ApiCode } from '../api/types'
 import type { GoodsDetail } from '../api/types'
-import { describeError, useAuthStore } from '../stores/auth'
+import EmptyState from '../components/common/EmptyState.vue'
+import DescriptionBlocks from '../components/goods/DescriptionBlocks.vue'
+import GoodsGallery from '../components/goods/GoodsGallery.vue'
+import { useAuthStore } from '../stores/auth'
 import { useCartStore } from '../stores/cart'
+import { describeError } from '../utils/errorText'
 import { formatMoney } from '../utils/format'
 
 const route = useRoute()
@@ -66,7 +70,7 @@ async function load() {
     void loadFavoriteStatus()
   } catch (err) {
     goods.value = null
-    // 买家只在售商品可见；下架后详情返回 404 + 20011，不是故障。
+    // 买家只在售商品可见;下架后详情返回 404 + 20011，不是故障。
     notFound.value =
       err instanceof ApiError && (err.code === ApiCode.GOODS_NOT_FOUND || err.httpStatus === 404)
     if (!notFound.value) {
@@ -158,204 +162,69 @@ watch(goodsId, () => {
 </script>
 
 <template>
-  <div class="page stack">
+  <div class="mx-auto max-w-[960px] space-y-3 p-4">
     <p v-if="loading" class="muted">加载中…</p>
 
-    <div v-else-if="notFound" class="card empty">
-      <p class="empty-title">商品已下架或不存在</p>
-      <p class="muted">该商品可能已被卖家下架，可以看看其他在售商品。</p>
-      <RouterLink class="back-link" to="/goods">返回商品列表</RouterLink>
-    </div>
+    <EmptyState
+      v-else-if="notFound"
+      title="商品已下架或不存在"
+      description="该商品可能已被卖家下架，可以看看其他在售商品。"
+    >
+      <RouterLink class="btn btn-primary btn-sm" to="/goods">返回商品列表</RouterLink>
+    </EmptyState>
 
-    <p v-else-if="errorText && !goods" class="error">{{ errorText }}</p>
+    <p v-else-if="errorText && !goods" class="text-error">{{ errorText }}</p>
 
     <template v-else-if="goods">
-      <div class="card detail">
-        <div class="gallery">
-          <img
-            v-if="activeImage"
-            :src="activeImage"
-            :alt="goods.name"
-            class="main-image"
-          />
-          <div v-else class="main-image placeholder">暂无图片</div>
-
-          <div v-if="allImages.length > 1" class="thumbs">
-            <img
-              v-for="url in allImages"
-              :key="url"
-              :src="url"
-              :class="['thumb', { active: url === activeImage }]"
-              @click="activeImage = url"
-            />
-          </div>
-        </div>
+      <div class="panel grid grid-cols-1 gap-5 min-[720px]:grid-cols-[minmax(0,1fr)_280px]">
+        <GoodsGallery
+          :images="allImages"
+          :active="activeImage"
+          :alt="goods.name"
+          @update:active="activeImage = $event"
+        />
 
         <div class="summary">
-          <h1 class="title">{{ goods.name }}</h1>
-          <div class="price">¥{{ formatMoney(goods.price) }}</div>
+          <h1 class="title mb-2 text-xl">{{ goods.name }}</h1>
+          <div class="price mb-2 text-2xl font-semibold text-error" data-testid="goods-price">
+            ¥{{ formatMoney(goods.price) }}
+          </div>
           <div class="muted">
             {{ goods.category?.l1_name ?? '未分类' }} / {{ goods.category?.l2_name ?? '' }}
           </div>
           <div class="muted">库存 {{ goods.stock }}</div>
 
-          <p v-if="outOfStock" class="warn">当前缺货，可以先加入购物车，等补货后再下单</p>
+          <p v-if="outOfStock" class="mt-2 text-warning">当前缺货，可以先加入购物车，等补货后再下单</p>
 
-          <div class="actions">
+          <div class="mt-4 flex gap-2">
             <button
               v-if="canAddToCart"
-              class="primary buy"
+              class="btn btn-primary flex-1"
               :disabled="adding"
               @click="onAddToCart"
             >
               {{ adding ? '加入中…' : '加入购物车' }}
             </button>
-            <button class="fav" :disabled="favoriteBusy" @click="onToggleFavorite">
+            <button class="btn btn-outline" :disabled="favoriteBusy" @click="onToggleFavorite">
               {{ favorited ? '已收藏' : '收藏' }}
             </button>
           </div>
 
-          <p v-if="notice" class="notice">
+          <p v-if="notice" class="notice mt-3 text-success" data-testid="notice">
             {{ notice }}
-            <RouterLink v-if="noticeTarget" :to="noticeTarget.to">{{ noticeTarget.text }}</RouterLink>
+            <RouterLink v-if="noticeTarget" class="link link-primary" :to="noticeTarget.to">
+              {{ noticeTarget.text }}
+            </RouterLink>
           </p>
-          <p v-if="actionError" class="error">{{ actionError }}</p>
+          <p v-if="actionError" class="mt-3 text-error">{{ actionError }}</p>
         </div>
       </div>
 
-      <div class="card">
-        <h2 class="section-title">商品描述</h2>
-        <div v-if="goods.description?.length" class="description">
-          <template v-for="(block, idx) in goods.description" :key="idx">
-            <p v-if="block.type === 'TEXT' && block.text">{{ block.text }}</p>
-            <img
-              v-else-if="block.type === 'IMAGE' && block.url"
-              :src="block.url"
-              class="desc-image"
-            />
-            <video
-              v-else-if="block.type === 'VIDEO' && block.url"
-              :src="block.url"
-              controls
-              class="desc-image"
-            />
-          </template>
-        </div>
+      <div class="panel">
+        <h2 class="mb-3 text-base">商品描述</h2>
+        <DescriptionBlocks v-if="goods.description?.length" :blocks="goods.description" />
         <p v-else class="muted">暂无描述</p>
       </div>
     </template>
   </div>
 </template>
-
-<style scoped>
-.detail {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
-  gap: 20px;
-}
-
-@media (max-width: 720px) {
-  .detail {
-    grid-template-columns: 1fr;
-  }
-}
-
-.main-image {
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  object-fit: cover;
-  border-radius: 6px;
-  background: var(--color-fill);
-}
-
-.main-image.placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-text-weak);
-}
-
-.thumbs {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
-  flex-wrap: wrap;
-}
-
-.thumb {
-  width: 64px;
-  height: 64px;
-  object-fit: cover;
-  border-radius: 4px;
-  border: 2px solid transparent;
-  cursor: pointer;
-}
-
-.thumb.active {
-  border-color: var(--color-primary);
-}
-
-.title {
-  font-size: 20px;
-  margin: 0 0 8px;
-}
-
-.price {
-  color: var(--color-danger);
-  font-size: 22px;
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-
-.empty {
-  text-align: center;
-  padding: 40px 16px;
-}
-
-.buy {
-  flex: 1;
-  margin-top: 16px;
-  padding: 10px;
-}
-
-.actions {
-  display: flex;
-  gap: 8px;
-}
-
-.fav {
-  margin-top: 16px;
-  padding: 10px 16px;
-  white-space: nowrap;
-}
-
-.notice {
-  color: #15803d;
-}
-
-.warn {
-  color: #92400e;
-}
-
-.empty-title {
-  font-size: 16px;
-  font-weight: 600;
-  margin: 0 0 8px;
-}
-
-.back-link {
-  display: inline-block;
-  margin-top: 12px;
-  color: var(--color-primary);
-}
-
-.section-title {
-  font-size: 16px;
-  margin: 0 0 12px;
-}
-
-.desc-image {
-  max-width: 100%;
-  border-radius: 4px;
-}
-</style>

@@ -6,7 +6,8 @@ import { placeOrder } from '../api/order'
 import type { CartItemData, OrderPlacedData } from '../api/types'
 import { clearCartLocal, loadCartLocal, saveCartLocal } from '../utils/cartStorage'
 import type { CartLocalState } from '../utils/cartStorage'
-import { describeError, useAuthStore } from './auth'
+import { describeError } from '../utils/errorText'
+import { useAuthStore } from './auth'
 
 /**
  * 购物车状态。

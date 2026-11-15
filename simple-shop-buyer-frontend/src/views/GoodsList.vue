@@ -1,13 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
 
 import { fetchCategories, fetchGoods } from '../api/buyer'
 import type { CategoryNode, GoodsSummary } from '../api/types'
+import Pagination from '../components/common/Pagination.vue'
+import GoodsCard from '../components/goods/GoodsCard.vue'
 import { usePagedList } from '../composables/usePagedList'
-import { formatMoney } from '../utils/format'
-
-const router = useRouter()
 
 const keyword = ref('')
 const l1Id = ref('')
@@ -19,10 +17,10 @@ const pageSize = 12
 const categories = ref<CategoryNode[]>([])
 
 /**
- * 分页状态交给公共 composable；筛选条件仍留在页面里，
+ * 分页状态交给公共 composable;筛选条件仍留在页面里，
  * fetcher 通过闭包读当前的 keyword / 类别，只把页码交给它。
  */
-const { items, total, page, loading, errorText, hasPager, load, reloadFromFirstPage, goPage } =
+const { items, total, page, loading, errorText, load, reloadFromFirstPage, goPage } =
   usePagedList<GoodsSummary>(
     (pageNo) =>
       fetchGoods({
@@ -46,7 +44,7 @@ const l2Options = computed<CategoryNode[]>(() => {
   return l1 ? l1.children : []
 })
 
-/** 选了二级就用二级，只选一级就用一级；都没选则不带该参数。 */
+/** 选了二级就用二级，只选一级就用一级;都没选则不带该参数。 */
 function categoryParam(): string | undefined {
   return l2Id.value || l1Id.value || undefined
 }
@@ -55,12 +53,20 @@ async function loadCategories() {
   try {
     categories.value = await fetchCategories()
   } catch {
-    // 类别加载失败不阻塞列表；下拉留空即可。
+    // 类别加载失败不阻塞列表;下拉留空即可。
   }
 }
 
 function search() {
   // 换关键字或类别必须回到第 1 页。
+  reloadFromFirstPage()
+}
+
+/** 清除搜索与类别筛选，回到全部商品第 1 页。 */
+function clearFilters() {
+  keyword.value = ''
+  l1Id.value = ''
+  l2Id.value = ''
   reloadFromFirstPage()
 }
 
@@ -90,140 +96,66 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="page stack">
-    <div class="card">
-      <div class="row">
+  <div class="mx-auto max-w-[960px] space-y-3 p-4">
+    <div class="panel">
+      <!-- 宽屏单行;窄屏搜索输入独占一行，类别与按钮作为整组另起一行，避免标签与下拉错位。 -->
+      <div class="flex flex-wrap items-center gap-3">
         <input
           v-model="keyword"
+          class="input w-full min-w-[180px] sm:w-auto sm:flex-1"
           placeholder="搜索商品名称或描述"
           @keyup.enter="search"
         />
-        <span class="filter-label">一级类别</span>
-        <select v-model="l1Id" class="select" @change="onL1Change">
-          <option value="">全选</option>
-          <option v-for="c in categories" :key="c.id" :value="c.id">
-            {{ c.name }}
-          </option>
-        </select>
-        <span class="filter-label">二级类别</span>
-        <select v-model="l2Id" class="select" :disabled="!l1Id" @change="onL2Change">
-          <option value="">全选</option>
-          <option v-for="c in l2Options" :key="c.id" :value="c.id">
-            {{ c.name }}
-          </option>
-        </select>
-        <button class="primary search-btn" @click="search">搜索</button>
-      </div>
-    </div>
-
-    <p v-if="errorText" class="error">{{ errorText }}</p>
-    <p v-else-if="loading" class="muted">加载中…</p>
-    <p v-else-if="!items.length" class="muted">还没有在售的商品</p>
-
-    <div v-else class="grid">
-      <div
-        v-for="g in items"
-        :key="g.id"
-        class="card goods-card"
-        @click="router.push({ name: 'goods-detail', params: { id: g.id } })"
-      >
-        <img
-          v-if="g.main_image_url"
-          :src="g.main_image_url"
-          :alt="g.name"
-          class="thumb"
-        />
-        <div v-else class="thumb placeholder">暂无图片</div>
-        <div class="info">
-          <div class="name">{{ g.name }}</div>
-          <div class="price">¥{{ formatMoney(g.price) }}</div>
-          <div class="muted">
-            {{ g.category?.l1_name ?? '未分类' }} / {{ g.category?.l2_name ?? '' }}
+        <div class="flex w-full flex-wrap items-center gap-3 sm:w-auto">
+          <label class="flex items-center gap-2 whitespace-nowrap">
+            <span class="text-sm text-base-content/60">一级类别</span>
+            <select v-model="l1Id" class="select w-[118px]" aria-label="一级类别" @change="onL1Change">
+              <option value="">全选</option>
+              <option v-for="c in categories" :key="c.id" :value="c.id">
+                {{ c.name }}
+              </option>
+            </select>
+          </label>
+          <label class="flex items-center gap-2 whitespace-nowrap">
+            <span class="text-sm text-base-content/60">二级类别</span>
+            <select
+              v-model="l2Id"
+              class="select w-[118px]"
+              aria-label="二级类别"
+              :disabled="!l1Id"
+              @change="onL2Change"
+            >
+              <option value="">全选</option>
+              <option v-for="c in l2Options" :key="c.id" :value="c.id">
+                {{ c.name }}
+              </option>
+            </select>
+          </label>
+          <div class="flex items-center gap-2">
+            <button class="btn btn-primary search-btn" @click="search">搜索</button>
+            <button class="btn btn-ghost" @click="clearFilters">清除</button>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 页码始终告诉用户「现在在第几页」，按钮只在真有多页时出现：
-         一页时两个按钮都是灰的，摆在那儿像坏了。 -->
-    <div v-if="items.length" class="row pager">
-      <button v-if="hasPager" :disabled="page <= 1" @click="changePage(page - 1)">上一页</button>
-      <span class="muted">第 {{ page }} 页 / 共 {{ Math.ceil(total / pageSize) }} 页</span>
-      <button v-if="hasPager" :disabled="page * pageSize >= total" @click="changePage(page + 1)">
-        下一页
-      </button>
+    <p v-if="errorText" class="text-error">{{ errorText }}</p>
+    <p v-else-if="loading" class="muted">加载中…</p>
+    <p v-else-if="!items.length" class="muted">还没有在售的商品</p>
+
+    <div v-else class="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
+      <GoodsCard v-for="g in items" :key="g.id" :goods="g" />
     </div>
+
+    <!-- 页码始终告诉用户「现在在第几页」，按钮只在真有多页时出现（Pagination 内部处理）。 -->
+    <Pagination
+      v-if="items.length"
+      :page="page"
+      :page-size="pageSize"
+      :total="total"
+      unit="件"
+      :disabled="loading"
+      @update:page="changePage"
+    />
   </div>
 </template>
-
-<style scoped>
-.select {
-  padding: 6px 10px;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  background: #fff;
-  min-width: 118px;
-  flex-shrink: 0;
-}
-
-/* 下拉框外面的字段名：原生 select 收起时只会显示第一项，所以标签放在外面 */
-.filter-label {
-  color: var(--color-text-weak);
-  flex-shrink: 0;
-}
-
-.select:disabled {
-  color: var(--color-text-weak);
-  background: var(--color-bg);
-}
-
-/* 搜索按钮不被输入框挤压，文字不换行 */
-.search-btn {
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
-}
-
-.goods-card {
-  padding: 0;
-  overflow: hidden;
-  cursor: pointer;
-}
-
-.thumb {
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  object-fit: cover;
-  display: block;
-  background: var(--color-fill);
-}
-
-.thumb.placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-text-weak);
-}
-
-.info {
-  padding: 10px 12px;
-}
-
-.name {
-  font-weight: 500;
-}
-
-.price {
-  color: var(--color-danger);
-  font-weight: 600;
-}
-
-.pager {
-  justify-content: center;
-}
-</style>

@@ -106,4 +106,24 @@ test.describe('01 认证与令牌隔离', () => {
     expect(failed, '错误密码不应登录成功').toBeTruthy();
     await ctx.dispose();
   });
+
+  test('T01-09 买家退出登录 → 需登录入口消失，可重新登录', async ({ page }) => {
+    const ctx = await newApi();
+    const fixture = buyerFixture('logout');
+    await newBuyer(ctx, fixture);
+    await ctx.dispose();
+
+    await buyerLoginUi(page, fixture.username, fixture.password);
+    await expect(page.getByRole('link', { name: '购物车', exact: true })).toBeVisible();
+
+    await page.getByRole('button', { name: '退出', exact: true }).click();
+    // 先等登出态出现（登录链接可见），再断言需登录入口消失，避免与异步退出竞态
+    await expect(page.getByRole('link', { name: '登录', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: '购物车', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: '收藏', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: '订单', exact: true })).toHaveCount(0);
+
+    await buyerLoginUi(page, fixture.username, fixture.password);
+    await expect(page.getByRole('link', { name: '购物车', exact: true })).toBeVisible();
+  });
 });

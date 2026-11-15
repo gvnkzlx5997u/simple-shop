@@ -2,7 +2,9 @@
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { describeError, useAuthStore } from '../stores/auth'
+import { useAuthStore } from '../stores/auth'
+import { describeError } from '../utils/errorText'
+import { safeRedirect } from '../utils/redirect'
 
 const auth = useAuthStore()
 const route = useRoute()
@@ -32,10 +34,7 @@ async function onSubmit() {
   errorText.value = ''
   try {
     await auth.login({ username: u, password: password.value })
-    const raw = typeof route.query.redirect === 'string' ? route.query.redirect : ''
-    // 只接受站内路径：`//evil.com` 是协议相对地址，浏览器会当成外站跳走。
-    const redirect = raw.startsWith('/') && !raw.startsWith('//') ? raw : ''
-    router.replace(redirect || { name: 'goods-list' })
+    router.replace(safeRedirect(route.query.redirect) || { name: 'goods-list' })
   } catch (err) {
     errorText.value = describeError(err)
   } finally {
@@ -45,56 +44,40 @@ async function onSubmit() {
 </script>
 
 <template>
-  <div class="page">
-    <div class="card form-card stack">
-      <h1 class="title">买家登录</h1>
+  <div class="mx-auto max-w-[960px] p-4">
+    <div class="panel mx-auto mt-10 max-w-[360px] space-y-3">
+      <h1 class="text-lg">买家登录</h1>
 
-      <label class="field">
-        <span>用户名</span>
-        <input v-model="username" autocomplete="username" @keyup.enter="onSubmit" />
+      <label class="block">
+        <span class="mb-1 block text-base-content/60">用户名</span>
+        <input
+          v-model="username"
+          class="input w-full"
+          autocomplete="username"
+          @keyup.enter="onSubmit"
+        />
       </label>
 
-      <label class="field">
-        <span>密码</span>
+      <label class="block">
+        <span class="mb-1 block text-base-content/60">密码</span>
         <input
           v-model="password"
           type="password"
+          class="input w-full"
           autocomplete="current-password"
           @keyup.enter="onSubmit"
         />
       </label>
 
-      <p v-if="errorText" class="error">{{ errorText }}</p>
+      <p v-if="errorText" class="text-error">{{ errorText }}</p>
 
-      <button class="primary" :disabled="submitting" @click="onSubmit">
+      <button class="btn btn-primary w-full" :disabled="submitting" @click="onSubmit">
         {{ submitting ? '登录中…' : '登录' }}
       </button>
 
       <p class="muted">
-        还没有账号？<RouterLink :to="{ name: 'register' }">去注册</RouterLink>
+        还没有账号？<RouterLink class="link link-primary" :to="{ name: 'register' }">去注册</RouterLink>
       </p>
     </div>
   </div>
 </template>
-
-<style scoped>
-.form-card {
-  max-width: 360px;
-  margin: 40px auto;
-}
-
-.title {
-  font-size: 18px;
-  margin: 0 0 8px;
-}
-
-.field {
-  display: block;
-}
-
-.field span {
-  display: block;
-  margin-bottom: 4px;
-  color: var(--color-text-weak);
-}
-</style>

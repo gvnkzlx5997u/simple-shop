@@ -1,104 +1,146 @@
-:root {
-  /* 暖色板：与卖家端 shop-light 主题同一套取色，两端并排看是同一个品牌。
-     语义色（成功绿 / 警示棕）不在这里，它们与品牌色无关，保持原值。 */
-  --color-text: #2b2620;
-  --color-text-weak: #6f6a61;
-  --color-border: #e7e1d6;
-  --color-primary: #d14408;
-  --color-danger: #dc2626;
-  --color-bg: #f6f3ee;
-  /* 卡片、按钮的实底 */
-  --color-surface: #fff;
-  /* 图片位、空槽这类浅填充；原来是 #f1f2f4 / #fafafa 的冷灰，暖底上会发青 */
-  --color-fill: #efece4;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
-    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  background: var(--color-bg);
-  color: var(--color-text);
-  font-size: 14px;
-  line-height: 1.6;
-}
-
-a {
-  color: var(--color-primary);
-  text-decoration: none;
-}
-
-button {
-  font: inherit;
-  padding: 6px 16px;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  background: var(--color-surface);
-  cursor: pointer;
-}
-
-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-button.primary {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-  color: #fff;
-}
-
-input {
-  font: inherit;
-  padding: 6px 10px;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  width: 100%;
-}
-
-/*
- * 勾选框/单选框不吃上一条的 width:100% 与内边距——否则它会把同一行里的文字挤到
- * 只剩一个字宽（购物车「全选」就是这么竖排的）。accent-color 让原生控件跟随主色，
- * 否则是浏览器默认的蓝，和暖色板放在一起很跳。
+/**
+ * 买家端唯一 CSS 入口：Tailwind v4 + daisyUI 5，只启用自定义的 shop-light / shop-dark 两套主题。
+ * 主题 token 与卖家端完全一致（两端并排看是同一个品牌）;差异只在密度——买家用默认尺寸，
+ * 不照搬卖家补偿 -sm 的字号 @utility。约定见 AGENTS.md §5 与《阶段F-买家端规范化计划》。
  */
-input[type='checkbox'],
-input[type='radio'] {
-  width: auto;
-  padding: 0;
-  accent-color: var(--color-primary);
+@import 'tailwindcss';
+
+@plugin 'daisyui' {
+  /* 内置主题全部关闭，只保留下面两套，避免带进用不到的色板变量。 */
+  themes: false;
+  logs: false;
 }
 
-.page {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 16px;
+@plugin 'daisyui/theme' {
+  name: 'shop-light';
+  default: true;
+  prefersdark: false;
+  color-scheme: light;
+
+  /* 浅色的 base-100 故意留透明：纯白在暖色底上偏冷偏硬，半透明后叠加成暖白，层次也更柔 */
+  --color-base-100: rgb(255 255 255 / 72%);
+  /*
+   * 叠加层专用实色：下拉弹层这类盖在内容之上的界面必须不透明，
+   * 否则背后的文字会透上来。取值等于 base-100 叠在 base-200 上的观感（≈ #fcfaf7）。
+   */
+  --color-surface-solid: #fcfaf7;
+  --color-base-200: #f6f3ee;
+  --color-base-300: #e7e1d6;
+  --color-base-content: #2b2620;
+  --color-primary: #d14408;
+  --color-primary-content: #ffffff;
+  --color-secondary: #0f766e;
+  --color-secondary-content: #ffffff;
+  --color-accent: #c026d3;
+  --color-accent-content: #ffffff;
+  --color-neutral: #3f3a33;
+  --color-neutral-content: #f6f3ee;
+  --color-info: #0369a1;
+  --color-info-content: #ffffff;
+  --color-success: #15803d;
+  --color-success-content: #ffffff;
+  --color-warning: #f59e0b;
+  --color-warning-content: #451a03;
+  --color-error: #dc2626;
+  --color-error-content: #ffffff;
+
+  --radius-selector: 1rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.5rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
 }
 
-.card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  padding: 16px;
+@plugin 'daisyui/theme' {
+  name: 'shop-dark';
+  default: false;
+  prefersdark: true;
+  color-scheme: dark;
+
+  --color-base-100: #26221c;
+  /* 深色的 base-100 本身已不透明，叠加层沿用同色即可，避免多出一档明度。 */
+  --color-surface-solid: #26221c;
+  --color-base-200: #1c1915;
+  --color-base-300: #38322a;
+  --color-base-content: #ede7dc;
+  --color-primary: #ff6b35;
+  --color-primary-content: #331005;
+  --color-secondary: #2dd4bf;
+  --color-secondary-content: #052e29;
+  --color-accent: #e879f9;
+  --color-accent-content: #4a044e;
+  --color-neutral: #3a342b;
+  --color-neutral-content: #ede7dc;
+  --color-info: #38bdf8;
+  --color-info-content: #082f49;
+  --color-success: #4ade80;
+  --color-success-content: #052e16;
+  --color-warning: #fbbf24;
+  --color-warning-content: #451a03;
+  --color-error: #f87171;
+  --color-error-content: #450a0a;
+
+  --radius-selector: 1rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.5rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  /* 深色下阴影几乎不可见，层级靠 base-100 与 base-300 的明度差，关掉 3D 深度。 */
+  --depth: 0;
+  --noise: 0;
 }
 
-.muted {
-  color: var(--color-text-weak);
+@layer base {
+  html {
+    font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  }
+
+  body {
+    /* 页面底走 base-200，卡片/面板走 base-100，这个分工固定，不要在页面里反转。 */
+    @apply bg-base-200 text-base-content;
+    /* 铺满视口：否则内容不足一屏时页尾会露出 html 的默认底色，与页面底形成色带。 */
+    min-height: 100vh;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-weight: 600;
+  }
+
+  /*
+   * 原生下拉的选项由浏览器绘制，拿不到 .select 上的样式，
+   * 不显式给底色弹层就会跟着 select 一起半透明（背后内容透出来）。
+   */
+  option {
+    background-color: var(--color-surface-solid);
+    color: var(--color-base-content);
+  }
 }
 
-.error {
-  color: var(--color-danger);
+@layer components {
+  /* 页面通用容器：等价于改造前 .card 的观感，避免每处重复写四条工具类。 */
+  .panel {
+    @apply rounded-box border border-base-300 bg-base-100 p-4 shadow-sm;
+  }
+
+  /* 二级文字：与 text-base-content/60 等价，保留短类名减少模板噪音。 */
+  .muted {
+    @apply text-base-content/60;
+  }
 }
 
-.row {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-
-.stack > * + * {
-  margin-top: 12px;
+/**
+ * daisyUI 的组件类落在 utilities 层的子层里，普通 @layer components 盖不住，
+ * 全局调整只能用 @utility。买家端不改字号（用默认尺寸），这里只处理下拉弹层的实色。
+ */
+@utility select {
+  /* 下拉的弹出列表会用这个底色画，必须实色，见 --color-surface-solid。 */
+  background-color: var(--color-surface-solid);
 }

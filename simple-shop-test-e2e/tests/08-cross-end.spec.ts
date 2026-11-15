@@ -22,6 +22,7 @@ import { buyerFixture, goodsFixture, uniqueName } from '../helpers/data';
 import { BUYER_URL, SELLER_URL } from '../helpers/config';
 import {
   buyerCartRow,
+  buyerCartTotal,
   buyerLoginUi,
   buyerOpenCart,
   openSellerOrder,
@@ -82,9 +83,9 @@ test.describe.serial('08 买卖两端联调', () => {
     await buyerLoginUi(page, fixture.username, fixture.password);
     await buyerOpenCart(page);
     const rowA = buyerCartRow(page, goodsA.name);
-    await rowA.locator('.qty-input').fill('2');
-    await rowA.locator('.qty-input').blur();
-    await expect(page.locator('.total strong')).toHaveText('¥45.00');
+    await rowA.getByTestId('cart-qty').fill('2');
+    await rowA.getByTestId('cart-qty').blur();
+    await expect(buyerCartTotal(page)).toHaveText('¥45.00');
 
     await page.getByRole('button', { name: '去结算' }).click();
     await expect(page).toHaveURL(/\/orders\/[^/]+$/);
@@ -114,7 +115,7 @@ test.describe.serial('08 买卖两端联调', () => {
 
     await buyerLoginUi(page, fixture.username, fixture.password);
     await page.goto(`${BUYER_URL}/orders/${placed.order_id}`);
-    await expect(page.locator('.badge')).toHaveText('已发货');
+    await expect(page.getByTestId('status-tag')).toHaveText('已发货');
     // 已发货后买家侧不再有取消入口
     await expect(page.getByRole('button', { name: '取消订单' })).toHaveCount(0);
   });
@@ -134,8 +135,8 @@ test.describe.serial('08 买卖两端联调', () => {
 
     await buyerLoginUi(page, fixture.username, fixture.password);
     await page.goto(`${BUYER_URL}/orders/${placed.order_id}`);
-    await expect(page.locator('.badge')).toHaveText('交易完成');
-    await expect(page.locator('.items tbody tr')).toHaveCount(1);
+    await expect(page.getByTestId('status-tag')).toHaveText('交易完成');
+    await expect(page.getByTestId('order-items').locator('tbody tr')).toHaveCount(1);
   });
 
   test('T08-04 发货前买家取消 → 卖家侧变已取消，推进按钮消失', async ({ page }) => {
@@ -147,7 +148,7 @@ test.describe.serial('08 买卖两端联调', () => {
     await page.goto(`${BUYER_URL}/orders/${placed.order_id}`);
     await page.getByRole('button', { name: '取消订单' }).click();
     await page.getByRole('button', { name: '确认取消' }).click();
-    await expect(page.locator('.badge')).toHaveText('已取消');
+    await expect(page.getByTestId('status-tag')).toHaveText('已取消');
 
     await sellerLoginUi(page);
     await page.goto(`${SELLER_URL}/orders`);
@@ -167,7 +168,7 @@ test.describe.serial('08 买卖两端联调', () => {
 
     await buyerLoginUi(page, fixture.username, fixture.password);
     await page.goto(`${BUYER_URL}/orders/${placed.order_id}`);
-    await expect(page.locator('.badge')).toHaveText('已发货');
+    await expect(page.getByTestId('status-tag')).toHaveText('已发货');
     await expect(page.getByRole('button', { name: '取消订单' })).toHaveCount(0);
 
     const result = await call(ctx, 'POST', `/api/buyer/orders/${placed.order_id}/cancel`, {}, {
@@ -231,21 +232,47 @@ test.describe.serial('08 买卖两端联调', () => {
     await page.goto(`${BUYER_URL}/orders`);
 
     // 已取消的订单也在「全部」里
-    await expect(page.locator('.order-row').filter({ hasText: older.order_no })).toBeVisible();
-    await expect(page.locator('.order-row').filter({ hasText: newer.order_no })).toBeVisible();
+    await expect(page.getByTestId('order-row').filter({ hasText: older.order_no })).toBeVisible();
+    await expect(page.getByTestId('order-row').filter({ hasText: newer.order_no })).toBeVisible();
 
     // 倒序：最新下的那笔在上
-    await expect(page.locator('.order-row').first()).toContainText(newer.order_no);
+    await expect(page.getByTestId('order-row').first()).toContainText(newer.order_no);
 
     // 按状态筛选
-    await page.locator('.filter select').selectOption({ label: '已取消' });
-    await expect(page.locator('.order-row').filter({ hasText: older.order_no })).toBeVisible();
-    await expect(page.locator('.order-row').filter({ hasText: newer.order_no })).toHaveCount(0);
+    await page.getByLabel('按状态筛选').selectOption({ label: '已取消' });
+    await expect(page.getByTestId('order-row').filter({ hasText: older.order_no })).toBeVisible();
+    await expect(page.getByTestId('order-row').filter({ hasText: newer.order_no })).toHaveCount(0);
 
     // 行上要能看到件数与金额
-    const row = page.locator('.order-row').filter({ hasText: older.order_no });
+    const row = page.getByTestId('order-row').filter({ hasText: older.order_no });
     await expect(row).toContainText('共 1 件');
     await expect(row).toContainText('¥15.00');
+  });
+
+  test('T08-09 买家开着详情时卖家发货 → 点取消提示已发货不能取消', async ({ page }) => {
+    const goods = await newGoods(3);
+    const { fixture, token } = await newBuyerToken();
+    const placed = await placeOrderViaApi(token, goods.id, 1);
+
+    // 买家先打开详情（此时待确认，有取消入口）
+    await buyerLoginUi(page, fixture.username, fixture.password);
+    await page.goto(`${BUYER_URL}/orders/${placed.order_id}`);
+    await expect(page.getByRole('button', { name: '取消订单' })).toBeVisible();
+
+    // 卖家在买家停留期间推进到已发货
+    await advanceOrder(ctx, sellerToken, placed.order_id, 'confirm');
+    await advanceOrder(ctx, sellerToken, placed.order_id, 'prepare');
+    await advanceOrder(ctx, sellerToken, placed.order_id, 'ship');
+
+    // 买家页面上的取消按钮是旧状态渲染的，点了应被 60003 拦下并给可读提示
+    await page.getByRole('button', { name: '取消订单' }).click();
+    await page.getByRole('button', { name: '确认取消' }).click();
+    await expect(page.getByText('已发货，不能取消')).toBeVisible();
+
+    // 刷新后与服务端一致：已发货、无取消入口
+    await page.reload();
+    await expect(page.getByTestId('status-tag')).toHaveText('已发货');
+    await expect(page.getByRole('button', { name: '取消订单' })).toHaveCount(0);
   });
 
   // ---- 本文件的小工具 ----

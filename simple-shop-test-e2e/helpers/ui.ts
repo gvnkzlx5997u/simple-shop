@@ -97,15 +97,15 @@ export async function buyerRegisterUi(
   await page.waitForURL((url) => url.pathname.startsWith('/goods'), { timeout: 20_000 });
 }
 
-/** 买家列表里按名称定位商品卡（买家端仍是原生 CSS，`.goods-card` 还在）。 */
+/** 买家列表里按名称定位商品卡（阶段F 后统一用 data-testid）。 */
 export function buyerGoodsCard(page: Page, name: string) {
-  return page.locator('.goods-card').filter({ hasText: name });
+  return page.getByTestId('goods-card').filter({ hasText: name });
 }
 
 /** 买家打开某个商品详情。 */
 export async function buyerOpenGoods(page: Page, name: string) {
   await buyerGoodsCard(page, name).first().click();
-  await expect(page.locator('.summary .title')).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 }
 
 /** 买家端搜索（placeholder 里写着「名称或描述」，但后端只匹配名称）。 */
@@ -117,17 +117,22 @@ export async function buyerSearch(page: Page, keyword: string) {
 /** 买家详情页加购：点按钮并等「已加入购物车 / 已在购物车里了」的提示。 */
 export async function buyerAddToCart(page: Page) {
   await page.getByRole('button', { name: '加入购物车' }).click();
-  await expect(page.locator('.notice')).toBeVisible();
+  await expect(page.getByTestId('notice')).toBeVisible();
 }
 
 /** 买家购物车里按商品名定位一行。 */
 export function buyerCartRow(page: Page, name: string) {
-  return page.locator('.row-item').filter({ hasText: name });
+  return page.getByTestId('cart-row').filter({ hasText: name });
+}
+
+/** 购物车合计金额（含 ¥ 与两位小数）。 */
+export function buyerCartTotal(page: Page) {
+  return page.getByTestId('cart-total');
 }
 
 /** 买家收藏页里按商品名定位卡片。 */
 export function buyerFavoriteCard(page: Page, name: string) {
-  return page.locator('.fav-card').filter({ hasText: name });
+  return page.getByTestId('fav-card').filter({ hasText: name });
 }
 
 export async function buyerOpenCart(page: Page) {
@@ -138,6 +143,16 @@ export async function buyerOpenCart(page: Page) {
 export async function buyerOpenFavorites(page: Page) {
   await page.goto(`${BUYER_URL}/favorites`);
   await expect(page.getByRole('heading', { name: '我的收藏' })).toBeVisible();
+}
+
+export async function buyerOpenOrders(page: Page) {
+  await page.goto(`${BUYER_URL}/orders`);
+  await expect(page.getByRole('heading', { name: '我的订单' })).toBeVisible();
+}
+
+/** 买家订单列表里按订单号定位一行。 */
+export function buyerOrderRow(page: Page, orderNo: string) {
+  return page.getByTestId('order-row').filter({ hasText: orderNo });
 }
 
 // ---------------- 卖家订单 ----------------

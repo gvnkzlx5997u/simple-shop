@@ -1,12 +1,13 @@
 # simple-shop E2E
 
-> **当前状态：阶段三用例已完成。** 阶段二 57 条逐条判定去留（保留 / 改写 / 删除）后留 42 条，
-> 再按 Backlog 新增 34 条（订单生命周期、跨端联调、买家购物车与收藏），`tests/` 共 **76 条**。
+> **当前状态：阶段三用例已完成并经阶段F 收口。** 阶段二 57 条逐条判定去留后留 42 条，
+> 再按 Backlog 新增 34 条；阶段F 又把买家遗留对账脚本 d3/d5 的可自动化部分收编进主套件
+> （新增 14 条，含新 spec 02c），并删除 d3/d5 本身。`tests/` 共 **10 spec / 90 条**。
 
 Playwright 驱动**系统已装的 Edge**（不下载 Chromium），对真实运行中的前后端做端到端验收。
 
-- 规模：**9 个 spec / 76 条用例**，全量跑约 **1.4 分钟**（含建 60+ 个商品/账号的造数）
-- 稳定性：`workers:1` 串行；空库重建后两批各跑通（76/76）
+- 规模：**10 个 spec / 90 条用例**，全量跑约 **1.5 分钟**（含建 60+ 个商品/账号的造数）
+- 稳定性：`workers:1` 串行；空库重建后全量跑通（90/90）
 - 历史套件都在 `archive/`（`阶段一/` 36 条、`阶段二/` 57 条原件），**不要放回 `tests/`**，否则会被 `playwright test` 误跑；对应关系见 `archive/目录.md`
 
 ---
@@ -28,7 +29,7 @@ cp .env.example .env     # Windows: copy .env.example .env
 | `E2E_DB_HOST` / `E2E_DB_PORT` / `E2E_DB_USER` | 数据库连接 | `127.0.0.1` / `3306` / `root` |
 | `E2E_DB_PASSWORD` | 数据库口令 | 空 |
 | `E2E_DB_NAME` | **E2E 主库**（`db:reset` / `db:probe`） | `simple_shop_e2e` |
-| `E2E_FIXTURE_DB_NAME` | 买家端对账脚本（d3/d5）的**夹具库**，与主库分开 | `simple_shop_d1` |
+| `E2E_FIXTURE_DB_NAME` | **手工联调夹具库**（阶段F 起测试不再连库），与主库分开 | `simple_shop_d1` |
 | `API_URL` / `BUYER_URL` / `SELLER_URL` | 三个服务地址 | 8080 / 5174 / 5173 |
 | `SELLER_ACCOUNT` / `SELLER_PASSWORD` | 种子卖家账号 | `seller` / `Abcd@1234` |
 
@@ -55,7 +56,7 @@ java -Dserver.port=8080 \
 
 后端添加了环境变量配置，可以通过环境变量一行启动：
 ```powershell
-$env:RATE_LIMIT_ENABLED="false";$env.DB_PASSWORD=<你的 MySQL 口令>;$env.DB_URL="jdbc:mysql://localhost:3306/simple_shop_e2e?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&connectionTimeZone=UTC&rewriteBatchedStatements=true";java -jar .\target\simple-shop.war
+$env:RATE_LIMIT_ENABLED="false";$env:DB_PASSWORD=<你的 MySQL 口令>;$env:DB_URL="jdbc:mysql://localhost:3306/simple_shop_e2e?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&connectionTimeZone=UTC&rewriteBatchedStatements=true";java -jar .\target\simple-shop.war
 ```
 
 
@@ -81,8 +82,8 @@ npm run db:reset     # DROP + CREATE simple_shop_e2e
 | 失败只能从 stderr 文本猜，退出码混着告警 | 抛带 `code` 的异常，消息里直接给出「连的哪个库 + 哪句 SQL + 可能原因」 |
 | 只支持 Windows | Windows / macOS / Linux / WSL 一致 |
 
-**边界**：只有「重建库」和「对账脚本（d3/d5）」用数据库连接；Playwright 用例本身仍然**只走接口与 UI**——
-造数走接口、断言看接口返回，避免用例跟着表结构漂移。
+**边界**：只有「重建库」与「手工联调夹具」用数据库连接；**测试（单元 / E2E）一律不连库**——
+造数走接口、断言看接口返回与页面，避免用例跟着表结构漂移。阶段F 已删除直连库对账的 d3/d5 脚本。
 
 ### 3. 依赖
 
@@ -158,23 +159,24 @@ npx playwright test
 
 ---
 
-## 三、用例清单（42 条）
+## 三、用例清单（90 条）
 
 | Spec | 条数 | 覆盖 |
 | --- | :---: | --- |
-| `01-auth.spec.ts` | 8 | 卖家未登录跳转、登录成功/失败、买家注册即登录、买家登录、**买卖家令牌互调被拒**、错误口令 |
-| `02-buyer.spec.ts` | 4 | 匿名看列表、**搜索只匹配名称**、两级类别筛选、详情价格（两位小数）/库存/描述 |
-| `03-seller-goods.spec.ts` | 9 | UI 发布商品、库存改 0 自动下架（库存耗尽）/改回自动上架、手动下架终态（库存只读、无上架入口、可按原因筛出）、**有未完成订单下架被拒 20020**、删被引用类别 20006、库存负数 400+50002、**状态+原因筛选**、类别改名/删空类别、类别管理页手工新增一级/二级 |
+| `01-auth.spec.ts` | 9 | 卖家未登录跳转、登录成功/失败、买家注册即登录、买家登录、**买卖家令牌互调被拒**、错误口令、**买家退出登录入口消失可重登** |
+| `02-buyer.spec.ts` | 5 | 匿名看列表、**搜索只匹配名称**、两级类别筛选、详情价格（两位小数）/库存/描述、**搜索无结果空态** |
+| `02b-buyer-cart.spec.ts` | 17 | 未登录拦截、重复加购仍一行、改数量/夹库存/合计、移除、**数量与勾选不落库/刷新保持**、失效行置灰不可结算、结算生成一笔两明细+回购物车空态、收藏与取消、收藏失效不可进详情、转收藏、**未登录加购/收藏回跳、空车引导、勾选全选合计、下单瞬间下架/缺货被拦并自动刷新、收藏刷新回显** |
+| `02c-buyer-orders.spec.ts` | 4 | **单件经购物车下单跳详情、订单分页与翻页、切筛选回第 1 页+空态清筛选、订单头与明细独立请求+明细失败单独重试** |
+| `03-seller-goods.spec.ts` | 11 | UI 发布商品、库存改 0 自动下架（库存耗尽）/改回自动上架、手动下架终态（库存只读、无上架入口、可按原因筛出）、**有未完成订单下架被拒 20020**、删被引用类别 20006、库存负数 400+50002、**状态+原因筛选**、类别改名/删空类别、类别管理页手工新增一级/二级 |
+| `04-order-lifecycle.spec.ts` | 14 | 七 tab（含已取消）、状态进 URL、行→详情、头+明细合计、只有一个推进按钮、四步推进、完成扣库存/扣到 0 自动下架、**完成缺货 60004**、卖家取消（含已发货）、终态无动作/60003、跳级 60002、重复取消幂等、空态、商品内嵌订单 |
 | `05-contract.spec.ts` | 15 | 400+50002、`errors` 定位字段、名称 50/51 边界、价格 0/三位小数、发布库存 0、**非法查询参数（订单状态、无 status 的原因）**、未登录 401、分页默认值、媒体边界（图片 >5MB→20016、视频 20MB 边界可传、>20MB→20026、视频当商品图→20027、文本伪装图片→20016） |
 | `06-security.spec.ts` | 3 | **有未完成订单时绕过前端下架/清零 20020**、**已下架商品加购 70001 + 下单 20019**、**改密后旧令牌失效**（用完恢复口令） |
 | `07-customer.spec.ts` | 3 | 客户列表、**客户详情内嵌该客户订单且不再返回购买历史**、改密页前端校验 |
-| `02b-buyer-cart.spec.ts` | 10 | 未登录拦截、重复加购仍一行、改数量/夹库存/合计、移除、**数量与勾选不落库**、失效行置灰不可结算、结算生成一笔两明细、收藏与取消、收藏失效不可进详情、转收藏 |
-| `04-order-lifecycle.spec.ts` | 14 | 七 tab（含已取消）、状态进 URL、行→详情、头+明细合计、只有一个推进按钮、四步推进、完成扣库存/扣到 0 自动下架、**完成缺货 60004**、卖家取消（含已发货）、终态无动作/60003、跳级 60002、重复取消幂等、空态、商品内嵌订单 |
-| `08-cross-end.spec.ts` | 8 | **买卖联调**：加购结算→卖家可见、推进状态同步、完成扣库存、发货前买家取消、发货后不可取消、有未完成订单下架被拒/取消后可下架、下单不锁库存、买家订单列表筛选与倒序 |
+| `08-cross-end.spec.ts` | 9 | **买卖联调**：加购结算→卖家可见、推进状态同步、完成扣库存、发货前买家取消、发货后不可取消、有未完成订单下架被拒/取消后可下架、下单不锁库存、买家订单列表筛选与倒序、**买家停留详情时卖家发货→取消被 60003 拦** |
 
 > 阶段二的 `04-trade.spec.ts`（8 条）**整组删除**：意向队列、交易裁决、冻结、归档在阶段三都不存在。
-> 下一轮补新增用例：订单生命周期（04）、跨端联调（08）、买家购物车/收藏、商品两态补充，清单见
-> `simple-shop-doc/阶段三/阶段E-E2E用例清单.md`。
+> 阶段F 已把买家遗留对账脚本 d3/d5 的可自动化部分收编（02b/02c/01/02/08 新增 14 条），脚本本身删除；
+> 逐条去留判定见 `simple-shop-doc/阶段三/阶段F-买家端规范化计划.md` §5 与《阶段E-E2E用例清单》。
 
 ### 数据策略
 
@@ -192,6 +194,7 @@ npx playwright test
 | 改密用例会真改卖家口令 | T06-04 用 `try/finally` 保证恢复；若进程被强杀，需手动把口令改回 `Abcd@1234` |
 | **`VIDEO_INVALID(20025)` 实际不可达** | 单文件上限（`max-file-size=20MB`）与视频业务上限（20MB）相同，>20MB 的视频在容器层就被拦成 `MEDIA_INVALID(20026)`，永远走不到业务层的 20025。T05-13 按实际行为断言 |
 | 列表筛选项与商品卡没有稳定类名 | 卖家端换 daisyUI 后靠 `aria-label`（`按状态与下架原因筛选`、`搜索商品名称`）、`data-testid`（`status-tag`、`toast-item`）与 `role=link + 名称` 定位；改版时优先保住这几个钩子 |
+| 买家端选择器已统一 testid | 阶段F 后买家靠 `data-testid`（`goods-card`/`cart-row`/`cart-qty`/`cart-check`/`cart-total`/`cart-checkout`/`fav-card`/`order-row`/`order-items`/`order-total`/`status-tag`/`notice`/`warn-bar`/`empty-state`）与 `role`/`aria-label`（`按状态筛选`、`一级类别`、`二级类别`）定位；不要再写 `.row-item`/`.total strong` 等旧类名 |
 
 ---
 
@@ -206,13 +209,12 @@ simple-shop-test-e2e/
 │  ├─ api.ts                # 接口封装（造数 + 负向调用）
 │  ├─ data.ts               # 唯一后缀 + 商品/买家工厂
 │  └─ ui.ts                 # 登录、确认弹窗、卡片/状态/提示定位
-├─ tests/                   # 9 个 spec（76 条，阶段三口径）
+├─ tests/                   # 10 个 spec（90 条，阶段三 + 阶段F 收口）
 ├─ scripts/
-│  ├─ db.js                 # MySQL 访问层（node 直连，mysql2；替代 mysql 命令行）
+│  ├─ db.js                 # MySQL 访问层（仅重建库 + 手工联调夹具；测试不连库）
 │  ├─ reset-e2e-db.js       # 重建独立 E2E 库（跨平台，npm run db:reset）
 │  └─ reset-e2e-db.bat      # Windows 薄壳，内部调用上面的 .js
-├─ d3-cart-check.js         # 购物车「页面金额 = 库内金额」对账脚本（12 项）
-├─ d5-full-regression.js    # 阶段D 买家端全量回归脚本（44 项）
+├─ simple-shop-d1-fixtures.sql  # 手工联调夹具造数（幂等；非测试依赖）
 ├─ archive/                 # 历史用例（不参与执行）
 │  ├─ 目录.md               # 两代归档的说明与「阶段二 → 阶段三」对应关系
 │  ├─ 阶段一/               # 36 条 + 当年的一键脚本
@@ -228,9 +230,8 @@ simple-shop-test-e2e/
 - **导航栏购物车角标**：买家端未实现（Backlog #10 有、前端没有），未写用例；
 - **「在售但库存 0」的购物车行**：阶段三库存归零即自动下架，该状态不可达，只测了「已下架行不可选」；
 - 媒体上传的 **UI 流程**（接口层的图片/视频各类边界已覆盖，但没走完整发布链路的界面操作）；
-- 分页翻页与多页边界（当前数据量不足以触发第二页）；
-- 浏览器返回/刷新深链、多标签页并发；
-- 移动端适配（本轮不做）。
+- 浏览器返回/多标签页并发（刷新保持已由 02b-14 / 02b-17 覆盖，返回与多标签未覆盖）；
+- 移动端适配（本轮不做，仅基础响应式）。
 
 ---
 

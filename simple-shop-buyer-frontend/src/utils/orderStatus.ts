@@ -1,3 +1,4 @@
+import type { TagTone } from '../components/common/StatusTag.vue'
 import type { OrderStatus } from '../api/types'
 
 /**
@@ -17,6 +18,19 @@ export const ORDER_STATUS_TEXT: Record<OrderStatus, string> = {
 export function orderStatusText(status: OrderStatus): string {
   // 后端加了新状态而前端还没跟上时，宁可显示原始值也不要显示 undefined。
   return ORDER_STATUS_TEXT[status] ?? String(status)
+}
+
+/**
+ * 订单六态 → 徽章色调（StatusTag 消费）。进行中三态用 info、待确认用 warning、
+ * 完成用 success、取消用 default（ghost，走 base-*，两套主题自动翻转）。
+ */
+export const ORDER_STATUS_TONES: Record<OrderStatus, TagTone> = {
+  PENDING_CONFIRM: 'warning',
+  CONFIRMED: 'info',
+  PREPARED: 'info',
+  SHIPPED: 'info',
+  COMPLETED: 'success',
+  CANCELED: 'default',
 }
 
 /**
