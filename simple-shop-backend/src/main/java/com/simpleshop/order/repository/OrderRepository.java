@@ -1,6 +1,5 @@
 package com.simpleshop.order.repository;
 
-import java.util.Collection;
 import java.util.Optional;
 
 import jakarta.persistence.LockModeType;
@@ -54,18 +53,6 @@ public interface OrderRepository extends JpaRepository<Order, String> {
             @Param("buyerId") String buyerId,
             @Param("goodsId") String goodsId,
             Pageable pageable);
-
-    /**
-     * 引用该商品的未完成订单数。商品手动下架与手动把库存改成 0 之前用它判断能否执行；
-     * 只读订单表、不加订单行锁，与下单的商品行锁配合即可挡住竞态。
-     */
-    @Query("""
-            select count(i) from OrderItem i
-            where i.goodsId = :goodsId and i.order.status in :statuses
-            """)
-    long countByGoodsIdAndOrderStatusIn(
-            @Param("goodsId") String goodsId,
-            @Param("statuses") Collection<OrderStatus> statuses);
 
     /**
      * 当日订单号已用的最大序列。订单号由「前缀 + 日期 + 补零序列」构成，

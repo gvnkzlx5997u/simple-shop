@@ -24,7 +24,6 @@ import com.simpleshop.goods.entity.GoodsImage;
 import com.simpleshop.goods.enums.OffShelfReason;
 import com.simpleshop.goods.repository.GoodsContentBlockRepository;
 import com.simpleshop.goods.repository.GoodsImageRepository;
-import com.simpleshop.goods.api.UnfinishedOrderPort;
 import com.simpleshop.goods.repository.GoodsRepository;
 import com.simpleshop.goods.support.GoodsRules;
 import com.simpleshop.inventory.api.StockPort;
@@ -35,8 +34,8 @@ import com.simpleshop.inventory.api.StockPort;
  * <p>库存写入的三条口径：在售改 0 触发库存耗尽下架；库存耗尽下架改大于 0 自动上架；
  * 手动下架后库存只读，避免把库存改回正数误触发上架。
  *
- * <p>手动下架与手动改库存为 0 都会先问一句「还有未完成订单吗」：订单还没走完就下架，
- * 会让卖家后续无法完成交易。改成其他正数不拦，因为它不改变商品状态。
+ * <p>不再有「有未完成订单就不许下架」的限制：库存不预占、成交才扣减，
+ * 卖家随时可以下架或调整库存；已下架商品成交时不扣库存，这是已接受的账实差异。
  */
 @Service
 public class SellerGoodsServiceImpl implements SellerGoodsService {
@@ -48,7 +47,6 @@ public class SellerGoodsServiceImpl implements SellerGoodsService {
     private final GoodsPublishPreparer preparer;
     private final GoodsAssembler assembler;
     private final StockPort stockPort;
-    private final UnfinishedOrderPort unfinishedOrders;
     private final OperationLogService audit;
 
     public SellerGoodsServiceImpl(
@@ -59,7 +57,6 @@ public class SellerGoodsServiceImpl implements SellerGoodsService {
             GoodsPublishPreparer preparer,
             GoodsAssembler assembler,
             StockPort stockPort,
-            UnfinishedOrderPort unfinishedOrders,
             OperationLogService audit) {
         this.goodsRepository = goodsRepository;
         this.goodsImages = goodsImages;
@@ -68,7 +65,6 @@ public class SellerGoodsServiceImpl implements SellerGoodsService {
         this.preparer = preparer;
         this.assembler = assembler;
         this.stockPort = stockPort;
-        this.unfinishedOrders = unfinishedOrders;
         this.audit = audit;
     }
 
@@ -140,7 +136,6 @@ public class SellerGoodsServiceImpl implements SellerGoodsService {
         if (!goods.isOnSale()) {
             throw new BusinessException(ErrorCode.GOODS_NOT_ON_SALE);
         }
-        requireNoUnfinishedOrder(goods);
         goods.offShelf(OffShelfReason.MANUAL);
         goodsRepository.saveAndFlush(goods);
         audit.log(OperationLogService.OFF_SHELF_GOODS,
@@ -168,17 +163,8 @@ public class SellerGoodsServiceImpl implements SellerGoodsService {
             stockPort.setAvailable(goods.getId(), stock);
             return;
         }
-        // 改 0 会连带下架，和手动下架同一条限制：有未完成订单时先拒绝，库存保持原值。
-        requireNoUnfinishedOrder(goods);
         stockPort.setAvailable(goods.getId(), 0);
         goods.offShelf(OffShelfReason.STOCK_ZERO);
-    }
-
-    /** 订单还没走完就下架（或改成 0），卖家之后无法完成交易，因此整单条拦截。 */
-    private void requireNoUnfinishedOrder(Goods goods) {
-        if (unfinishedOrders.hasUnfinishedOrder(goods.getId())) {
-            throw new BusinessException(ErrorCode.GOODS_HAS_UNFINISHED_ORDER);
-        }
     }
 
     /** 库存耗尽下架的商品：补货即自动上架，原因与下架时间一起清空。 */

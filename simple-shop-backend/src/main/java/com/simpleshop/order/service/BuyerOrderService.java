@@ -12,7 +12,8 @@ public interface BuyerOrderService {
     /**
      * 提交订单：整单成功或整单拒绝，不做部分受理。
      *
-     * <p>下单只校验商品状态与库存，不锁库存行、不预占库存；库存以成交完成时为准。
+     * <p>必须选一个已有收货地址，订单只存快照；下单只校验商品状态与库存，
+     * 不锁库存行、不预占库存，库存以买家确认收货时为准。
      */
     OrderPlacedData place(String buyerId, PlaceOrderRequest request);
 

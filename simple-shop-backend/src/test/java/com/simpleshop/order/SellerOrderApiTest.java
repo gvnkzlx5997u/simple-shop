@@ -3,6 +3,7 @@ package com.simpleshop.order;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -14,6 +15,7 @@ import com.simpleshop.order.entity.Order;
 import com.simpleshop.order.enums.OrderStatus;
 import com.simpleshop.testing.ApiTestBase;
 
+@Disabled("阶段四：卖家不再有「完成订单」，状态推进要以支付为前置；T2 完成后重写本类")
 class SellerOrderApiTest extends ApiTestBase {
 
     private static final String SELLER_PASSWORD = "Abcd@1234";

@@ -12,8 +12,8 @@ import com.simpleshop.testing.DataLayerTestBase;
 class SchemaDataTest extends DataLayerTestBase {
 
     @Test
-    @DisplayName("迁移到 V3 后正好 12 张业务表：意向与归档已下线，交易四表已建")
-    void migratesToTwelveTables() {
+    @DisplayName("迁移到 V4 后正好 16 张业务表：交易四表、地址与售后四表都在，意向与归档不在")
+    void migratesToSixteenTables() {
         List<String> tables = jdbcTemplate.queryForList(
                 "select table_name from information_schema.tables "
                         + "where table_schema = database() and table_name like 'simpleshop\\_%'",
@@ -31,7 +31,11 @@ class SchemaDataTest extends DataLayerTestBase {
                 "simpleshop_order",
                 "simpleshop_order_item",
                 "simpleshop_cart_item",
-                "simpleshop_favorite");
+                "simpleshop_favorite",
+                "simpleshop_address",
+                "simpleshop_aftersale",
+                "simpleshop_aftersale_image",
+                "simpleshop_payment_refund");
         assertThat(tables).doesNotContain(
                 "simpleshop_intention",
                 "simpleshop_intention_history",
@@ -139,6 +143,52 @@ class SchemaDataTest extends DataLayerTestBase {
         assertThat(keys).containsExactlyInAnyOrder(
                 "simpleshop_order.uk_order_no",
                 "simpleshop_order_item.uk_order_item_order_goods");
+    }
+
+    @Test
+    @DisplayName("阶段四结构：订单七态与收货快照、地址默认唯一、售后退款唯一、买家不再有默认交易地点")
+    void stageFourSchemaGuardsInvariants() {
+        List<String> orderColumns = jdbcTemplate.queryForList(
+                "select column_name from information_schema.columns "
+                        + "where table_schema = database() and table_name = 'simpleshop_order' "
+                        + "and is_nullable = 'NO' and column_name like 'receiver\\_%'",
+                String.class);
+        assertThat(orderColumns).containsExactlyInAnyOrder(
+                "receiver_name", "receiver_phone", "receiver_address");
+
+        List<String> generated = jdbcTemplate.queryForList(
+                "select concat(table_name, '.', column_name, ':', extra) "
+                        + "from information_schema.columns "
+                        + "where table_schema = database() "
+                        + "and ((table_name = 'simpleshop_address' and column_name = 'default_key') "
+                        + "or (table_name = 'simpleshop_aftersale' and column_name = 'refund_key'))",
+                String.class);
+        assertThat(generated).hasSize(2)
+                .allSatisfy(row -> assertThat(row).containsIgnoringCase("GENERATED"));
+
+        List<String> uniqueKeys = jdbcTemplate.queryForList(
+                "select distinct concat(table_name, '.', index_name) "
+                        + "from information_schema.statistics "
+                        + "where table_schema = database() and non_unique = 0 "
+                        + "and ((table_name = 'simpleshop_address' "
+                        + "and index_name = 'uk_address_buyer_default') "
+                        + "or (table_name = 'simpleshop_aftersale' "
+                        + "and index_name = 'uk_aftersale_item_refund') "
+                        + "or (table_name = 'simpleshop_payment_refund' "
+                        + "and index_name = 'uk_payment_refund_order_reason'))",
+                String.class);
+        assertThat(uniqueKeys).containsExactlyInAnyOrder(
+                "simpleshop_address.uk_address_buyer_default",
+                "simpleshop_aftersale.uk_aftersale_item_refund",
+                "simpleshop_payment_refund.uk_payment_refund_order_reason");
+
+        Long legacyColumn = jdbcTemplate.queryForObject(
+                "select count(*) from information_schema.columns "
+                        + "where table_schema = database() "
+                        + "and table_name = 'simpleshop_buyer_account' "
+                        + "and column_name = 'default_location'",
+                Long.class);
+        assertThat(legacyColumn).isZero();
     }
 
     @Test

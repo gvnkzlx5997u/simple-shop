@@ -11,6 +11,8 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.simpleshop.address.api.AddressPort;
+import com.simpleshop.address.api.AddressSnapshot;
 import com.simpleshop.common.api.BusinessException;
 import com.simpleshop.common.api.ErrorCode;
 import com.simpleshop.common.audit.OperationLogService;
@@ -25,6 +27,7 @@ import com.simpleshop.order.dto.PlaceOrderItemRequest;
 import com.simpleshop.order.dto.PlaceOrderRequest;
 import com.simpleshop.order.entity.Order;
 import com.simpleshop.order.entity.OrderLine;
+import com.simpleshop.order.entity.ReceiverSnapshot;
 import com.simpleshop.order.enums.OrderStatus;
 import com.simpleshop.order.repository.OrderRepository;
 import com.simpleshop.order.service.BuyerOrderService;
@@ -34,8 +37,8 @@ import com.simpleshop.order.support.OrderNoGenerator;
 /**
  * 下单：先锁商品行再校验，避免「校验通过后商品被下架」。
  *
- * <p>事务顺序固定为：校验明细形状 → 按 ID 升序锁商品行 → 校验在售 → 读库存 → 取下单快照 →
- * 算总额并落库。库存只读不锁：本期没有预占，真正的扣减发生在交易完成时。
+ * <p>事务顺序固定为：取地址快照 → 校验明细形状 → 按 ID 升序锁商品行 → 校验在售 → 读库存 →
+ * 取下单快照 → 算总额并落库。库存只读不锁：没有预占，真正的扣减发生在买家确认收货时。
  *
  * <p>拒绝口径：任一明细不满足就整单拒绝、不写任何数据，并按「为什么」返回已有业务码——
  * 商品不存在 20011、商品已下架 20019、库存不足 20015。订单域自己的状态类错误码
@@ -50,6 +53,7 @@ public class BuyerOrderServiceImpl implements BuyerOrderService {
     private final OrderRepository orders;
     private final GoodsQueryPort goodsQuery;
     private final StockPort stockPort;
+    private final AddressPort addresses;
     private final OrderNoGenerator orderNumbers;
     private final OperationLogService audit;
     private final RateLimiter rateLimiter;
@@ -59,6 +63,7 @@ public class BuyerOrderServiceImpl implements BuyerOrderService {
             OrderRepository orders,
             GoodsQueryPort goodsQuery,
             StockPort stockPort,
+            AddressPort addresses,
             OrderNoGenerator orderNumbers,
             OperationLogService audit,
             RateLimiter rateLimiter,
@@ -66,6 +71,7 @@ public class BuyerOrderServiceImpl implements BuyerOrderService {
         this.orders = orders;
         this.goodsQuery = goodsQuery;
         this.stockPort = stockPort;
+        this.addresses = addresses;
         this.orderNumbers = orderNumbers;
         this.audit = audit;
         this.rateLimiter = rateLimiter;
@@ -84,8 +90,10 @@ public class BuyerOrderServiceImpl implements BuyerOrderService {
                 : request.items();
         requireWellFormed(requested);
 
+        ReceiverSnapshot receiver = resolveReceiver(buyerId, request.addressId());
         List<OrderLine> lines = resolveLines(requested);
-        Order order = orders.saveAndFlush(Order.place(orderNumbers.next(), buyerId, lines));
+        Order order = orders.saveAndFlush(
+                Order.place(orderNumbers.next(), buyerId, receiver, lines));
         audit.log(OperationLogService.CREATE_ORDER,
                 OperationLogService.TARGET_ORDER, order.getId());
         return assembler.placed(order);
@@ -109,6 +117,19 @@ public class BuyerOrderServiceImpl implements BuyerOrderService {
         }
         order.cancelByBuyer();
         return persistCancellation(order);
+    }
+
+    /**
+     * 收货地址必须是买家自己地址簿里的条目。
+     *
+     * <p>「不存在」与「别人的地址」都按同一个业务码拒绝，避免用地址 ID 探测他人数据；
+     * 拿不到地址就不许下单，而不是允许空地址——没有收货人就没有履约对象。
+     */
+    private ReceiverSnapshot resolveReceiver(String buyerId, String addressId) {
+        AddressSnapshot address = addresses.findOwned(buyerId, addressId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.ADDRESS_REQUIRED));
+        return new ReceiverSnapshot(
+                address.receiverName(), address.receiverPhone(), address.detailAddress());
     }
 
     private OrderStatusData persistCancellation(Order order) {

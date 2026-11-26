@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import java.util.List;
 import java.util.Map;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -21,6 +22,7 @@ import com.simpleshop.order.entity.OrderLine;
 import com.simpleshop.order.enums.OrderStatus;
 import com.simpleshop.testing.ApiTestBase;
 
+@Disabled("阶段四：交易完成改由买家确认收货，卖家完成端点已删除；T2 完成后由买家收货用例取代")
 class OrderCompletionApiTest extends ApiTestBase {
 
     private static final String SELLER_PASSWORD = "Abcd@1234";
@@ -129,6 +131,7 @@ class OrderCompletionApiTest extends ApiTestBase {
         return orders.saveAndFlush(Order.place(
                 orderNoGenerator.next(),
                 buyer.getId(),
+                receiver(),
                 List.of(
                         new OrderLine(first.getId(), first.getName(), first.getPrice(), firstQuantity),
                         new OrderLine(second.getId(), second.getName(), second.getPrice(), secondQuantity))));

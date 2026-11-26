@@ -1,23 +1,14 @@
 package com.simpleshop.order.service.impl;
 
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
-
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.simpleshop.common.api.BusinessException;
 import com.simpleshop.common.api.ErrorCode;
 import com.simpleshop.common.audit.OperationLogService;
-import com.simpleshop.goods.api.GoodsQueryPort;
-import com.simpleshop.goods.api.GoodsSalePort;
-import com.simpleshop.inventory.api.StockPort;
-import com.simpleshop.inventory.api.StockShortage;
 import com.simpleshop.order.dto.OrderStatusData;
+import com.simpleshop.order.dto.ShipLogisticsRequest;
 import com.simpleshop.order.entity.Order;
-import com.simpleshop.order.entity.OrderItem;
 import com.simpleshop.order.enums.OrderStatus;
 import com.simpleshop.order.repository.OrderRepository;
 import com.simpleshop.order.service.OrderAssembler;
@@ -29,7 +20,8 @@ import com.simpleshop.order.service.SellerOrderService;
  * <p>推进与取消都先锁订单行，重复提交的第二个请求拿到锁后会看到新状态，
  * 因而得到「状态不允许」而不是把订单推两格。
  *
- * <p>取消只写进操作日志（操作者与时间），订单上不落取消人与取消时间字段。
+ * <p>卖家不再有「交易完成」这个动作：成交由买家确认收货推进，卖家最多把订单推到已发货。
+ * 取消只写进操作日志（操作者与时间），订单上不落取消人与取消时间字段。
  */
 @Service
 public class SellerOrderServiceImpl implements SellerOrderService {
@@ -37,23 +29,14 @@ public class SellerOrderServiceImpl implements SellerOrderService {
     private final OrderRepository orders;
     private final OperationLogService audit;
     private final OrderAssembler assembler;
-    private final GoodsQueryPort goodsQuery;
-    private final GoodsSalePort goodsSale;
-    private final StockPort stockPort;
 
     public SellerOrderServiceImpl(
             OrderRepository orders,
             OperationLogService audit,
-            OrderAssembler assembler,
-            GoodsQueryPort goodsQuery,
-            GoodsSalePort goodsSale,
-            StockPort stockPort) {
+            OrderAssembler assembler) {
         this.orders = orders;
         this.audit = audit;
         this.assembler = assembler;
-        this.goodsQuery = goodsQuery;
-        this.goodsSale = goodsSale;
-        this.stockPort = stockPort;
     }
 
     @Transactional
@@ -61,7 +44,7 @@ public class SellerOrderServiceImpl implements SellerOrderService {
         Order order = lock(orderId);
         if (!order.canConfirm()) {
             throw new BusinessException(ErrorCode.ORDER_STATUS_INVALID,
-                    "order " + order.getOrderNo() + " is not pending confirmation");
+                    "order " + order.getOrderNo() + " is not paid");
         }
         order.confirm();
         return persist(order, OperationLogService.ORDER_CONFIRM);
@@ -80,41 +63,17 @@ public class SellerOrderServiceImpl implements SellerOrderService {
     }
 
     @Transactional
-    public OrderStatusData ship(String orderId) {
+    public OrderStatusData ship(String orderId, ShipLogisticsRequest request) {
+        if (request == null) {
+            throw new BusinessException(ErrorCode.PARAM_INVALID, "logistics info is required");
+        }
         Order order = lock(orderId);
         if (!order.canShip()) {
             throw new BusinessException(ErrorCode.ORDER_STATUS_INVALID,
                     "order " + order.getOrderNo() + " is not prepared");
         }
-        order.ship();
+        order.ship(request.carrier(), request.trackingNo(), request.logisticsRemark());
         return persist(order, OperationLogService.ORDER_SHIP);
-    }
-
-    /**
-     * 交易完成：扣库存与改订单状态在同一事务里，全成或全败。
-     *
-     * <p>先锁订单行，再按 ID 升序锁商品行、库存行；库存只在这个事务里扣一次，
-     * 因此重复提交的第二个请求会先被状态守卫挡下，不会重复扣库存。
-     */
-    @Transactional
-    public OrderStatusData complete(String orderId) {
-        Order order = lock(orderId);
-        if (!order.canComplete()) {
-            throw new BusinessException(ErrorCode.ORDER_STATUS_INVALID,
-                    "order " + order.getOrderNo() + " is not shipped");
-        }
-
-        Map<String, Integer> required = requiredQuantities(order);
-        goodsQuery.lockForOrder(required.keySet());
-        List<StockShortage> shortages = stockPort.deductAll(required);
-        if (!shortages.isEmpty()) {
-            // 整单拒绝：上面一行都没扣，订单仍是已发货，卖家补货后可以重试。
-            throw new BusinessException(
-                    ErrorCode.ORDER_STOCK_SHORTAGE, shortageMessage(shortages));
-        }
-        goodsSale.markSoldOut(required.keySet());
-        order.complete();
-        return persist(order, OperationLogService.ORDER_COMPLETE);
     }
 
     @Transactional
@@ -131,23 +90,6 @@ public class SellerOrderServiceImpl implements SellerOrderService {
         }
         order.cancelBySeller();
         return persist(order, OperationLogService.ORDER_CANCEL);
-    }
-
-    private static Map<String, Integer> requiredQuantities(Order order) {
-        Map<String, Integer> required = new LinkedHashMap<>();
-        for (OrderItem item : order.getItems()) {
-            required.merge(item.getGoodsId(), item.getQuantity(), Integer::sum);
-        }
-        return required;
-    }
-
-    /** 只报商品与数量缺口，不带名称、单价等完整订单项信息。 */
-    private static String shortageMessage(List<StockShortage> shortages) {
-        String detail = shortages.stream()
-                .map(shortage -> shortage.goodsId() + " needs " + shortage.required()
-                        + ", has " + shortage.available())
-                .collect(Collectors.joining("; "));
-        return "insufficient stock: " + detail;
     }
 
     private Order lock(String orderId) {

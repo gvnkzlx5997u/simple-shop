@@ -12,7 +12,9 @@ import com.simpleshop.common.text.TextRules;
  * <p>用户名/账号：去首尾空白后 1~50 字符，不允许空白、控制字符、换行和尖括号。
  * 密码：注册/改密至少 8 字符，且 UTF-8 不超过 72 字节（BCrypt 的有效输入上限）。
  * 电话：7~20 位数字与 "-"，且数字至少 7 位；格式在这里校验，数据库不限制。
- * 默认交易地点：可空，最多 50 字符，不允许换行和尖括号。
+ *
+ * <p>收货地址不在这里校验：它属于地址簿（见 address 包的 AddressRules），
+ * 注册流程已经不收这个字段。
  */
 public final class AccountRules {
 
@@ -49,17 +51,6 @@ public final class AccountRules {
         if (!value.matches("[0-9-]{7,20}")
                 || value.chars().filter(Character::isDigit).count() < 7) {
             throw new BusinessException(ErrorCode.PHONE_INVALID);
-        }
-        return value;
-    }
-
-    public static String defaultLocation(String raw) {
-        String value = TextRules.trimToNull(raw);
-        if (value != null
-                && (TextRules.charCount(value) > 50
-                || TextRules.containsAngleBracket(value)
-                || TextRules.containsLineBreak(value))) {
-            throw new BusinessException(ErrorCode.DEFAULT_LOCATION_INVALID);
         }
         return value;
     }

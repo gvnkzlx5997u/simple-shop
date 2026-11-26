@@ -10,7 +10,7 @@
 - 订单取代购买意向，商品只有「在售 / 已下架」两态；不要沿用阶段二的意向排队、商品冻结与归档搬表。
 - 项目按阶段迭代，新需求可能改变业务口径，先确认需求与状态模型，再改实现；不要全部沿用旧口径。
 - 后端只提供 REST 与 `/media`。买家端与卖家端是两个独立 SPA。
-- 当前阶段（阶段三）文档见 `simple-shop-doc/阶段三/目录.md`；历史阶段文档已失去时效性，仅作参考。
+- **阶段状态：阶段四（挑战需求 C）后端已交付，前端与 E2E 待改造。** 数据层（V4）、订单七态主链、地址、售后、横切与测试全部完成，契约冻结在 `simple-shop-doc/阶段四/openapi.json` 与《契约交接》。阶段四文档见 `simple-shop-doc/阶段四/目录.md`；阶段一、阶段二、阶段三文档已失去时效性，仅作参考。
 
 ## 2. 仓库与技术栈
 
@@ -75,35 +75,43 @@ npx playwright test
 
 ## 4. 后端约定
 
-- **按功能分包**：`account`、`category`、`goods`、`inventory`、`order`、`cart`、`favorite`、`common`。功能包内按 `entity / repository / service / controller / dto` 组织；`service/` 放接口，`service/impl/` 放实现。阶段二的 `intention` 与 `history` 包已下线，不要恢复。
+- **按功能分包**：`account`、`category`、`goods`、`inventory`、`order`、`cart`、`favorite`、`address`、`payment`、`aftersale`、`common`。功能包内按 `entity / repository / service / controller / dto` 组织；`service/` 放接口，`service/impl/` 放实现。阶段二的 `intention` 与 `history` 包已下线，不要恢复。
+- **三个新包的依赖方向是固定的**：`order` 可以用 `address.api`、`payment.api`、`goods.api`；`payment` 是叶子，谁都不认识（接真实渠道也不许反过来 import 订单）；`aftersale` 只能用 `order.api` 与 `order.enums`（状态枚举跨包共享），不能碰订单的实体、仓储、服务与 DTO。反向依赖由 ArchUnit 拦截，不要用"临时 import"绕。
 - **依赖方向由 ArchUnit 守门**：`common` 保持隔离；Controller 不直接碰 Repository；跨功能只依赖对方的 `api/` 端口；功能包之间不允许循环依赖。不要用“先写通再重构”的方式绕过这些规则。
 - **Controller 分层**：卖家、买家、公共查询分别放在 `controller/seller`、`controller/buyer`、`controller/publicapi`；不要把所有接口塞进一个 Controller。
-- **接口边界**：Entity 不直接暴露给前端；请求/响应使用 DTO。响应外壳统一为 `{code, message, data}`，`code=0` 表示成功；业务拒绝通常是 HTTP 200 + 业务码，只有 401、400、404、500 使用 HTTP 状态码。参数校验错误可能带 `errors` 数组。业务码按域分段：1xxxx 账号、2xxxx 类别与商品、6xxxx 订单、7xxxx 购物车与收藏、5xxxx 通用；3xxxx 与 4xxxx 已停用，不得复用。
-- **订单查询边界**：列表与详情只回订单头，订单项按订单 ID 单独查询（避免一层返回里两层分页）；买家只能读自己的订单，他人订单按不存在处理；客户购买历史不在客户详情内嵌，改查卖家订单列表并按买家筛选。
+- **接口边界**：Entity 不直接暴露给前端；请求/响应使用 DTO。响应外壳统一为 `{code, message, data}`，`code=0` 表示成功；业务拒绝通常是 HTTP 200 + 业务码，只有 401、400、404、500 使用 HTTP 状态码。参数校验错误可能带 `errors` 数组。业务码按域分段：1xxxx 账号、2xxxx 类别与商品、5xxxx 通用、6xxxx 订单、7xxxx 购物车与收藏、8xxxx 阶段四（800xx 地址、810xx 售后、820xx 物流、830xx 支付）；3xxxx、4xxxx 与 10008、20020 已停用，不得复用。
+- **订单查询边界**：列表与详情只回订单头，订单项按订单 ID 单独查询（避免一层返回里两层分页）；售后列表同理，按 `order_id` 单独查，不内嵌进订单详情。买家只能读自己的订单，他人订单按不存在处理；客户购买历史不在客户详情内嵌，改查卖家订单列表并按买家筛选。
+- **两个派生字段的算法**：订单详情的 `refunded_amount` = 取消退款（支付流水）+ 售后退款（售后单，只算已完成且结果为退款类）；`aftersale_count` 是售后条数（含待处理与换货）。两者都在查询时算，任何表都不存这个总数。
 - **分页**：请求 `page` 从 1 开始，`page_size` 默认 10、上限 100；响应为 `{items, page, page_size, total}`。
 - **契约/错误码变更**：新增业务码要登记并同步两端，不能复用旧码，也不能只改一端；改接口或 DTO 时同批更新：
   - 后端 DTO 与实现；
-  - OpenAPI 快照（`simple-shop-doc/阶段三/openapi.json`）与《契约交接》；
+  - OpenAPI 快照（`simple-shop-doc/阶段四/openapi.json`）与《阶段四契约交接》；
   - 买家、卖家两端的 `api/types.ts`；
   - 受影响的接口测试。
 - **鉴权**：自定义拦截器 + BCrypt 校验，没有引入 Spring Security 全栈；令牌放在进程内，买家与卖家令牌不能互用。默认会话 30 分钟，backend 重启会丢会话。
 - **时间**：库内、接口、日志统一 UTC。实体时间字段必须保留 `@JdbcTypeCode(SqlTypes.LOCAL_DATE_TIME)`；不要用依赖 JVM 默认时区的 `now()`。连接串中的 `connectionTimeZone=UTC` 不能删。
-- **库存独立聚合**：商品只存展示属性，库存变更走 `inventory`；不要绕过库存服务直接改商品表库存字段。交易完成时按明细数量一次性扣减，任一明细不足则整单拒绝（全成或全败），不出现负库存；下单只校验、不预占。
+- **库存独立聚合**：商品只存展示属性，库存变更走 `inventory`；不要绕过库存服务直接改商品表库存字段。成交（买家确认收货）时按明细数量一次性扣减，任一明细不足则整单拒绝（全成或全败），不出现负库存；下单只校验、不预占，支付与取消都不改库存。
 - **状态不变量**：
   - 商品态：`ON_SALE`、`OFF_SHELF`；下架原因 `MANUAL`、`STOCK_ZERO`、`SOLD_OUT`。`ON_SALE` 时原因与下架时间必须为空，`OFF_SHELF` 时必须非空。
   - `OFF_SHELF + MANUAL` 是终态：禁止改库存、没有重新上架接口；类别仍可改挂（否则永久引用会阻塞类别删除）。只有 `STOCK_ZERO`、`SOLD_OUT` 在库存改回大于 0 时自动上架。
-  - 订单态：`PENDING_CONFIRM`、`CONFIRMED`、`PREPARED`、`SHIPPED`、`COMPLETED`、`CANCELED`；整单流转，只能按序推进，不可跳级或回退。
-  - 买家在进入 `SHIPPED` 前可取消，卖家在进入 `COMPLETED` 前可取消；取消是整单的，不影响库存。
-  - 库存只在交易完成时扣减；完成时库存不足则拒绝完成，不部分完成、不自动取消、不扣成负数。
-  - 存在未完成订单（`PENDING_CONFIRM` 至 `SHIPPED`）时，禁止手动下架与手动把库存改为 0；成交扣减到 0 不受此限。
+  - 订单态：`PENDING_PAYMENT`、`PAID`、`CONFIRMED`、`PREPARED`、`SHIPPED`、`COMPLETED`、`CANCELED`；整单流转，只能按序推进，不可跳级或回退。
+  - 买家在进入 `SHIPPED` 前可取消，卖家在进入 `COMPLETED` 前可取消；取消是整单的，不改变库存。已支付订单取消要原路退款，退款流水属支付包。
+  - 交易完成只能由买家确认收货推进；卖家没有「完成订单」的动作与端点。
+  - 库存只在成交（买家确认收货）时扣减：在售商品按明细数量扣，任一不足整单拒绝；已下架商品成交不扣库存。
+  - 已删除「有未完成订单禁止手动下架 / 改 0」：卖家随时可以下架或调整库存，成交扣减到 0 仍会自动下架。
   - 订单项、购物车行、收藏行没有状态；「历史商品」是 `OFF_SHELF` 的查询视图，不存在历史表与 `ARCHIVED`。
+  - 售后态：`PENDING` → `COMPLETED` / `CANCELED`；完成必须带结果，「拒绝」与「取消」是同一个动作，没有独立的已拒绝状态。
+  - 售后额度按订单项：同一订单项最多一条「已完成 + 退款类结果」的售后单（数据库唯一索引兜底），完成并退款前必须锁订单项行再判额度；换货不占额度。
+  - 售后退款只落售后单，不写支付流水、不改库存、不上架——否则订单详情的已退款会重复计数。
+  - 地址：每个买家最多一条默认（唯一索引兜底），切换默认要「先清旧的、刷库、再置新的」；删默认后由剩余最新一条补位。
+  - 支付：`payment_channel` 与 `paid_at` 同生同灭，失败时两者都为空；`pay_deadline` 只在待支付订单上出现。
 - **状态/迁移变更清单**：不要只改表或只改前端表现；涉及商品、订单状态时逐项检查：
   - 枚举定义与查询条件；
   - Flyway 新迁移（不改已发布脚本）；
   - 状态迁移与并发测试；
   - 买家/卖家两端的文案、筛选与按钮状态；
   - 状态与库存的一致性（在售无原因、已下架有原因；`MANUAL` 库存大于 0，另两类为 0）。
-- **媒体限制**：商品图/描述图 5MB，描述视频 20MB，multipart 请求上限 25MB；nginx 的 `client_max_body_size 25m` 不能小于后端上限，否则会先收到 413 而不是业务错误码。
+- **媒体限制**：商品图/描述图/售后凭证图各 5MB，描述视频 20MB，multipart 请求上限 25MB；nginx 的 `client_max_body_size 25m` 不能小于后端上限，否则会先收到 413 而不是业务错误码。目录由 `MediaPurpose` 决定（`goods` / `description` / `aftersale`），新增用途只改枚举——存储服务的 URL 回验正则按枚举拼装，不要再写死目录名。买家上传入口只开放 `AFTERSALE_IMAGE`，其他用途 20027。
 - **限流**：限流是保护措施，不是业务规则。总开关 `simple-shop.rate-limit.enabled` 默认开；注册、登录默认各 50 次/分钟，登录按「账号 + IP」计；提交订单只给 1000 次/分钟的兜底阈值；购物车、收藏不限流。E2E 与批量造数据在 yml 里整体关闭，不要靠调大阈值绕过。
 
 ## 5. 前端约定
@@ -116,6 +124,10 @@ npx playwright test
 - 已下架商品对买家不可见：收藏里保留但不可进详情，购物车里保留但不可选中。
 - 购物车数量与勾选只存 `localStorage`，不落库；下单请求自带 `goods_id + quantity`，后端不校验商品是否在购物车中。
 - 订单详情买卖双方共用一套，按角色显示操作；订单列表只负责筛选与跳转。
+- **订单七态**：`PENDING_PAYMENT`、`PAID`、`CONFIRMED`、`PREPARED`、`SHIPPED`、`COMPLETED`、`CANCELED`。按钮显隐以《阶段四契约交接》§4 的状态矩阵为准，不要从状态名自行推断；**卖家端没有「完成订单」**，成交只由买家确认收货推进。
+- **倒计时用 `pay_deadline`**：只在待支付订单上有值，前端不要按 24 小时自己算（时限是后端配置）。
+- **售后入口用 `order_item_id`**：同一商品可能出现在多个订单里，用 `goods_id` 定位会指错行。
+- **8xxxx 错误码**按段映射文案：800xx 地址、810xx 售后、820xx 物流、830xx 支付；未识别的码统一走「操作失败，请稍后重试」，不要把后端 `message` 直接展示给用户。
 - 卖家 SPA 生产构建 base 为 `/seller/`，开发期仍在根路径；不要用生产 URL 规则套开发地址。买家 SPA 固定在 `/`。
 - 开发期 Vite 已把 `/api`、`/media` 代理到 `http://localhost:8080`；后端不在本机时用 `VITE_API_BASE_URL` 覆盖。
 - 改页面时优先复用现有 `components/common`、`composables`、`stores`，不要为单个页面另起一套请求/状态实现。

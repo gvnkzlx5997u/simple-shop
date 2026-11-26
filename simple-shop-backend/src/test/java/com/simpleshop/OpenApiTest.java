@@ -54,7 +54,6 @@ class OpenApiTest extends ApiTestBase {
                 "/api/seller/orders/{id}/confirm",
                 "/api/seller/orders/{id}/prepare",
                 "/api/seller/orders/{id}/ship",
-                "/api/seller/orders/{id}/complete",
                 "/api/seller/orders/{id}/cancel",
                 // 购物车与收藏
                 "/api/buyer/cart",
@@ -64,6 +63,10 @@ class OpenApiTest extends ApiTestBase {
                 "/api/buyer/favorites/{goodsId}");
 
         assertThat(body).doesNotContain(
+                // 阶段四：卖家不再有「完成订单」，成交由买家确认收货推进
+                "/api/seller/orders/{id}/complete",
+                // 阶段四：注册不再收「默认交易地点」
+                "default_location",
                 "/api/seller/goods/{id}/re-list",
                 "/api/buyer/intentions",
                 "/api/buyer/history",

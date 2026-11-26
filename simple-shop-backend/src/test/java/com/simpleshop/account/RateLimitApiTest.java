@@ -68,7 +68,6 @@ class RateLimitApiTest extends ApiTestBase {
         body.put("username", username);
         body.put("password", PASSWORD);
         body.put("phone", "13800000000");
-        body.put("default_location", null);
         MvcResult result = mockMvc.perform(post("/api/buyer/auth/register")
                         .header("X-Forwarded-For", clientIp)
                         .contentType(MediaType.APPLICATION_JSON)

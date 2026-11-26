@@ -16,6 +16,8 @@ import com.simpleshop.common.time.DatabaseTimeProvider;
 
 /**
  * 买家账号。用户名唯一，手机号允许重复。
+ *
+ * <p>收货地址不在账号上：阶段四起地址由地址簿维护，账号只保留身份信息。
  */
 @Entity
 @Table(name = "simpleshop_buyer_account")
@@ -34,9 +36,6 @@ public class BuyerAccount {
     @Column(nullable = false, length = 20)
     private String phone;
 
-    @Column(name = "default_location", length = 50)
-    private String defaultLocation;
-
     @Column(name = "create_at", nullable = false)
     @JdbcTypeCode(SqlTypes.LOCAL_DATE_TIME)
     private LocalDateTime createAt;
@@ -44,14 +43,12 @@ public class BuyerAccount {
     protected BuyerAccount() {
     }
 
-    public static BuyerAccount register(
-            String username, String passwordHash, String phone, String defaultLocation) {
+    public static BuyerAccount register(String username, String passwordHash, String phone) {
         BuyerAccount value = new BuyerAccount();
         value.id = Ids.next("BA");
         value.username = username;
         value.password = passwordHash;
         value.phone = phone;
-        value.defaultLocation = defaultLocation;
         return value;
     }
 
@@ -76,10 +73,6 @@ public class BuyerAccount {
 
     public String getPhone() {
         return phone;
-    }
-
-    public String getDefaultLocation() {
-        return defaultLocation;
     }
 
     public LocalDateTime getCreateAt() {

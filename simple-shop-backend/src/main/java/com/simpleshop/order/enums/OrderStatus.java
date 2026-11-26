@@ -1,16 +1,20 @@
 package com.simpleshop.order.enums;
 
-import java.util.Set;
-
 /**
  * 订单状态。整单流转，只能按序前进一格，不可跳级或回退。
  *
  * <p>订单项没有状态：明细的有效性由整单状态派生，因此状态判断只读订单头。
+ *
+ * <p>与阶段三的差别只在两端：前面多了待支付与已支付（付款后才轮到卖家确认），
+ * 后面交易完成改由买家确认收货推进。卖家不再有「完成订单」这个动作。
  */
 public enum OrderStatus {
 
-    /** 待确认：买家已提交，等待卖家确认。 */
-    PENDING_CONFIRM,
+    /** 待支付：下单即进入，24 小时未支付由系统取消。卖家在此状态不能推进任何一步。 */
+    PENDING_PAYMENT,
+
+    /** 已支付：买家付款成功，等待卖家确认。已支付不等于已确认。 */
+    PAID,
 
     /** 已确认：卖家已接单。 */
     CONFIRMED,
@@ -18,29 +22,17 @@ public enum OrderStatus {
     /** 备货完成：只是流程状态，不代表库存充足。 */
     PREPARED,
 
-    /** 已发货：买家取消的边界，进入本状态后买家不可取消。 */
+    /** 已发货：买家取消的边界，进入本状态后买家不可取消；发货必须带承运商与单号。 */
     SHIPPED,
 
-    /** 交易完成：扣减库存成功后才进入，终态。 */
+    /** 交易完成：买家确认收货后进入，终态。成交扣库存发生在这条边之前。 */
     COMPLETED,
 
-    /** 已取消：整单终止，终态；不区分取消方。 */
+    /** 已取消：整单终止，终态；不区分取消方与取消原因。 */
     CANCELED;
 
     /** 终态没有任何出边，买卖双方都不能再推进或取消。 */
     public boolean isTerminal() {
         return this == COMPLETED || this == CANCELED;
-    }
-
-    /**
-     * 未完成订单 = 待确认至已发货四态。商品手动下架与手动改库存为 0 时据此阻断。
-     */
-    public boolean isUnfinished() {
-        return !isTerminal();
-    }
-
-    /** 未完成四态。用于按商品判断是否存在未完成订单，避免调用方各自拼状态集合。 */
-    public static Set<OrderStatus> unfinished() {
-        return Set.of(PENDING_CONFIRM, CONFIRMED, PREPARED, SHIPPED);
     }
 }

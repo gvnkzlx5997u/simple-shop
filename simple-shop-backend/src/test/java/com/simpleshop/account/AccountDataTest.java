@@ -29,7 +29,7 @@ class AccountDataTest extends DataLayerTestBase {
     void buyerUsernameIsUnique() {
         BuyerAccount first = createBuyer();
         BuyerAccount duplicate = BuyerAccount.register(
-                first.getUsername(), PasswordHasher.hash("Other@1234"), "13900000000", null);
+                first.getUsername(), PasswordHasher.hash("Other@1234"), "13900000000");
 
         assertThatThrownBy(() -> buyerAccounts.saveAndFlush(duplicate))
                 .isInstanceOf(DataIntegrityViolationException.class);
@@ -40,7 +40,7 @@ class AccountDataTest extends DataLayerTestBase {
     void buyerPhoneMayRepeat() {
         BuyerAccount first = createBuyer();
         BuyerAccount second = BuyerAccount.register(
-                unique("buyer-"), PasswordHasher.hash("Other@1234"), first.getPhone(), null);
+                unique("buyer-"), PasswordHasher.hash("Other@1234"), first.getPhone());
 
         buyerAccounts.saveAndFlush(second);
 

@@ -48,7 +48,7 @@ public class OrderQuerySupport {
         return PageQuery.of(page, pageSize, properties);
     }
 
-    /** 状态筛选只接受六个枚举值；空值表示不筛选，非法值按参数错误拒绝。 */
+    /** 状态筛选只接受枚举里的七个值；空值表示不筛选，非法值按参数错误拒绝。 */
     public OrderStatus status(String raw) {
         if (raw == null || raw.isBlank()) {
             return null;

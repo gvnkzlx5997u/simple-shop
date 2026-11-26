@@ -8,6 +8,8 @@ import jakarta.validation.constraints.Size;
 
 /**
  * 买家注册请求。存在性与长度在边界校验；字符规则与重复性仍由账号规则判定。
+ *
+ * <p>注册不再收「默认交易地点」：收货地址由地址簿维护，下单时选，注册页不掺这件事。
  */
 public record BuyerRegisterRequest(
         @JsonProperty("username")
@@ -23,9 +25,5 @@ public record BuyerRegisterRequest(
         @JsonProperty("phone")
         @NotBlank(message = "must not be blank")
         @Size(max = 20, message = "must be at most 20 characters")
-        String phone,
-
-        @JsonProperty("default_location")
-        @CodePointLength(max = 50)
-        String defaultLocation) {
+        String phone) {
 }

@@ -19,6 +19,9 @@ import org.testcontainers.containers.MySQLContainer;
 
 import com.simpleshop.account.entity.BuyerAccount;
 import com.simpleshop.account.entity.SellerAccount;
+import com.simpleshop.address.entity.Address;
+import com.simpleshop.aftersale.entity.Aftersale;
+import com.simpleshop.aftersale.entity.AftersaleImage;
 import com.simpleshop.cart.entity.CartItem;
 import com.simpleshop.category.entity.CategoryL1;
 import com.simpleshop.category.entity.CategoryL2;
@@ -29,9 +32,10 @@ import com.simpleshop.goods.entity.GoodsImage;
 import com.simpleshop.inventory.entity.GoodsStock;
 import com.simpleshop.order.entity.Order;
 import com.simpleshop.order.entity.OrderItem;
+import com.simpleshop.payment.entity.PaymentRefund;
 
 /**
- * 空库迁移验证：在一次性 MySQL 里跑 V1→V3，再用 Hibernate 的 validate 校验实体与表结构。
+ * 空库迁移验证：在一次性 MySQL 里跑 V1→V4，再用 Hibernate 的 validate 校验实体与表结构。
  *
  * <p>默认在 Testcontainers 容器里执行；{@code -Plocal-mysql} 时在本机 MySQL 上创建
  * 一个随机命名的临时库，验证完立即删除，不碰 {@code simple_shop} / {@code simple_shop_test}。
@@ -44,7 +48,8 @@ class MigrationTest {
             GoodsStock.class,
             SellerAccount.class, BuyerAccount.class,
             Order.class, OrderItem.class,
-            CartItem.class, Favorite.class);
+            CartItem.class, Favorite.class,
+            Address.class, Aftersale.class, AftersaleImage.class, PaymentRefund.class);
 
     @Test
     void emptyDatabaseMigratesAndValidates() throws Exception {
@@ -103,7 +108,7 @@ class MigrationTest {
                 .load();
         flyway.migrate();
 
-        assertThat(flyway.info().applied()).hasSize(3);
+        assertThat(flyway.info().applied()).hasSize(4);
         assertSchema(url, user, password);
         validateWithHibernate(url, user, password);
     }
@@ -114,7 +119,7 @@ class MigrationTest {
             assertThat(count(statement,
                     "select count(*) from information_schema.tables "
                             + "where table_schema = database() and table_name like 'simpleshop_%'"))
-                    .isEqualTo(12);
+                    .isEqualTo(16);
             assertThat(count(statement,
                     "select count(*) from information_schema.tables "
                             + "where table_schema = database() and table_name in ("
@@ -128,16 +133,35 @@ class MigrationTest {
                             + "'simpleshop_cart_item', 'simpleshop_favorite')"))
                     .isEqualTo(4);
             assertThat(count(statement,
+                    "select count(*) from information_schema.tables "
+                            + "where table_schema = database() and table_name in ("
+                            + "'simpleshop_address', 'simpleshop_aftersale', "
+                            + "'simpleshop_aftersale_image', 'simpleshop_payment_refund')"))
+                    .isEqualTo(4);
+            assertThat(count(statement,
                     "select count(*) from information_schema.columns "
                             + "where table_schema = database() and table_name = 'simpleshop_goods' "
                             + "and column_name in ('off_shelf_reason', 'off_shelf_at')"))
                     .isEqualTo(2);
             assertThat(count(statement,
+                    "select count(*) from information_schema.columns "
+                            + "where table_schema = database() and table_name = 'simpleshop_order' "
+                            + "and column_name in ('receiver_name', 'receiver_phone', "
+                            + "'receiver_address', 'payment_channel', 'paid_at', 'carrier', "
+                            + "'tracking_no', 'logistics_remark')"))
+                    .isEqualTo(8);
+            assertThat(count(statement,
+                    "select count(*) from information_schema.columns "
+                            + "where table_schema = database() "
+                            + "and table_name = 'simpleshop_buyer_account' "
+                            + "and column_name = 'default_location'"))
+                    .isZero();
+            assertThat(count(statement,
                     "select count(*) from simpleshop_seller_account where account = 'seller'"))
                     .isEqualTo(1);
             assertThat(count(statement,
                     "select count(*) from flyway_schema_history where success = 1"))
-                    .isEqualTo(3);
+                    .isEqualTo(4);
         }
     }
 

@@ -36,6 +36,7 @@ import com.simpleshop.inventory.entity.GoodsStock;
 import com.simpleshop.inventory.repository.GoodsStockRepository;
 import com.simpleshop.order.entity.Order;
 import com.simpleshop.order.entity.OrderLine;
+import com.simpleshop.order.entity.ReceiverSnapshot;
 import com.simpleshop.order.repository.OrderItemRepository;
 import com.simpleshop.order.repository.OrderRepository;
 import com.simpleshop.order.support.OrderNoGenerator;
@@ -79,7 +80,7 @@ public abstract class DataLayerTestBase {
 
     protected BuyerAccount createBuyer() {
         BuyerAccount buyer = BuyerAccount.register(
-                unique("buyer-"), PasswordHasher.hash("Buyer@1234"), "13800000000", "默认地点");
+                unique("buyer-"), PasswordHasher.hash("Buyer@1234"), "13800000000");
         return buyerAccounts.saveAndFlush(buyer);
     }
 
@@ -108,12 +109,18 @@ public abstract class DataLayerTestBase {
         entityManager.clear();
     }
 
-    /** 建一笔待确认订单：单商品、指定数量，用于订单相关测试的夹具。 */
+    /** 建一笔待支付订单：单商品、指定数量，用于订单相关测试的夹具。 */
     protected Order createOrder(BuyerAccount buyer, Goods goods, int quantity) {
         Order order = Order.place(
                 orderNoGenerator.next(),
                 buyer.getId(),
+                receiver(),
                 List.of(new OrderLine(goods.getId(), goods.getName(), goods.getPrice(), quantity)));
         return orders.saveAndFlush(order);
+    }
+
+    /** 订单夹具用的收货快照：订单只认快照，与地址簿无关。 */
+    protected ReceiverSnapshot receiver() {
+        return new ReceiverSnapshot("张三", "13800000000", "北京市朝阳区某路 1 号");
     }
 }

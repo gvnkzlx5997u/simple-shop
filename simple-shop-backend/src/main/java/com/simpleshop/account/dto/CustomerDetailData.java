@@ -11,6 +11,5 @@ public record CustomerDetailData(
         @JsonProperty("id") String id,
         @JsonProperty("username") String username,
         @JsonProperty("phone") String phone,
-        @JsonProperty("default_location") String defaultLocation,
         @JsonProperty("create_at") String createAt) {
 }

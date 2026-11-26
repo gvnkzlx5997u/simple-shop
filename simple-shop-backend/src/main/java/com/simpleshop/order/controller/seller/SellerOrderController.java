@@ -1,5 +1,7 @@
 package com.simpleshop.order.controller.seller;
 
+import jakarta.validation.Valid;
+
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -7,6 +9,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -16,6 +19,7 @@ import com.simpleshop.common.api.PageResponse;
 import com.simpleshop.order.dto.OrderData;
 import com.simpleshop.order.dto.OrderItemsData;
 import com.simpleshop.order.dto.OrderStatusData;
+import com.simpleshop.order.dto.ShipLogisticsRequest;
 import com.simpleshop.order.service.SellerOrderQueryService;
 import com.simpleshop.order.service.SellerOrderService;
 
@@ -23,7 +27,7 @@ import com.simpleshop.order.service.SellerOrderService;
  * 卖家订单：列表筛选、详情、明细与状态推进。
  *
  * <p>订单管理、按客户、按商品三个入口在后端只是筛选条件，进入详情后一律按订单主键查。
- * 交易完成需要校验并扣减库存，单独在完成接口实现。
+ * 卖家最多把订单推到已发货：交易完成由买家确认收货推进，这里没有完成接口。
  */
 @RestController
 @RequestMapping("/api/seller/orders")
@@ -76,15 +80,10 @@ public class SellerOrderController {
     }
 
     @PostMapping("/{id}/ship")
-    @Operation(summary = "开始发货：备货完成 → 已发货，此后买家不可取消")
-    public ApiResponse<OrderStatusData> ship(@PathVariable String id) {
-        return ApiResponse.ok(orderService.ship(id));
-    }
-
-    @PostMapping("/{id}/complete")
-    @Operation(summary = "交易完成：已发货 → 交易完成，按明细数量扣减库存；任一商品库存不足则整单拒绝")
-    public ApiResponse<OrderStatusData> complete(@PathVariable String id) {
-        return ApiResponse.ok(orderService.complete(id));
+    @Operation(summary = "开始发货：备货完成 → 已发货，必须填承运商与单号；此后买家不可取消")
+    public ApiResponse<OrderStatusData> ship(
+            @PathVariable String id, @Valid @RequestBody ShipLogisticsRequest request) {
+        return ApiResponse.ok(orderService.ship(id, request));
     }
 
     @PostMapping("/{id}/cancel")
