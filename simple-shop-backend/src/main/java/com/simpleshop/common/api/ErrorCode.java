@@ -71,6 +71,10 @@ public enum ErrorCode {
     /** 下单未选地址，或所选地址已删除/不属于当前买家。 */
     ADDRESS_REQUIRED(80004, "a valid shipping address is required", HttpStatus.OK),
 
+    // 82xxx 物流
+    /** 只有已发货（含交易完成）且未取消的订单能改物流；缺承运商/单号走参数校验。 */
+    LOGISTICS_NOT_EDITABLE(82002, "logistics can only be updated after shipping", HttpStatus.OK),
+
     // 83xxx 支付与退款
     PAYMENT_CHANNEL_INVALID(83001, "payment channel is invalid", HttpStatus.OK),
     /** 订单不在待支付，或已超过支付时限。 */

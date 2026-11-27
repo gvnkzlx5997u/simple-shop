@@ -80,6 +80,24 @@ public class SellerOrderServiceImpl implements SellerOrderService {
         return persist(order, OperationLogService.ORDER_SHIP);
     }
 
+    /** 改物流：高频修正动作，不改状态、不写审计；只有已发货且未取消的订单允许。 */
+    @Transactional
+    public OrderStatusData updateLogistics(String orderId, ShipLogisticsRequest request) {
+        if (request == null) {
+            throw new BusinessException(ErrorCode.PARAM_INVALID, "logistics info is required");
+        }
+        Order order = lock(orderId);
+        if (!order.canUpdateLogistics()) {
+            throw new BusinessException(ErrorCode.LOGISTICS_NOT_EDITABLE,
+                    "order " + order.getOrderNo() + " has no logistics to update in status "
+                            + order.getStatus());
+        }
+        order.updateLogistics(
+                request.carrier(), request.trackingNo(), request.logisticsRemark());
+        orders.saveAndFlush(order);
+        return assembler.status(order);
+    }
+
     @Transactional
     public OrderStatusData cancel(String orderId) {
         Order order = lock(orderId);

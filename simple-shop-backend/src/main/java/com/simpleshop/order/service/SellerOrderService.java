@@ -19,6 +19,13 @@ public interface SellerOrderService {
     /** 备货完成 → 已发货；必须带承运商与单号，此后买家不可取消。 */
     OrderStatusData ship(String orderId, ShipLogisticsRequest request);
 
+    /**
+     * 发货后修正承运商、单号与备注：只改这三项，订单状态不变。
+     *
+     * <p>这是高频操作（填错单号很常见），不写审计；已取消的订单不再允许修改。
+     */
+    OrderStatusData updateLogistics(String orderId, ShipLogisticsRequest request);
+
     /** 交易完成前整单取消；已支付订单同时退款。已取消的订单重复取消按成功返回（防抖）。 */
     OrderStatusData cancel(String orderId);
 }

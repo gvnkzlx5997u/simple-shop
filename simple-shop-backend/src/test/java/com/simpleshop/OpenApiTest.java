@@ -56,6 +56,7 @@ class OpenApiTest extends ApiTestBase {
                 "/api/seller/orders/{id}/confirm",
                 "/api/seller/orders/{id}/prepare",
                 "/api/seller/orders/{id}/ship",
+                "/api/seller/orders/{id}/logistics",
                 "/api/seller/orders/{id}/cancel",
                 // 购物车与收藏
                 "/api/buyer/cart",

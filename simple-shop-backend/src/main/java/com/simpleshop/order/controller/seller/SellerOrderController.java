@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -84,6 +85,13 @@ public class SellerOrderController {
     public ApiResponse<OrderStatusData> ship(
             @PathVariable String id, @Valid @RequestBody ShipLogisticsRequest request) {
         return ApiResponse.ok(orderService.ship(id, request));
+    }
+
+    @PutMapping("/{id}/logistics")
+    @Operation(summary = "修改物流：发货后修正承运商、单号与备注，订单状态不变；已取消订单 82002")
+    public ApiResponse<OrderStatusData> updateLogistics(
+            @PathVariable String id, @Valid @RequestBody ShipLogisticsRequest request) {
+        return ApiResponse.ok(orderService.updateLogistics(id, request));
     }
 
     @PostMapping("/{id}/cancel")
