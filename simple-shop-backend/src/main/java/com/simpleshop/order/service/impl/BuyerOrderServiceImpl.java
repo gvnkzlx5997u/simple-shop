@@ -3,6 +3,7 @@ package com.simpleshop.order.service.impl;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
@@ -21,8 +22,10 @@ import com.simpleshop.goods.api.GoodsQueryPort;
 import com.simpleshop.goods.api.GoodsSnapshot;
 import com.simpleshop.goods.enums.GoodsStatus;
 import com.simpleshop.inventory.api.StockPort;
+import com.simpleshop.order.dto.OrderPaymentData;
 import com.simpleshop.order.dto.OrderPlacedData;
 import com.simpleshop.order.dto.OrderStatusData;
+import com.simpleshop.order.dto.PayOrderRequest;
 import com.simpleshop.order.dto.PlaceOrderItemRequest;
 import com.simpleshop.order.dto.PlaceOrderRequest;
 import com.simpleshop.order.entity.Order;
@@ -33,6 +36,11 @@ import com.simpleshop.order.repository.OrderRepository;
 import com.simpleshop.order.service.BuyerOrderService;
 import com.simpleshop.order.service.OrderAssembler;
 import com.simpleshop.order.support.OrderNoGenerator;
+import com.simpleshop.order.support.PaymentDeadline;
+import com.simpleshop.payment.api.PaymentChannel;
+import com.simpleshop.payment.api.PaymentPort;
+import com.simpleshop.payment.api.PaymentRequest;
+import com.simpleshop.payment.api.PaymentResult;
 
 /**
  * 下单：先锁商品行再校验，避免「校验通过后商品被下架」。
@@ -54,6 +62,8 @@ public class BuyerOrderServiceImpl implements BuyerOrderService {
     private final GoodsQueryPort goodsQuery;
     private final StockPort stockPort;
     private final AddressPort addresses;
+    private final PaymentPort payments;
+    private final PaymentDeadline deadlines;
     private final OrderNoGenerator orderNumbers;
     private final OperationLogService audit;
     private final RateLimiter rateLimiter;
@@ -64,6 +74,8 @@ public class BuyerOrderServiceImpl implements BuyerOrderService {
             GoodsQueryPort goodsQuery,
             StockPort stockPort,
             AddressPort addresses,
+            PaymentPort payments,
+            PaymentDeadline deadlines,
             OrderNoGenerator orderNumbers,
             OperationLogService audit,
             RateLimiter rateLimiter,
@@ -72,6 +84,8 @@ public class BuyerOrderServiceImpl implements BuyerOrderService {
         this.goodsQuery = goodsQuery;
         this.stockPort = stockPort;
         this.addresses = addresses;
+        this.payments = payments;
+        this.deadlines = deadlines;
         this.orderNumbers = orderNumbers;
         this.audit = audit;
         this.rateLimiter = rateLimiter;
@@ -97,6 +111,60 @@ public class BuyerOrderServiceImpl implements BuyerOrderService {
         audit.log(OperationLogService.CREATE_ORDER,
                 OperationLogService.TARGET_ORDER, order.getId());
         return assembler.placed(order);
+    }
+
+    /**
+     * 支付：先锁订单行，再校验状态与时限，最后才调支付包。
+     *
+     * <p>顺序不能反：先锁再判断，重复提交的第二个请求会看到已支付；先调渠道再判断，
+     * 就可能对同一笔订单扣两次钱。超时判断放在调用渠道之前——已经过期的订单不该再试。
+     *
+     * <p>失败只回错误码，订单字段一个都不写：`payment_channel` 与 `paid_at` 必须同生同灭。
+     */
+    @Transactional
+    public OrderPaymentData pay(String buyerId, String orderId, PayOrderRequest request) {
+        PaymentChannel channel = parseChannel(request == null ? null : request.paymentChannel());
+        Order order = orders.findWithLockById(orderId == null ? "" : orderId.trim())
+                .filter(candidate -> candidate.belongsTo(buyerId))
+                .orElseThrow(() -> new BusinessException(ErrorCode.ORDER_NOT_FOUND));
+
+        if (!order.canPay()) {
+            throw new BusinessException(ErrorCode.PAYMENT_NOT_ALLOWED,
+                    "order " + order.getOrderNo() + " is not pending payment");
+        }
+        if (deadlines.isExpired(order)) {
+            throw new BusinessException(ErrorCode.PAYMENT_NOT_ALLOWED,
+                    "payment window of order " + order.getOrderNo() + " has expired");
+        }
+
+        PaymentResult result = payments.charge(new PaymentRequest(
+                order.getId(), order.getOrderNo(), order.getTotalAmount(), channel));
+
+        return switch (result.status()) {
+            case SUCCEEDED -> {
+                order.pay(result.channel(), result.paidAt());
+                orders.saveAndFlush(order);
+                audit.log(OperationLogService.ORDER_PAY,
+                        OperationLogService.TARGET_ORDER, order.getId());
+                yield assembler.payment(order, null);
+            }
+            // 真实渠道重定向：订单不动，把跳转地址交给前端；本期 Mock 不会走到这里。
+            case PENDING -> assembler.payment(order, result.redirectUrl());
+            case FAILED -> throw new BusinessException(ErrorCode.PAYMENT_FAILED,
+                    "payment failed for order " + order.getOrderNo() + ", please retry");
+        };
+    }
+
+    /** 渠道用字符串收再转枚举：非法值落到 83001，而不是变成参数格式错误。 */
+    private static PaymentChannel parseChannel(String raw) {
+        if (raw == null || raw.isBlank()) {
+            throw new BusinessException(ErrorCode.PAYMENT_CHANNEL_INVALID);
+        }
+        try {
+            return PaymentChannel.valueOf(raw.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            throw new BusinessException(ErrorCode.PAYMENT_CHANNEL_INVALID);
+        }
     }
 
     @Transactional

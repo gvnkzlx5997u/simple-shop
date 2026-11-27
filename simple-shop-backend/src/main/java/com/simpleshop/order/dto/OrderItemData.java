@@ -7,9 +7,13 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 /**
  * 订单项：商品引用、下单快照与数量，外加服务端算好的小计。
  *
+ * <p>{@code order_item_id} 是售后申请的入参：一张售后单对应一个订单项，不是商品——
+ * 同一商品可能在不同订单里各申请一次，用 goods_id 定位会指错行。
+ *
  * <p>小计由后端给，避免前端用浮点数乘出 299.70000000000005 这类展示问题。
  */
 public record OrderItemData(
+        @JsonProperty("order_item_id") String orderItemId,
         @JsonProperty("goods_id") String goodsId,
         @JsonProperty("goods_name") String goodsName,
         @JsonProperty("unit_price") BigDecimal unitPrice,

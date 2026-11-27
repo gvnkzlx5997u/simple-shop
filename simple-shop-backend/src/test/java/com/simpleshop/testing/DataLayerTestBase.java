@@ -19,6 +19,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.simpleshop.account.entity.BuyerAccount;
+import com.simpleshop.address.entity.Address;
+import com.simpleshop.address.repository.AddressRepository;
 import com.simpleshop.account.repository.BuyerAccountRepository;
 import com.simpleshop.account.repository.SellerAccountRepository;
 import com.simpleshop.common.auth.PasswordHasher;
@@ -54,6 +56,7 @@ public abstract class DataLayerTestBase {
 
     @Autowired protected SellerAccountRepository sellerAccounts;
     @Autowired protected BuyerAccountRepository buyerAccounts;
+    @Autowired protected AddressRepository addresses;
     @Autowired protected CategoryL1Repository categoryL1s;
     @Autowired protected CategoryL2Repository categoryL2s;
     @Autowired protected GoodsRepository goodsRepository;
@@ -82,6 +85,12 @@ public abstract class DataLayerTestBase {
         BuyerAccount buyer = BuyerAccount.register(
                 unique("buyer-"), PasswordHasher.hash("Buyer@1234"), "13800000000");
         return buyerAccounts.saveAndFlush(buyer);
+    }
+
+    /** 下单要选地址：直接落一条，不走还没实现的地址接口。 */
+    protected Address createAddress(BuyerAccount buyer) {
+        return addresses.saveAndFlush(Address.create(
+                buyer.getId(), "张三", "13800000000", "北京市朝阳区某路 1 号", true));
     }
 
     protected Goods createGoods(CategoryL2 category) {

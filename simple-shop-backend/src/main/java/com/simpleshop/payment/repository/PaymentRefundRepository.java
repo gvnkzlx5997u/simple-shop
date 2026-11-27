@@ -2,6 +2,7 @@ package com.simpleshop.payment.repository;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -15,6 +16,8 @@ public interface PaymentRefundRepository extends JpaRepository<PaymentRefund, St
     List<PaymentRefund> findByOrderIdOrderByRefundedAtDesc(String orderId);
 
     boolean existsByOrderIdAndReason(String orderId, String reason);
+
+    Optional<PaymentRefund> findByOrderIdAndReason(String orderId, String reason);
 
     @Query("""
             select coalesce(sum(r.amount), 0) from PaymentRefund r

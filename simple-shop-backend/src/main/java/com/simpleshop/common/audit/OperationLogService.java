@@ -36,6 +36,7 @@ public class OperationLogService {
     public static final String CHANGE_PASSWORD = "CHANGE_PASSWORD";
 
     public static final String CREATE_ORDER = "CREATE_ORDER";
+    public static final String ORDER_PAY = "ORDER_PAY";
     public static final String ORDER_CONFIRM = "ORDER_CONFIRM";
     public static final String ORDER_PREPARE = "ORDER_PREPARE";
     public static final String ORDER_SHIP = "ORDER_SHIP";

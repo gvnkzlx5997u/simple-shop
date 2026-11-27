@@ -71,6 +71,14 @@ public enum ErrorCode {
     /** 下单未选地址，或所选地址已删除/不属于当前买家。 */
     ADDRESS_REQUIRED(80004, "a valid shipping address is required", HttpStatus.OK),
 
+    // 83xxx 支付与退款
+    PAYMENT_CHANNEL_INVALID(83001, "payment channel is invalid", HttpStatus.OK),
+    /** 订单不在待支付，或已超过支付时限。 */
+    PAYMENT_NOT_ALLOWED(83002, "order is not payable in its current status", HttpStatus.OK),
+    /** 渠道返回失败：订单仍停在待支付，可重试。 */
+    PAYMENT_FAILED(83003, "payment failed, the order is still unpaid", HttpStatus.OK),
+    REFUND_FAILED(83004, "refund failed", HttpStatus.OK),
+
     // 7xxxx 购物车与收藏
     CART_GOODS_NOT_SELECTABLE(70001, "goods cannot be added to cart", HttpStatus.OK),
     FAVORITE_GOODS_NOT_SELECTABLE(70002, "goods cannot be added to favorites", HttpStatus.OK),
