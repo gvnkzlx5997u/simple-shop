@@ -44,6 +44,9 @@ class OpenApiTest extends ApiTestBase {
                 "/api/seller/customers",
                 "/api/seller/customers/{id}",
                 // 订单
+                "/api/buyer/addresses",
+                "/api/buyer/addresses/{id}",
+                "/api/buyer/addresses/{id}/default",
                 "/api/buyer/orders",
                 "/api/buyer/orders/{id}",
                 "/api/buyer/orders/{id}/items",
