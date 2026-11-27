@@ -9,7 +9,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Matcher;
+import java.util.Arrays;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,6 +48,7 @@ public class MediaStorageService {
     private final DataSize goodsImageMaxSize;
     private final DataSize descriptionImageMaxSize;
     private final DataSize descriptionVideoMaxSize;
+    private final DataSize aftersaleImageMaxSize;
     private final Pattern storedUrlPattern;
 
     public MediaStorageService(AppProperties properties, DatabaseTimeProvider timeProvider) {
@@ -56,9 +59,15 @@ public class MediaStorageService {
         this.goodsImageMaxSize = media.getGoodsImageMaxSize();
         this.descriptionImageMaxSize = media.getDescriptionImageMaxSize();
         this.descriptionVideoMaxSize = media.getDescriptionVideoMaxSize();
+        this.aftersaleImageMaxSize = media.getAftersaleImageMaxSize();
+        // 目录名从用途枚举拼出来：新增用途时只要改枚举，不用回来改正则
+        // （漏改的现象是「上传成功，但申请时 URL 回验被拒」，很难定位）。
+        String folders = Arrays.stream(MediaPurpose.values())
+                .map(MediaPurpose::folder)
+                .collect(Collectors.joining("|"));
         this.storedUrlPattern = Pattern.compile(
                 "^" + Pattern.quote(urlPrefix)
-                        + "/(goods|description)/(\\d{4})/(\\d{2})/"
+                        + "/(" + folders + ")/(\\d{4})/(\\d{2})/"
                         + "([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})"
                         + "\\.(jpg|png|mp4)$");
     }
@@ -165,16 +174,18 @@ public class MediaStorageService {
     private DataSize maxSize(MediaPurpose purpose, MediaKind kind) {
         return switch (purpose) {
             case GOODS_IMAGE -> goodsImageMaxSize;
+            case AFTERSALE_IMAGE -> aftersaleImageMaxSize;
             case DESCRIPTION_MEDIA -> kind == MediaKind.IMAGE
                     ? descriptionImageMaxSize
                     : descriptionVideoMaxSize;
         };
     }
 
+    /** 只收图片的用途报「图片非法」，允许视频的用途报「媒体非法」。 */
     private BusinessException invalidFor(MediaPurpose purpose) {
-        return new BusinessException(purpose == MediaPurpose.GOODS_IMAGE
-                ? ErrorCode.IMAGE_INVALID
-                : ErrorCode.MEDIA_INVALID);
+        return new BusinessException(purpose.allows(MediaKind.VIDEO)
+                ? ErrorCode.MEDIA_INVALID
+                : ErrorCode.IMAGE_INVALID);
     }
 
     private BusinessException tooLarge(MediaKind kind) {

@@ -75,6 +75,17 @@ public enum ErrorCode {
     /** 只有已发货（含交易完成）且未取消的订单能改物流；缺承运商/单号走参数校验。 */
     LOGISTICS_NOT_EDITABLE(82002, "logistics can only be updated after shipping", HttpStatus.OK),
 
+    // 81xxx 售后
+    AFTERSALE_NOT_FOUND(81001, "aftersale not found", HttpStatus.NOT_FOUND),
+    /** 售后单不处于待处理：已完成的不能再处理或取消。 */
+    AFTERSALE_STATUS_INVALID(81002, "aftersale status does not allow this operation", HttpStatus.OK),
+    /** 订单项不可申请售后：不存在、不属于该买家、订单未交易完成。 */
+    AFTERSALE_NOT_APPLICABLE(81003, "the order item is not eligible for aftersale", HttpStatus.OK),
+    AFTERSALE_REFUND_DUPLICATED(81004, "this order item has already been refunded", HttpStatus.OK),
+    AFTERSALE_RESULT_REQUIRED(81005, "aftersale result is required", HttpStatus.OK),
+    AFTERSALE_CONTENT_INVALID(81006, "aftersale title or description is invalid", HttpStatus.OK),
+    AFTERSALE_IMAGE_LIMIT_EXCEEDED(81007, "too many aftersale images", HttpStatus.OK),
+
     // 83xxx 支付与退款
     PAYMENT_CHANNEL_INVALID(83001, "payment channel is invalid", HttpStatus.OK),
     /** 订单不在待支付，或已超过支付时限。 */

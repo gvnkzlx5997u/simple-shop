@@ -45,6 +45,11 @@ public class OperationLogService {
     public static final String ORDER_CANCEL = "ORDER_CANCEL";
     public static final String ORDER_TIMEOUT_CANCEL = "ORDER_TIMEOUT_CANCEL";
 
+    public static final String AFTERSALE_APPLY = "AFTERSALE_APPLY";
+    public static final String AFTERSALE_COMPLETE = "AFTERSALE_COMPLETE";
+    public static final String AFTERSALE_CANCEL = "AFTERSALE_CANCEL";
+    public static final String TARGET_AFTERSALE = "AFTERSALE";
+
     public static final String ADD_CART = "ADD_CART";
     public static final String REMOVE_CART = "REMOVE_CART";
     public static final String ADD_FAVORITE = "ADD_FAVORITE";

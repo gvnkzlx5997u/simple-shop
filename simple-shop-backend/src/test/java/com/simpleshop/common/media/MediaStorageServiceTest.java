@@ -111,6 +111,22 @@ class MediaStorageServiceTest {
                 .isInstanceOf(BusinessException.class);
     }
 
+    @Test
+    @DisplayName("售后图片写入 aftersale 目录，跨用途回验被拒")
+    void storesAftersaleImageInItsOwnFolder() {
+        MediaStorageService service = service();
+
+        StoredMedia stored = service.store(jpeg(), MediaPurpose.AFTERSALE_IMAGE);
+
+        assertThat(stored.kind()).isEqualTo(MediaKind.IMAGE);
+        assertThat(stored.url()).matches("^/media/aftersale/\\d{4}/\\d{2}/[0-9a-f-]{36}\\.jpg$");
+        assertThat(Files.isRegularFile(pathOf(stored.url()))).isTrue();
+        service.verifyStoredUrl(stored.url(), MediaPurpose.AFTERSALE_IMAGE);
+
+        assertThatThrownBy(() -> service.verifyStoredUrl(stored.url(), MediaPurpose.GOODS_IMAGE))
+                .isInstanceOf(BusinessException.class);
+    }
+
     private MediaStorageService service() {
         return new MediaStorageService(properties(), new DatabaseTimeProvider());
     }

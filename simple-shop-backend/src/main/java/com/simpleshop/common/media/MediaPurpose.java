@@ -9,7 +9,9 @@ import java.util.Set;
 public enum MediaPurpose {
 
     GOODS_IMAGE("goods", Set.of(MediaKind.IMAGE)),
-    DESCRIPTION_MEDIA("description", Set.of(MediaKind.IMAGE, MediaKind.VIDEO));
+    DESCRIPTION_MEDIA("description", Set.of(MediaKind.IMAGE, MediaKind.VIDEO)),
+    /** 买家申请售后时上传的凭证图，只允许图片。 */
+    AFTERSALE_IMAGE("aftersale", Set.of(MediaKind.IMAGE));
 
     private final String folder;
     private final Set<MediaKind> allowedKinds;

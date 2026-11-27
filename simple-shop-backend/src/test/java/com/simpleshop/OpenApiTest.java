@@ -44,6 +44,9 @@ class OpenApiTest extends ApiTestBase {
                 "/api/seller/customers",
                 "/api/seller/customers/{id}",
                 // 订单
+                "/api/buyer/aftersales",
+                "/api/buyer/aftersales/{id}",
+                "/api/buyer/media",
                 "/api/buyer/addresses",
                 "/api/buyer/addresses/{id}",
                 "/api/buyer/addresses/{id}/default",
@@ -53,6 +56,8 @@ class OpenApiTest extends ApiTestBase {
                 "/api/buyer/orders/{id}/pay",
                 "/api/buyer/orders/{id}/confirm-receipt",
                 "/api/buyer/orders/{id}/cancel",
+                "/api/seller/aftersales",
+                "/api/seller/aftersales/{id}",
                 "/api/seller/orders",
                 "/api/seller/orders/{id}",
                 "/api/seller/orders/{id}/items",

@@ -63,6 +63,9 @@ public class AppProperties {
         /** 描述内容块中的视频。 */
         private DataSize descriptionVideoMaxSize = DataSize.ofMegabytes(20);
 
+        /** 售后凭证图：与商品图同样是 5MB，但独立配置，将来可以单独调。 */
+        private DataSize aftersaleImageMaxSize = DataSize.ofMegabytes(5);
+
         public String getDirectory() {
             return directory;
         }
@@ -97,6 +100,14 @@ public class AppProperties {
 
         public DataSize getDescriptionVideoMaxSize() {
             return descriptionVideoMaxSize;
+        }
+
+        public DataSize getAftersaleImageMaxSize() {
+            return aftersaleImageMaxSize;
+        }
+
+        public void setAftersaleImageMaxSize(DataSize aftersaleImageMaxSize) {
+            this.aftersaleImageMaxSize = aftersaleImageMaxSize;
         }
 
         public void setDescriptionVideoMaxSize(DataSize descriptionVideoMaxSize) {
