@@ -212,12 +212,34 @@ public class AppProperties {
 
         private Duration paymentTimeout = Duration.ofHours(24);
 
+        /** 超时扫描间隔（毫秒）；测试里调大，避免定时任务干扰用例。 */
+        private long timeoutScanIntervalMs = 60_000;
+
+        /** 每轮最多处理多少笔，避免一次扫全表、长事务。 */
+        private int timeoutBatchSize = 200;
+
         public Duration getPaymentTimeout() {
             return paymentTimeout;
         }
 
         public void setPaymentTimeout(Duration paymentTimeout) {
             this.paymentTimeout = paymentTimeout;
+        }
+
+        public long getTimeoutScanIntervalMs() {
+            return timeoutScanIntervalMs;
+        }
+
+        public void setTimeoutScanIntervalMs(long timeoutScanIntervalMs) {
+            this.timeoutScanIntervalMs = timeoutScanIntervalMs;
+        }
+
+        public int getTimeoutBatchSize() {
+            return timeoutBatchSize;
+        }
+
+        public void setTimeoutBatchSize(int timeoutBatchSize) {
+            this.timeoutBatchSize = timeoutBatchSize;
         }
     }
 

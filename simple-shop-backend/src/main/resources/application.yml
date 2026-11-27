@@ -64,6 +64,9 @@ simple-shop:
   order:
     # 下单起 24 小时未支付由系统取消；测试用极短值覆盖。
     payment-timeout: ${ORDER_PAYMENT_TIMEOUT:24h}
+    # 超时扫描间隔与单批上限；启动即扫一次，补上停机期间到期的订单。
+    timeout-scan-interval-ms: ${ORDER_TIMEOUT_SCAN_INTERVAL_MS:60000}
+    timeout-batch-size: ${ORDER_TIMEOUT_BATCH_SIZE:200}
 
   payment:
     mock:

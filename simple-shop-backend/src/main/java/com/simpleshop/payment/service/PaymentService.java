@@ -82,6 +82,13 @@ public class PaymentService implements PaymentPort {
     }
 
     @Override
+    public RefundReceipt refundForCancel(
+            String orderId, String orderNo, BigDecimal amount, PaymentChannel channel) {
+        return refund(new RefundRequest(
+                orderId, orderNo, amount, channel, PaymentRefund.REASON_ORDER_CANCEL));
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public BigDecimal refundedTotal(String orderId) {
         BigDecimal total = refunds.sumAmountByOrderId(orderId);

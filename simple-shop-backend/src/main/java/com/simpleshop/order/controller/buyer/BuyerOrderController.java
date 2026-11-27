@@ -30,7 +30,7 @@ import com.simpleshop.order.service.BuyerOrderQueryService;
 import com.simpleshop.order.service.BuyerOrderService;
 
 /**
- * 买家下单、支付、取消与订单查询。订单归属由令牌主体决定，请求体与路径都不接受买家 ID。
+ * 买家下单、支付、确认收货、取消与订单查询。订单归属由令牌主体决定，请求体与路径都不接受买家 ID。
  */
 @RestController
 @RequestMapping("/api/buyer/orders")
@@ -63,6 +63,14 @@ public class BuyerOrderController {
             HttpServletRequest httpRequest) {
         AuthPrincipal buyer = CurrentUser.require(httpRequest);
         return ApiResponse.ok(orderService.pay(buyer.subjectId(), id, request));
+    }
+
+    @PostMapping("/{id}/confirm-receipt")
+    @Operation(summary = "确认收货：已发货 → 交易完成；在售商品扣库存，已下架商品不扣；任一不足整单拒绝")
+    public ApiResponse<OrderStatusData> confirmReceipt(
+            @PathVariable String id, HttpServletRequest httpRequest) {
+        AuthPrincipal buyer = CurrentUser.require(httpRequest);
+        return ApiResponse.ok(orderService.confirmReceipt(buyer.subjectId(), id));
     }
 
     @PostMapping("/{id}/cancel")

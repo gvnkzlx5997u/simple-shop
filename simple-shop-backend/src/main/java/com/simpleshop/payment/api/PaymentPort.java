@@ -26,6 +26,15 @@ public interface PaymentPort {
     RefundReceipt refund(RefundRequest request);
 
     /**
+     * 取消已支付订单的整单退款：金额是订单总额，渠道是原支付渠道，原因固定为 ORDER_CANCEL。
+     *
+     * <p>单独给一个方法而不是让订单侧自己拼 reason：退款原因是支付包的记账口径，
+     * 调用方只需要表达「这单取消了」。同一订单重复调用返回已有回执，不会重复退。
+     */
+    RefundReceipt refundForCancel(
+            String orderId, String orderNo, BigDecimal amount, PaymentChannel channel);
+
+    /**
      * 某订单已退金额，只含取消退款。售后退款记在售后单里，由 aftersale 自己聚合，
      * 两处相加才是订单详情要展示的「已退款」。
      */

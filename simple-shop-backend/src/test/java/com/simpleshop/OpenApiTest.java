@@ -48,6 +48,7 @@ class OpenApiTest extends ApiTestBase {
                 "/api/buyer/orders/{id}",
                 "/api/buyer/orders/{id}/items",
                 "/api/buyer/orders/{id}/pay",
+                "/api/buyer/orders/{id}/confirm-receipt",
                 "/api/buyer/orders/{id}/cancel",
                 "/api/seller/orders",
                 "/api/seller/orders/{id}",

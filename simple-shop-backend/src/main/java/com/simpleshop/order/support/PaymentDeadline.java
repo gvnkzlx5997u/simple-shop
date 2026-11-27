@@ -30,6 +30,14 @@ public class PaymentDeadline {
         return order.getCreateAt().plus(timeout);
     }
 
+    /**
+     * 到期分界线：创建时间早于它的待支付订单就算超时。给扫描任务做查询条件用，
+     * 不要拿它去比较单笔订单（单笔用 {@link #isExpired(Order)}）。
+     */
+    public LocalDateTime expiredBefore() {
+        return DatabaseTimeProvider.utcNow().minus(timeout);
+    }
+
     /** 到点即算超时（含边界）：上限是「24 小时内付」，第 24 小时整点不再接受支付。 */
     public boolean isExpired(Order order) {
         return !DatabaseTimeProvider.utcNow().isBefore(of(order));

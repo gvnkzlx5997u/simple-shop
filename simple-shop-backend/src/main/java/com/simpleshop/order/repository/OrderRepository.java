@@ -1,5 +1,7 @@
 package com.simpleshop.order.repository;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import jakarta.persistence.LockModeType;
@@ -52,6 +54,21 @@ public interface OrderRepository extends JpaRepository<Order, String> {
             @Param("status") OrderStatus status,
             @Param("buyerId") String buyerId,
             @Param("goodsId") String goodsId,
+            Pageable pageable);
+
+    /**
+     * 超时任务扫到的订单 ID：只取待支付且已过截止时间的，按最旧优先，限量由调用方给。
+     *
+     * <p>命中 idx_order_status_create；返回 ID 而不是实体，避免把一批订单装进持久化上下文。
+     */
+    @Query("""
+            select o.id from Order o
+            where o.status = :status and o.createAt < :deadline
+            order by o.createAt asc
+            """)
+    List<String> findIdsByStatusAndCreateAtBefore(
+            @Param("status") OrderStatus status,
+            @Param("deadline") LocalDateTime deadline,
             Pageable pageable);
 
     /**

@@ -12,6 +12,7 @@ import com.simpleshop.order.entity.Order;
 import com.simpleshop.order.enums.OrderStatus;
 import com.simpleshop.order.repository.OrderRepository;
 import com.simpleshop.order.service.OrderAssembler;
+import com.simpleshop.order.support.OrderRefund;
 import com.simpleshop.order.service.SellerOrderService;
 
 /**
@@ -27,14 +28,17 @@ import com.simpleshop.order.service.SellerOrderService;
 public class SellerOrderServiceImpl implements SellerOrderService {
 
     private final OrderRepository orders;
+    private final OrderRefund refunds;
     private final OperationLogService audit;
     private final OrderAssembler assembler;
 
     public SellerOrderServiceImpl(
             OrderRepository orders,
+            OrderRefund refunds,
             OperationLogService audit,
             OrderAssembler assembler) {
         this.orders = orders;
+        this.refunds = refunds;
         this.audit = audit;
         this.assembler = assembler;
     }
@@ -88,6 +92,8 @@ public class SellerOrderServiceImpl implements SellerOrderService {
                     "order " + order.getOrderNo() + " cannot be canceled in status "
                             + order.getStatus());
         }
+        // 已支付（含已发货）的订单取消要原路退款；先退款再改状态，失败则订单不变。
+        refunds.refundIfPaid(order);
         order.cancelBySeller();
         return persist(order, OperationLogService.ORDER_CANCEL);
     }

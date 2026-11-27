@@ -87,10 +87,16 @@ public abstract class DataLayerTestBase {
         return buyerAccounts.saveAndFlush(buyer);
     }
 
-    /** 下单要选地址：直接落一条，不走还没实现的地址接口。 */
+    /**
+     * 下单要选地址：直接落一条，不走还没实现的地址接口。
+     *
+     * <p>只有该买家的第一条才是默认——同一买家建两条默认会撞唯一索引，而测试里
+     * 「一个买家下多单」很常见。
+     */
     protected Address createAddress(BuyerAccount buyer) {
+        boolean first = addresses.countByBuyerId(buyer.getId()) == 0;
         return addresses.saveAndFlush(Address.create(
-                buyer.getId(), "张三", "13800000000", "北京市朝阳区某路 1 号", true));
+                buyer.getId(), "张三", "13800000000", "北京市朝阳区某路 1 号", first));
     }
 
     protected Goods createGoods(CategoryL2 category) {

@@ -12,6 +12,9 @@ simple-shop:
   # API 测试整体关闭限流；限流算法与开关由 RateLimiterTest 单独覆盖。
   rate-limit:
     enabled: false
+  order:
+    # 测试里把扫描间隔调到一小时：超时用例显式调用服务，避免定时任务抢在前面改状态。
+    timeout-scan-interval-ms: 3600000
 
 logging:
   level:

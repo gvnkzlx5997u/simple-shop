@@ -7,7 +7,7 @@ import com.simpleshop.order.dto.PayOrderRequest;
 import com.simpleshop.order.dto.PlaceOrderRequest;
 
 /**
- * 买家下单与取消。
+ * 买家下单、支付、确认收货与取消。
  */
 public interface BuyerOrderService {
 
@@ -26,6 +26,14 @@ public interface BuyerOrderService {
      * 渠道结果由支付包给出，订单只负责落状态与记审计。
      */
     OrderPaymentData pay(String buyerId, String orderId, PayOrderRequest request);
+
+    /**
+     * 确认收货：成交，订单进入交易完成，这是唯一的完成入口。
+     *
+     * <p>成交时在售商品按明细数量扣减，已下架商品不扣（唯一例外）；任一在售商品不足则整单拒绝，
+     * 订单停在已发货，卖家补货后可重试。
+     */
+    OrderStatusData confirmReceipt(String buyerId, String orderId);
 
     /**
      * 买家取消自己的订单：进入已发货之前可取消，整单取消、不影响库存。

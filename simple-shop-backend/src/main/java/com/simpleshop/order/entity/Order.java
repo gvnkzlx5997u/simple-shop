@@ -417,6 +417,17 @@ public class Order {
         status = OrderStatus.CANCELED;
     }
 
+    /**
+     * 超时未支付：系统取消，只对待支付订单有效。
+     *
+     * <p>单独一个方法而不是复用 cancelBySeller：取消是无退款、无库存变化，但「谁取消的」
+     * 决定审计与后续排查，把它混进卖家动作里会让日志看不出是系统干的。
+     */
+    public void cancelForTimeout() {
+        requireStatus(OrderStatus.PENDING_PAYMENT, "cancel after timeout");
+        status = OrderStatus.CANCELED;
+    }
+
     public void cancelBySeller() {
         if (!canCancelBySeller()) {
             throw new IllegalStateException("seller cannot cancel an order in status " + status);
