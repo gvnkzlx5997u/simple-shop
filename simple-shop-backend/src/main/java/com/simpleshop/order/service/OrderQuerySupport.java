@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Component;
 
@@ -38,7 +37,7 @@ public class OrderQuerySupport {
     private final OrderAssembler assembler;
     private final AppProperties properties;
     private final PaymentPort payments;
-    private final ObjectProvider<OrderAftersalePort> aftersales;
+    private final OrderAftersalePort aftersales;
 
     public OrderQuerySupport(
             BuyerDirectoryPort buyers,
@@ -46,7 +45,7 @@ public class OrderQuerySupport {
             OrderAssembler assembler,
             AppProperties properties,
             PaymentPort payments,
-            ObjectProvider<OrderAftersalePort> aftersales) {
+            OrderAftersalePort aftersales) {
         this.buyers = buyers;
         this.orderItems = orderItems;
         this.assembler = assembler;
@@ -107,10 +106,9 @@ public class OrderQuerySupport {
                 .add(aftersaleSummaryOf(order).refundedAmount());
     }
 
-    /** 售后包尚未提供实现时按「没有售后」处理；T5 的适配器注册后自动生效。 */
+
     private OrderAftersaleSummary aftersaleSummaryOf(Order order) {
-        OrderAftersalePort port = aftersales.getIfAvailable();
-        return port == null ? OrderAftersaleSummary.empty() : port.summaryOf(order.getId());
+        return aftersales.summaryOf(order.getId());
     }
 
     public List<OrderItemData> items(String orderId) {

@@ -2,144 +2,144 @@ package com.simpleshop.order;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import org.junit.jupiter.api.Disabled;
+import java.util.Map;
+
+import com.fasterxml.jackson.databind.JsonNode;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 
 import com.simpleshop.account.entity.BuyerAccount;
-import com.simpleshop.goods.entity.Goods;
 import com.simpleshop.order.entity.Order;
 import com.simpleshop.order.enums.OrderStatus;
-import com.simpleshop.testing.ApiTestBase;
 
-@Disabled("阶段四：卖家不再有「完成订单」，状态推进要以支付为前置；T2 完成后重写本类")
-class SellerOrderApiTest extends ApiTestBase {
+/**
+ * 卖家推进：确认 → 备货完成 → 发货，每次一格；确认前必须有支付。
+ *
+ * <p>阶段四卖家不再有「完成订单」：成交由买家确认收货推进，所以本类最后一个合法动作是发货。
+ */
+class SellerOrderApiTest extends PaymentTestSupport {
 
-    private static final String SELLER_PASSWORD = "Abcd@1234";
-    private static final int ORDER_NOT_FOUND = 60001;
-    private static final int ORDER_STATUS_INVALID = 60002;
-    private static final int ORDER_NOT_CANCELABLE = 60003;
+    private static final int STATUS_INVALID = 60002;
+    private static final int NOT_CANCELABLE = 60003;
 
     @Test
-    @DisplayName("卖家按序推进：确认 → 备货完成 → 已发货，每次一格")
+    @DisplayName("支付后逐格推进：确认 → 备货完成 → 已发货，发货必须带承运商与单号")
     void advancesOneStepAtATime() throws Exception {
-        String token = loginSeller(SELLER_PASSWORD);
-        Order order = pendingOrder();
+        BuyerAccount buyer = createBuyer();
+        Order order = placeOrder(buyer);
+        String buyerToken = bearer(loginBuyer(buyer.getUsername(), PASSWORD));
+        pay(buyerToken, order.getId(), "ALIPAY");
+        String seller = sellerToken();
 
-        MvcResult confirmed = advance(token, order, "confirm");
-        assertApiCode(confirmed, 0);
-        assertThat(dataOf(confirmed).path("status").asText()).isEqualTo("CONFIRMED");
-        assertThat(statusOf(order)).isEqualTo("CONFIRMED");
+        assertThat(dataOf(advance(seller, order.getId(), "confirm")).path("status").asText())
+                .isEqualTo("CONFIRMED");
+        assertThat(dataOf(advance(seller, order.getId(), "prepare")).path("status").asText())
+                .isEqualTo("PREPARED");
 
-        MvcResult prepared = advance(token, order, "prepare");
-        assertApiCode(prepared, 0);
-        assertThat(dataOf(prepared).path("status").asText()).isEqualTo("PREPARED");
-        assertThat(statusOf(order)).isEqualTo("PREPARED");
-
-        MvcResult shipped = advance(token, order, "ship");
+        MvcResult shipped = mockMvc.perform(post("/api/seller/orders/{id}/ship", order.getId())
+                        .header("Authorization", seller)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("carrier", "顺丰速运", "tracking_no", "SF123456"))))
+                .andExpect(status().isOk())
+                .andReturn();
         assertApiCode(shipped, 0);
-        assertThat(dataOf(shipped).path("status").asText()).isEqualTo("SHIPPED");
-        assertThat(statusOf(order)).isEqualTo("SHIPPED");
-        assertThat(dataOf(shipped).path("order_no").asText()).isEqualTo(order.getOrderNo());
+        assertThat(reload(order).getStatus()).isEqualTo(OrderStatus.SHIPPED);
+        assertThat(reload(order).getCarrier()).isEqualTo("顺丰速运");
+        assertThat(reload(order).getTrackingNo()).isEqualTo("SF123456");
     }
 
     @Test
-    @DisplayName("跳级与重复推进都返回状态不允许，订单停在原状态")
-    void rejectsSkippedOrRepeatedAdvance() throws Exception {
-        String token = loginSeller(SELLER_PASSWORD);
-        Order order = pendingOrder();
+    @DisplayName("待支付不能确认；跳级与重复推进都返回状态不允许")
+    void rejectsAdvanceBeforePaymentAndSkippedSteps() throws Exception {
+        BuyerAccount buyer = createBuyer();
+        Order order = placeOrder(buyer);
+        String seller = sellerToken();
 
-        assertApiStatusAndCode(advance(token, order, "prepare"), 200, ORDER_STATUS_INVALID);
-        assertApiStatusAndCode(advance(token, order, "ship"), 200, ORDER_STATUS_INVALID);
-        assertThat(statusOf(order)).isEqualTo("PENDING_CONFIRM");
+        assertApiCode(advance(seller, order.getId(), "confirm"), STATUS_INVALID);
+        assertApiCode(advance(seller, order.getId(), "prepare"), STATUS_INVALID);
+        assertApiCode(ship(seller, order.getId()), STATUS_INVALID);
+        assertThat(reload(order).getStatus()).isEqualTo(OrderStatus.PENDING_PAYMENT);
 
-        assertApiCode(advance(token, order, "confirm"), 0);
-        assertApiStatusAndCode(advance(token, order, "confirm"), 200, ORDER_STATUS_INVALID);
-        assertApiStatusAndCode(advance(token, order, "ship"), 200, ORDER_STATUS_INVALID);
-        assertThat(statusOf(order)).isEqualTo("CONFIRMED");
+        String buyerToken = bearer(loginBuyer(buyer.getUsername(), PASSWORD));
+        pay(buyerToken, order.getId(), "ALIPAY");
+        assertApiCode(advance(seller, order.getId(), "prepare"), STATUS_INVALID);
 
-        assertApiCode(advance(token, order, "prepare"), 0);
-        assertApiCode(advance(token, order, "ship"), 0);
-        assertApiStatusAndCode(advance(token, order, "prepare"), 200, ORDER_STATUS_INVALID);
-        assertThat(statusOf(order)).isEqualTo("SHIPPED");
+        assertApiCode(advance(seller, order.getId(), "confirm"), 0);
+        assertApiCode(advance(seller, order.getId(), "confirm"), STATUS_INVALID);
+        assertThat(reload(order).getStatus()).isEqualTo(OrderStatus.CONFIRMED);
     }
 
     @Test
-    @DisplayName("卖家可在已发货后取消；交易完成后不可取消；终态不可再推进")
+    @DisplayName("卖家可取消已发货订单（已支付则退款）；交易完成后不可取消")
     void sellerCancelsBeforeCompletion() throws Exception {
-        String token = loginSeller(SELLER_PASSWORD);
-        Order shipped = shippedOrder();
+        BuyerAccount buyer = createBuyer();
+        Order order = placeOrder(buyer);
+        String buyerToken = bearer(loginBuyer(buyer.getUsername(), PASSWORD));
+        pay(buyerToken, order.getId(), "ALIPAY");
+        String seller = sellerToken();
+        advance(seller, order.getId(), "confirm");
+        advance(seller, order.getId(), "prepare");
+        ship(seller, order.getId());
 
-        MvcResult canceled = advance(token, shipped, "cancel");
+        MvcResult canceled = mockMvc.perform(post("/api/seller/orders/{id}/cancel", order.getId())
+                        .header("Authorization", seller))
+                .andExpect(status().isOk())
+                .andReturn();
         assertApiCode(canceled, 0);
-        assertThat(dataOf(canceled).path("status").asText()).isEqualTo("CANCELED");
-        assertThat(statusOf(shipped)).isEqualTo("CANCELED");
+        assertThat(reload(order).getStatus()).isEqualTo(OrderStatus.CANCELED);
 
-        assertApiStatusAndCode(advance(token, shipped, "confirm"), 200, ORDER_STATUS_INVALID);
+        // 另一单走到交易完成，卖家再取消应被拒
+        Order completed = placeOrder(buyer);
+        pay(buyerToken, completed.getId(), "WECHAT");
+        advance(seller, completed.getId(), "confirm");
+        advance(seller, completed.getId(), "prepare");
+        ship(seller, completed.getId());
+        mockMvc.perform(post("/api/buyer/orders/{id}/confirm-receipt", completed.getId())
+                        .header("Authorization", buyerToken))
+                .andExpect(status().isOk());
 
-        Order completed = pendingOrder();
-        markStatus(completed, OrderStatus.COMPLETED);
-        assertApiStatusAndCode(advance(token, completed, "cancel"), 200, ORDER_NOT_CANCELABLE);
-        assertThat(statusOf(completed)).isEqualTo("COMPLETED");
+        assertApiCode(mockMvc.perform(post("/api/seller/orders/{id}/cancel", completed.getId())
+                        .header("Authorization", seller))
+                .andReturn(), NOT_CANCELABLE);
+        assertThat(reload(completed).getStatus()).isEqualTo(OrderStatus.COMPLETED);
     }
 
     @Test
-    @DisplayName("订单不存在返回 404/60001")
-    void rejectsUnknownOrder() throws Exception {
-        String token = loginSeller(SELLER_PASSWORD);
-
-        MvcResult result = mockMvc.perform(post("/api/seller/orders/O-NOT-EXISTS/confirm")
-                        .header("Authorization", bearer(token)))
-                .andReturn();
-        assertApiStatusAndCode(result, 404, ORDER_NOT_FOUND);
-    }
-
-    @Test
-    @DisplayName("卖家接口不接受买家令牌")
-    void requiresSellerSession() throws Exception {
+    @DisplayName("订单不存在返回 404/60001；买家令牌不能调卖家接口")
+    void rejectsUnknownOrderAndBuyerToken() throws Exception {
         BuyerAccount buyer = createBuyer();
-        Order order = pendingOrder();
-        String buyerToken = loginBuyer(buyer.getUsername(), "Buyer@1234");
+        Order order = placeOrder(buyer);
+        String seller = sellerToken();
 
-        MvcResult result = mockMvc.perform(post("/api/seller/orders/" + order.getId() + "/confirm")
-                        .header("Authorization", bearer(buyerToken)))
+        assertApiStatusAndCode(advance(seller, "O-NOT-EXISTS", "confirm"), 404, 60001);
+
+        assertApiStatusAndCode(mockMvc.perform(
+                        post("/api/seller/orders/{id}/confirm", order.getId())
+                                .header("Authorization", bearer(loginBuyer(
+                                        buyer.getUsername(), PASSWORD))))
+                .andReturn(), 401, 10002);
+    }
+
+    private String sellerToken() throws Exception {
+        return bearer(loginSeller("Abcd@1234"));
+    }
+
+    private MvcResult advance(String seller, String orderId, String action) throws Exception {
+        return mockMvc.perform(post("/api/seller/orders/{id}/{action}", orderId, action)
+                        .header("Authorization", seller))
                 .andReturn();
-        assertApiStatusAndCode(result, 401, 10002);
     }
 
-    private MvcResult advance(String token, Order order, String action) throws Exception {
-        return mockMvc.perform(post("/api/seller/orders/" + order.getId() + "/" + action)
-                        .header("Authorization", bearer(token)))
+    private MvcResult ship(String seller, String orderId) throws Exception {
+        return mockMvc.perform(post("/api/seller/orders/{id}/ship", orderId)
+                        .header("Authorization", seller)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("carrier", "顺丰速运", "tracking_no", "SF1"))))
                 .andReturn();
-    }
-
-    private Order pendingOrder() {
-        BuyerAccount buyer = createBuyer();
-        Goods goods = createGoods(createCategory());
-        return createOrder(buyer, goods, 1);
-    }
-
-    private Order shippedOrder() {
-        Order order = pendingOrder();
-        markStatus(order, OrderStatus.SHIPPED);
-        return order;
-    }
-
-    /**
-     * 直接改库准备中间态夹具。改完必须清持久化上下文：否则服务层加锁读到的是
-     * 上下文里那份旧实体，状态守卫会判错。
-     */
-    private void markStatus(Order order, OrderStatus status) {
-        jdbcTemplate.update("update simpleshop_order set status = ? where id = ?",
-                status.name(), order.getId());
-        flushAndClear();
-    }
-
-    private String statusOf(Order order) {
-        return jdbcTemplate.queryForObject(
-                "select status from simpleshop_order where id = ?", String.class, order.getId());
     }
 }

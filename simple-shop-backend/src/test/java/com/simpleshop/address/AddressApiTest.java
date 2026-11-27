@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.List;
 import java.util.Map;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -152,6 +153,24 @@ class AddressApiTest extends ApiTestBase {
         assertApiCode(create(token, "张三", "12345", "北京市朝阳区某路 1 号"), 80003);
         assertApiCode(create(token, "张三", "13800000000", "第一行\n第二行"), 80003);
         assertApiCode(create(token, "张<三>", "13800000000", "北京市朝阳区某路 1 号"), 80003);
+    }
+
+    @Test
+    @DisplayName("下单必须选一个存在的地址：地址不存在按 80004 拒绝")
+    void placingOrderRequiresOwnedAddress() throws Exception {
+        BuyerAccount buyer = createBuyer();
+        String token = tokenOf(buyer);
+        String goodsId = createGoods(createCategory()).getId();
+
+        MvcResult result = mockMvc.perform(post("/api/buyer/orders")
+                        .header("Authorization", token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of(
+                                "address_id", "AD-NOT-EXISTS",
+                                "items", List.of(Map.of("goods_id", goodsId, "quantity", 1))))))
+                .andReturn();
+
+        assertApiCode(result, 80004);
     }
 
     @Test

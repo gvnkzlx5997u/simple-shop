@@ -168,6 +168,8 @@ class AftersaleApiTest extends AftersaleTestSupport {
 
         String url = uploadImage(token);
         assertThat(url).startsWith("/media/aftersale/");
+        // 静态映射沿用 url-prefix/**，新增 aftersale 目录无需额外配置，这里确认真的能取到文件
+        mockMvc.perform(get(url)).andExpect(status().isOk());
 
         assertApiCode(mockMvc.perform(multipart("/api/buyer/media")
                         .file(jpeg())

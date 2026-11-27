@@ -69,7 +69,7 @@ public class SellerOrderController {
     }
 
     @PostMapping("/{id}/confirm")
-    @Operation(summary = "确认订单：待确认 → 已确认")
+    @Operation(summary = "确认订单：已支付 → 已确认；待支付不能确认")
     public ApiResponse<OrderStatusData> confirm(@PathVariable String id) {
         return ApiResponse.ok(orderService.confirm(id));
     }
