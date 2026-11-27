@@ -70,22 +70,6 @@ class AccountRulesTest {
         assertInvalid(() -> AccountRules.phone("123456-"), ErrorCode.PHONE_INVALID);
     }
 
-    @Test
-    @DisplayName("默认交易地点可空，最多 50 字符，拒绝换行与尖括号")
-    void validatesDefaultLocation() {
-        assertThat(AccountRules.defaultLocation(null)).isNull();
-        assertThat(AccountRules.defaultLocation("   ")).isNull();
-        assertThat(AccountRules.defaultLocation(" 北京 朝阳 ")).isEqualTo("北京 朝阳");
-        assertThat(AccountRules.defaultLocation("a".repeat(50))).hasSize(50);
-
-        assertInvalid(() -> AccountRules.defaultLocation("a".repeat(51)),
-                ErrorCode.DEFAULT_LOCATION_INVALID);
-        assertInvalid(() -> AccountRules.defaultLocation("北京\n朝阳"),
-                ErrorCode.DEFAULT_LOCATION_INVALID);
-        assertInvalid(() -> AccountRules.defaultLocation("<北京>"),
-                ErrorCode.DEFAULT_LOCATION_INVALID);
-    }
-
     private static void assertInvalid(Runnable action, ErrorCode expected) {
         assertThatThrownBy(action::run)
                 .isInstanceOf(BusinessException.class)

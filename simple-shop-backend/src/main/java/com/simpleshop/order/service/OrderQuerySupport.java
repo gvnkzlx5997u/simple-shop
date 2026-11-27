@@ -1,5 +1,6 @@
 package com.simpleshop.order.service;
 
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -14,6 +15,9 @@ import com.simpleshop.common.api.ErrorCode;
 import com.simpleshop.common.api.PageQuery;
 import com.simpleshop.common.api.PageResponse;
 import com.simpleshop.common.config.AppProperties;
+import com.simpleshop.order.api.OrderAftersalePort;
+import com.simpleshop.order.api.OrderAftersaleSummary;
+import com.simpleshop.payment.api.PaymentPort;
 import com.simpleshop.order.dto.OrderData;
 import com.simpleshop.order.dto.OrderItemData;
 import com.simpleshop.order.entity.Order;
@@ -32,23 +36,29 @@ public class OrderQuerySupport {
     private final OrderItemRepository orderItems;
     private final OrderAssembler assembler;
     private final AppProperties properties;
+    private final PaymentPort payments;
+    private final OrderAftersalePort aftersales;
 
     public OrderQuerySupport(
             BuyerDirectoryPort buyers,
             OrderItemRepository orderItems,
             OrderAssembler assembler,
-            AppProperties properties) {
+            AppProperties properties,
+            PaymentPort payments,
+            OrderAftersalePort aftersales) {
         this.buyers = buyers;
         this.orderItems = orderItems;
         this.assembler = assembler;
         this.properties = properties;
+        this.payments = payments;
+        this.aftersales = aftersales;
     }
 
     public PageQuery pageQuery(Integer page, Integer pageSize) {
         return PageQuery.of(page, pageSize, properties);
     }
 
-    /** 状态筛选只接受六个枚举值；空值表示不筛选，非法值按参数错误拒绝。 */
+    /** 状态筛选只接受枚举里的七个值；空值表示不筛选，非法值按参数错误拒绝。 */
     public OrderStatus status(String raw) {
         if (raw == null || raw.isBlank()) {
             return null;
@@ -71,7 +81,9 @@ public class OrderQuerySupport {
                 .map(order -> assembler.data(
                         order,
                         usernames.get(order.getBuyerId()),
-                        itemCounts.getOrDefault(order.getId(), 0L)))
+                        itemCounts.getOrDefault(order.getId(), 0L),
+                        refundedAmountOf(order),
+                        aftersaleSummaryOf(order).count()))
                 .toList();
         return PageResponse.of(
                 items, pageQuery.page(), pageQuery.pageSize(), result.getTotalElements());
@@ -80,7 +92,23 @@ public class OrderQuerySupport {
     public OrderData data(Order order) {
         String username = buyers.usernames(List.of(order.getBuyerId())).get(order.getBuyerId());
         long itemCount = orderItems.countByOrder_Id(order.getId());
-        return assembler.data(order, username, itemCount);
+        return assembler.data(
+                order, username, itemCount,
+                refundedAmountOf(order), aftersaleSummaryOf(order).count());
+    }
+
+    /**
+     * 已退款 = 取消退款（支付包流水）+ 售后退款（售后单）。两处分开记，展示时相加，
+     * 不在任何一张表里存「总退款」这个派生的数。
+     */
+    private BigDecimal refundedAmountOf(Order order) {
+        return payments.refundedTotal(order.getId())
+                .add(aftersaleSummaryOf(order).refundedAmount());
+    }
+
+
+    private OrderAftersaleSummary aftersaleSummaryOf(Order order) {
+        return aftersales.summaryOf(order.getId());
     }
 
     public List<OrderItemData> items(String orderId) {

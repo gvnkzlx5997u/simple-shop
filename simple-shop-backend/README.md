@@ -1,7 +1,9 @@
 # simple-shop 后端
 
-> 阶段三后端工程：商品两态、订单、购物车与收藏。本文只描述代码结构、对外接口与运行方式；
-> 进度、待办与遗留项记录在 [`simple-shop-doc/阶段三/后端开发计划.md`](../simple-shop-doc/阶段三/后端开发计划.md)。
+> 阶段三后端工程：商品两态、订单、购物车与收藏。本文只描述**当前代码**的结构、对外接口与运行方式。
+>
+> **当前状态：阶段四（挑战需求 C）后端已交付。** 覆盖 `V4` 迁移、七态订单、支付（Mock）、收货地址、物流、售后、取消与超时退款；接口契约以 [openapi.json](../simple-shop-doc/阶段四/openapi.json) 与[契约交接](../simple-shop-doc/阶段四/契约交接.md) 为准。
+> 阶段四的范围、表结构与任务拆分见 [`simple-shop-doc/阶段四/目录.md`](../simple-shop-doc/阶段四/目录.md)，后端任务计划是仓库根目录的临时文档（不入库）。
 
 ## 技术基线
 
@@ -69,7 +71,11 @@ mvn spring-boot:run            # 启动，需要 MySQL；默认使用 simple_sho
   缺省回退 `DB_USERNAME`/`DB_PASSWORD`（root/123456）。
 - Testcontainers/JUnit/ArchUnit 都是 `test` scope，不会进入 `target/simple-shop.war`，生产部署无需 Docker。
 - 应用启动时由 Flyway 依次执行 `V1__baseline_schema.sql`、`V2__seed_initial_data.sql`、
-  `V3__stage3_goods_and_trade_schema.sql`，随后由 `ddl-auto=validate` 校验实体与表结构。
+  `V3__stage3_goods_and_trade_schema.sql`、`V4__stage4_payment_delivery_aftersale_schema.sql`，
+  随后由 `ddl-auto=validate` 校验实体与表结构。
+- `mvn clean verify` 当前 **314 条用例**：单元（枚举与规则）、数据层（迁移、约束、生成列）、
+  接口（买卖两端全链路）、并发（重复支付、过期取消、并发收货扣减、并发退款额度）、架构（7 条依赖规则）。
+  `mvn clean verify` 与 `mvn -Plocal-mysql clean verify` 两条路径各跑通过一次。
 
 构建产物为 `target/simple-shop.war`，可用 `java -jar` 启动。
 容器部署由仓库根目录的 [`deploy/docker-compose.yml`](../deploy/docker-compose.yml) 编排；
@@ -100,10 +106,13 @@ mvn spring-boot:run            # 启动，需要 MySQL；默认使用 simple_sho
 
 Spring 的 multipart 上限已调到 20MB/25MB，图片的 5MB 由 Service 按用途单独校验。
 
+买家侧的上传入口只开放售后凭证图，用途白名单写在服务里，不靠前端自觉。
+
 媒体 URL 形状：
 
 - 商品图片：`/media/goods/uuuu/MM/<uuid>.jpg|png`
 - 描述媒体：`/media/description/uuuu/MM/<uuid>.jpg|png|mp4`
+- 售后凭证图：`/media/aftersale/uuuu/MM/<uuid>.jpg|png`
 
 数据库只存相对 URL；服务端回验时会同时检查用途目录、扩展名和文件是否存在。
 
@@ -115,13 +124,24 @@ Spring 的 multipart 上限已调到 20MB/25MB，图片的 5MB 由 Service 按�
 | GET | `/api/public/categories` | 两级类别树，无需登录 |
 | GET | `/api/public/goods` | 在售商品列表/搜索；keyword、category_id、page、page_size |
 | GET | `/api/public/goods/{id}` | 商品详情；只返回在售商品，已下架返回 404 |
-| POST | `/api/buyer/auth/register` | 买家注册：username、password、phone、default_location |
+| POST | `/api/buyer/auth/register` | 买家注册：username、password、phone |
 | POST | `/api/buyer/auth/session` | 买家登录，返回 token 与 expire_at |
 | DELETE | `/api/buyer/auth/session` | 买家退出，幂等 |
-| POST | `/api/buyer/orders` | 提交订单：items[{goods_id, quantity}]，金额由服务端算 |
+| GET | `/api/buyer/addresses` | 地址列表；默认在前，不分页（上限 10 条） |
+| POST | `/api/buyer/addresses` | 新建地址：receiver_name、receiver_phone、detail_address；第一条自动默认 |
+| PUT | `/api/buyer/addresses/{id}` | 编辑地址；不改默认标记 |
+| DELETE | `/api/buyer/addresses/{id}` | 删除地址；删的是默认时由最新一条补位 |
+| POST | `/api/buyer/addresses/{id}/default` | 设为默认；原默认自动取消 |
+| POST | `/api/buyer/aftersales` | 申请售后：order_item_id、title、description、image_urls（≤9） |
+| GET | `/api/buyer/aftersales` | 我的售后；status、order_id、page、page_size，按申请时间倒序 |
+| GET | `/api/buyer/aftersales/{id}` | 售后详情；只能看自己的，否则 81001 |
+| POST | `/api/buyer/media` | 买家上传售后凭证图：multipart 字段 `file`，purpose 只接受 `AFTERSALE_IMAGE` |
+| POST | `/api/buyer/orders` | 提交订单：address_id、items[{goods_id, quantity}]，金额由服务端算 |
 | GET | `/api/buyer/orders` | 我的订单；status、page、page_size，按下单时间倒序 |
 | GET | `/api/buyer/orders/{id}` | 订单详情；只回订单头，不含订单项 |
 | GET | `/api/buyer/orders/{id}/items` | 订单项；按订单 ID 查，不分页 |
+| POST | `/api/buyer/orders/{id}/pay` | 支付订单：body `payment_channel`（BANK_CARD / CREDIT_CARD / ALIPAY / WECHAT）；失败返回 83003，订单仍待支付可重试 |
+| POST | `/api/buyer/orders/{id}/confirm-receipt` | 确认收货：已发货 → 交易完成；在售商品扣库存，已下架商品不扣 |
 | POST | `/api/buyer/orders/{id}/cancel` | 取消自己的订单；已发货后不可取消 |
 | POST | `/api/buyer/cart` | 加入购物车：goods_id；重复加购只留一行，商品不在售返回 70001 |
 | GET | `/api/buyer/cart` | 我的购物车；不分页，已下架行保留并标 selectable=false |
@@ -151,8 +171,8 @@ Spring 的 multipart 上限已调到 20MB/25MB，图片的 5MB 由 Service 按�
 | GET | `/api/seller/orders/{id}/items` | 订单项；按订单 ID 查，不分页 |
 | POST | `/api/seller/orders/{id}/confirm` | 确认订单：待确认 → 已确认 |
 | POST | `/api/seller/orders/{id}/prepare` | 备货完成：已确认 → 备货完成，不校验库存 |
-| POST | `/api/seller/orders/{id}/ship` | 开始发货：备货完成 → 已发货 |
-| POST | `/api/seller/orders/{id}/complete` | 交易完成：按明细数量扣库存，任一不足则整单拒绝 |
+| POST | `/api/seller/orders/{id}/ship` | 开始发货：备货完成 → 已发货；请求体 `carrier`、`tracking_no`、`logistics_remark` |
+| PUT | `/api/seller/orders/{id}/logistics` | 修改物流：发货后改承运商/单号/备注，状态不变；已取消订单 82002 |
 | POST | `/api/seller/orders/{id}/cancel` | 取消订单：交易完成前可取消 |
 | GET | `/api/seller/customers` | 注册客户列表；按注册时间倒序分页 |
 | GET | `/api/seller/customers/{id}` | 客户详情；不含购买历史，历史订单用 `/api/seller/orders?buyer_id=` 查 |
@@ -170,17 +190,45 @@ Spring 的 multipart 上限已调到 20MB/25MB，图片的 5MB 由 Service 按�
 - 描述是 TEXT / IMAGE / VIDEO 的有序内容块，不存 HTML；文本总长 1000 字符，单块同样最多 1000。
 - 商品只有 `ON_SALE`、`OFF_SHELF` 两态；已下架必须带原因 `MANUAL` / `STOCK_ZERO` / `SOLD_OUT` 与下架时间，在售时两者都为空。
 - 在售改库存为 0 → 自动下架（`STOCK_ZERO`）；库存耗尽下架的商品改回大于 0 → 自动上架并清空原因。手动下架是终态：库存只读，类别仍可改挂。
-- 存在未完成订单（待确认 / 已确认 / 备货完成 / 已发货）时，禁止手动下架，也禁止手动把库存改成 0（20020）；改成其他正数不受限。成交扣减到 0 不在此限。
+- 没有「有未完成订单就不许下架」的限制：库存不预占、成交才扣减，卖家随时可以下架或调整库存；成交扣减到 0 仍自动下架（`SOLD_OUT`）。
 - 卖家列表按 `status` + `off_shelf_reason` 筛选；原因只能与 `OFF_SHELF` 组合，否则按参数错误拒绝。
 - 买家列表与详情只放行 `ON_SALE`；`purchasable` 以后端返回为准，等价于「在售且有库存」。
 
+### 地址口径
+
+- 三个字段：收货人、手机号、一行详细地址；不做省市区、邮编，也不允许换行。电话沿用账号口径（7~20 位数字与 `-`）。
+- 每个买家最多 10 条地址（80002），第一条创建即默认；之后只能通过「设为默认」切换，编辑不动默认标记。
+- 同一买家最多一条默认由数据库唯一索引（生成列 `default_key`）兜底；设默认时先清旧默认再置新的，两次 flush 保证不撞索引。
+- 删除默认地址后，由剩余里最新创建的一条补位；全部删光则没有默认。
+- 订单只存下单时的地址快照，地址之后怎么改、删都不影响历史订单。
+- 归属按令牌主体判定，他人地址一律按不存在（80001）返回；字段不合法返回 80003，下单未选或地址已删返回 80004。
+
+### 售后口径（买家侧）
+
+- 只有**交易完成**的订单可以按订单项申请售后；同一订单项可以多次申请（换货之后仍可再申请），是否受理由卖家线下判断，申请阶段不拦。
+- 申请只填标题、描述与图片。售后类型（退货退款 / 仅退款 / 换货）由卖家处理时登记，买家申请时不选。
+- 图片先走 `POST /api/buyer/media`（purpose 只接受 `AFTERSALE_IMAGE`，单张 5MB、JPG/PNG），申请时只传返回的 URL；外链与跨用途地址都会被媒体服务拒绝。
+- 单号形如 `AS202611260001`；列表按申请时间倒序分页，可按 `status`、`order_id` 筛选；详情只能看自己的。
+- 卖家登记结果时三选一：`RETURN_AND_REFUND` / `REFUND_ONLY` / `EXCHANGE`。退款类结果由后端按订单项「单价 × 数量」算金额，不接受前端传值；换货不产生退款。
+- **同一订单项只能退款一次**：完成并退款前锁订单项行再判额度，第二次返回 81004。换货不占额度，换货后仍可再申请退款。
+- 完成是终态：已完成不能再取消或改结果（81002）；取消只对未处理的单有效，重复取消按成功返回。取消后可以重新申请，生成新单号。
+- 订单详情的 `refunded_amount` = 取消退款（支付流水）+ 售后退款（售后单，只算「已完成 + 退款类结果」）；`aftersale_count` 是售后条数，含待处理与换货。售后列表不内嵌在订单详情里，按 `order_id` 单独查。
+- 错误码：81001 售后单不存在、81002 状态不允许、81003 订单项不可申请（不存在/非本人/订单未完成）、81004 该订单项已退款、81005 结果缺失或非法、81006 标题或描述非法、81007 图片超过 9 张。
+
 ### 订单口径
 
-- 六态：`PENDING_CONFIRM` → `CONFIRMED` → `PREPARED` → `SHIPPED` → `COMPLETED`，另有终态 `CANCELED`；整单流转，只能按序前进一格，不可跳级或回退。
-- 买家在进入「已发货」前可取消；卖家在「交易完成」前可取消（含已发货）。取消不影响库存，取消人与时间只记操作日志。
-- 下单只校验商品在售与库存，不锁库存行、不预占；交易完成时按明细数量一次性扣减，任一不足则整单拒绝、订单停在已发货，补货后可重试。
+- 七态：`PENDING_PAYMENT` → `PAID` → `CONFIRMED` → `PREPARED` → `SHIPPED` → `COMPLETED`，另有终态 `CANCELED`；整单流转，只能按序前进一格，不可跳级或回退。
+- 交易完成只由买家确认收货推进，卖家没有「完成订单」接口；成交时在售商品按明细数量扣减，任一不足整单拒绝、订单停在已发货，补货后可重试；已下架商品成交不扣库存。
+- 买家在进入「已发货」前可取消；卖家在「交易完成」前可取消（含已发货）。取消不改变库存，取消人与时间只记操作日志。
+- 已支付订单取消即全额原路退款，写一条 `ORDER_CANCEL` 退款流水；待支付取消不退款。重复取消返回成功但不会重复退。
+- 下单起 24 小时未支付由定时任务自动取消（启动即扫、按批处理、每笔独立事务），不改库存、不退款。
+- 发货后卖家可以改承运商、单号与备注，订单状态不变。这是高频修正动作，**不写审计**；只有已发货且未取消的订单允许。
+- 下单必须选一个已存在的收货地址，订单存收货人/手机号/地址快照；下单只校验商品在售与库存，不锁库存行、不预占。
+- 支付走 Mock 网关（`simple-shop.payment`）：四个渠道都成功，失败由 `mock.fail-channels` 注入给测试用；支付失败不写 `payment_channel` / `paid_at`，订单停在待支付。支付时限 24 小时，由 `order.payment-timeout` 配置。
 - 下单只收明细与数量，同一订单内重复商品按参数错误（400 / 50002）拒绝，不做数量合并。
 - 列表与详情只回订单头，**不含订单项**；明细走 `/orders/{id}/items`，列表分页、明细不分页，避免一层返回里出现两层分页。
+- 订单头统一返回收货快照（收货人/手机号/详细地址）、支付（渠道、支付时间）、物流（承运商、多行单号、备注）与退款汇总：`refunded_amount` = 取消退款 + 售后退款，`aftersale_count` 为售后条数（售后列表按 `order_id` 单独查）。
+- `pay_deadline` 只在待支付订单上有值，前端据此倒数，不要自己按 24 小时算；订单项带 `order_item_id`，售后按订单项而不是商品定位。
 - 买家只能读自己的订单，他人订单按不存在（60001）处理；卖家可读全部订单。
 - 「订单管理」「按客户」「按商品」三个入口在后端只是同一个列表的筛选条件（`status` / `buyer_id` / `goods_id` 可组合），进入详情一律按订单主键查；按商品筛选经订单项反查订单 ID。
 
@@ -191,11 +239,14 @@ Spring 的 multipart 上限已调到 20MB/25MB，图片的 5MB 由 Service 按�
 | 60001 | `ORDER_NOT_FOUND` | 404 | 订单不存在；买家操作他人订单同样按不存在处理 |
 | 60002 | `ORDER_STATUS_INVALID` | 200 | 状态不允许该操作：跳级、重复推进、终态推进 |
 | 60003 | `ORDER_NOT_CANCELABLE` | 200 | 当前状态不可取消：买家在已发货后、双方在交易完成后 |
-| 60004 | `ORDER_STOCK_SHORTAGE` | 200 | 交易完成时库存不足，整单拒绝、订单停在已发货 |
+| 60004 | `ORDER_STOCK_SHORTAGE` | 200 | 买家确认收货时库存不足，整单拒绝、订单停在已发货 |
+| 83001 | `PAYMENT_CHANNEL_INVALID` | 200 | 支付渠道不在四个枚举内 |
+| 83002 | `PAYMENT_NOT_ALLOWED` | 200 | 订单非待支付，或已过支付时限 |
+| 83003 | `PAYMENT_FAILED` | 200 | 渠道返回失败，订单仍待支付、可重试 |
+| 83004 | `REFUND_FAILED` | 200 | 退款失败（Mock 基本不触发，留给真实渠道） |
 | 20011 | `GOODS_NOT_FOUND` | 404 | 下单时商品不存在 |
 | 20019 | `GOODS_NOT_ON_SALE` | 200 | 下单时商品已下架 |
 | 20015 | `STOCK_INVALID` | 200 | 下单数量超过库存 |
-| 20020 | `GOODS_HAS_UNFINISHED_ORDER` | 200 | 有未完成订单时手动下架或手动把库存改成 0 |
 | 50002 | `PARAM_INVALID` | 400 | 明细为空、同一订单内重复商品、状态参数非法等 |
 
 码表以 `ErrorCode` 枚举为准。重复取消按成功返回只是为了防抖，不是可依赖的业务契约；重复推进会返回 60002。
@@ -229,10 +280,12 @@ Spring 的 multipart 上限已调到 20MB/25MB，图片的 5MB 由 Service 按�
 
 - 开发库 `simple_shop`、测试库 `simple_shop_test`、E2E 库 `simple_shop_e2e` 互相隔离，不要混用。
 - 活动迁移脚本：`V1__baseline_schema.sql`（12 张表基线）、`V2__seed_initial_data.sql`（卖家种子）、
-  `V3__stage3_goods_and_trade_schema.sql`（删意向与归档四表、商品加下架原因与时间、建订单/订单项/购物车/收藏）。
-- 迁移后仍是 12 张表；`V3` 只做结构变更与旧状态值换算，不迁移意向与历史记录。
+  `V3__stage3_goods_and_trade_schema.sql`（删意向与归档四表、商品加下架原因与时间、建订单/订单项/购物车/收藏）、
+  `V4__stage4_payment_delivery_aftersale_schema.sql`（订单加收货/支付/物流字段并转七态、删买家默认交易地点、建地址与售后四表）。
+- 迁移后共 16 张表；`V3` 只做结构变更与旧状态值换算，`V4` 不做任何数据回填。
 - 数据库按阶段重建：升级前先备份，再删库或删数据卷；`V3` 可以用于阶段二存量库的原地升级（商品与类别数据保留）。
 - `db/草稿/` 保留阶段三设计草稿供对照；`db/阶段三/` 是阶段三交付归档（V3 定稿）；`db/阶段一`、`db/阶段二` 是历史归档，Flyway 不会加载。
+- `V4` 要求订单表为空：开发库与 E2E 库按重建流程执行（备份 → 删库 → 启动由 Flyway 跑到 V4），旧订单不迁移；`V1`–`V3` 不改。
 - 种子卖家：账号 `seller`，初始口令 `Abcd@1234`，首次登录后请修改。
 - 测试库默认 `simple_shop_test`，可通过 `TEST_DB_URL` 覆盖；测试启动时自动跑 Flyway 并校验实体。
 - 已发布的迁移脚本不得修改，只能追加新版本。

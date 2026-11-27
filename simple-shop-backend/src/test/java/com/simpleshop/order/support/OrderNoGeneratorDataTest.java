@@ -50,7 +50,10 @@ class OrderNoGeneratorDataTest extends DataLayerTestBase {
     }
 
     private Order place(BuyerAccount buyer, Goods goods, String orderNo) {
-        return orders.saveAndFlush(Order.place(orderNo, buyer.getId(),
+        return orders.saveAndFlush(Order.place(
+                orderNo,
+                buyer.getId(),
+                receiver(),
                 List.of(new OrderLine(goods.getId(), goods.getName(), goods.getPrice(), 1))));
     }
 }

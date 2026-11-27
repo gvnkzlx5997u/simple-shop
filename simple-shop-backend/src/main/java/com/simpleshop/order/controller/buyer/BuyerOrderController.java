@@ -21,14 +21,16 @@ import com.simpleshop.common.auth.AuthPrincipal;
 import com.simpleshop.common.auth.CurrentUser;
 import com.simpleshop.order.dto.OrderData;
 import com.simpleshop.order.dto.OrderItemsData;
+import com.simpleshop.order.dto.OrderPaymentData;
 import com.simpleshop.order.dto.OrderPlacedData;
+import com.simpleshop.order.dto.PayOrderRequest;
 import com.simpleshop.order.dto.OrderStatusData;
 import com.simpleshop.order.dto.PlaceOrderRequest;
 import com.simpleshop.order.service.BuyerOrderQueryService;
 import com.simpleshop.order.service.BuyerOrderService;
 
 /**
- * 买家下单、取消与订单查询。订单归属由令牌主体决定，请求体与路径都不接受买家 ID。
+ * 买家下单、支付、确认收货、取消与订单查询。订单归属由令牌主体决定，请求体与路径都不接受买家 ID。
  */
 @RestController
 @RequestMapping("/api/buyer/orders")
@@ -51,6 +53,24 @@ public class BuyerOrderController {
             @Valid @RequestBody PlaceOrderRequest request, HttpServletRequest httpRequest) {
         AuthPrincipal buyer = CurrentUser.require(httpRequest);
         return ApiResponse.ok(orderService.place(buyer.subjectId(), request));
+    }
+
+    @PostMapping("/{id}/pay")
+    @Operation(summary = "支付订单：待支付且未超时才受理；渠道失败返回 83003，订单仍待支付可重试")
+    public ApiResponse<OrderPaymentData> pay(
+            @PathVariable String id,
+            @Valid @RequestBody PayOrderRequest request,
+            HttpServletRequest httpRequest) {
+        AuthPrincipal buyer = CurrentUser.require(httpRequest);
+        return ApiResponse.ok(orderService.pay(buyer.subjectId(), id, request));
+    }
+
+    @PostMapping("/{id}/confirm-receipt")
+    @Operation(summary = "确认收货：已发货 → 交易完成；在售商品扣库存，已下架商品不扣；任一不足整单拒绝")
+    public ApiResponse<OrderStatusData> confirmReceipt(
+            @PathVariable String id, HttpServletRequest httpRequest) {
+        AuthPrincipal buyer = CurrentUser.require(httpRequest);
+        return ApiResponse.ok(orderService.confirmReceipt(buyer.subjectId(), id));
     }
 
     @PostMapping("/{id}/cancel")

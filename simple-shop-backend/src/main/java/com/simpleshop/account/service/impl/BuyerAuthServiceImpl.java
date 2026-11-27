@@ -42,14 +42,13 @@ public class BuyerAuthServiceImpl implements BuyerAuthService {
         String username = AccountRules.username(request.username());
         String password = AccountRules.newPassword(request.password());
         String phone = AccountRules.phone(request.phone());
-        String location = AccountRules.defaultLocation(request.defaultLocation());
 
         if (buyers.existsByUsername(username)) {
             throw new BusinessException(ErrorCode.USERNAME_TAKEN);
         }
         try {
             buyers.saveAndFlush(BuyerAccount.register(
-                    username, PasswordHasher.hash(password), phone, location));
+                    username, PasswordHasher.hash(password), phone));
         } catch (DataIntegrityViolationException exception) {
             throw new BusinessException(ErrorCode.USERNAME_TAKEN);
         }

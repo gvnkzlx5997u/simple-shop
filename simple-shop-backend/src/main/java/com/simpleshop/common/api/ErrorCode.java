@@ -28,7 +28,7 @@ public enum ErrorCode {
     USERNAME_INVALID(10006, "username is invalid", HttpStatus.OK),
     ACCOUNT_INVALID(10010, "account is invalid", HttpStatus.OK),
     PHONE_INVALID(10007, "phone number is invalid", HttpStatus.OK),
-    DEFAULT_LOCATION_INVALID(10008, "default trade location is invalid", HttpStatus.OK),
+    /** 10008 原为「默认交易地点非法」，阶段四删除该字段后停用，码位不复用。 */
     ACCOUNT_NOT_FOUND(10009, "account not found", HttpStatus.NOT_FOUND),
 
     // 2xxxx 类别与商品
@@ -47,8 +47,7 @@ public enum ErrorCode {
     IMAGE_LIMIT_EXCEEDED(20017, "too many images", HttpStatus.OK),
     MAIN_IMAGE_REQUIRED(20018, "a main image is required before adding gallery images", HttpStatus.OK),
     GOODS_NOT_ON_SALE(20019, "goods is not on sale", HttpStatus.OK),
-    /** 有未完成订单时禁止手动下架、禁止手动把库存改为 0。 */
-    GOODS_HAS_UNFINISHED_ORDER(20020, "goods is referenced by an unfinished order", HttpStatus.OK),
+    /** 20020 原为「有未完成订单禁止下架/改 0」，阶段四删除该规则后停用，码位不复用。 */
     GOODS_STATUS_MISMATCH(20023, "goods status does not allow this operation", HttpStatus.OK),
     VIDEO_INVALID(20025, "video is invalid or too large", HttpStatus.OK),
     MEDIA_INVALID(20026, "media is invalid or too large", HttpStatus.OK),
@@ -63,6 +62,37 @@ public enum ErrorCode {
     ORDER_NOT_CANCELABLE(60003, "order cannot be canceled in its current status", HttpStatus.OK),
     /** 交易完成时库存不足：整单拒绝，订单停在已发货，不扣任何一行。 */
     ORDER_STOCK_SHORTAGE(60004, "insufficient stock to complete the order", HttpStatus.OK),
+
+    // 8xxxx 地址、售后、物流、支付退款（阶段四）
+    /** 地址不存在；买家操作他人地址时同样按不存在处理。 */
+    ADDRESS_NOT_FOUND(80001, "address not found", HttpStatus.NOT_FOUND),
+    ADDRESS_LIMIT_EXCEEDED(80002, "too many addresses", HttpStatus.OK),
+    ADDRESS_FIELD_INVALID(80003, "address field is invalid", HttpStatus.OK),
+    /** 下单未选地址，或所选地址已删除/不属于当前买家。 */
+    ADDRESS_REQUIRED(80004, "a valid shipping address is required", HttpStatus.OK),
+
+    // 82xxx 物流
+    /** 只有已发货（含交易完成）且未取消的订单能改物流；缺承运商/单号走参数校验。 */
+    LOGISTICS_NOT_EDITABLE(82002, "logistics can only be updated after shipping", HttpStatus.OK),
+
+    // 81xxx 售后
+    AFTERSALE_NOT_FOUND(81001, "aftersale not found", HttpStatus.NOT_FOUND),
+    /** 售后单不处于待处理：已完成的不能再处理或取消。 */
+    AFTERSALE_STATUS_INVALID(81002, "aftersale status does not allow this operation", HttpStatus.OK),
+    /** 订单项不可申请售后：不存在、不属于该买家、订单未交易完成。 */
+    AFTERSALE_NOT_APPLICABLE(81003, "the order item is not eligible for aftersale", HttpStatus.OK),
+    AFTERSALE_REFUND_DUPLICATED(81004, "this order item has already been refunded", HttpStatus.OK),
+    AFTERSALE_RESULT_REQUIRED(81005, "aftersale result is required", HttpStatus.OK),
+    AFTERSALE_CONTENT_INVALID(81006, "aftersale title or description is invalid", HttpStatus.OK),
+    AFTERSALE_IMAGE_LIMIT_EXCEEDED(81007, "too many aftersale images", HttpStatus.OK),
+
+    // 83xxx 支付与退款
+    PAYMENT_CHANNEL_INVALID(83001, "payment channel is invalid", HttpStatus.OK),
+    /** 订单不在待支付，或已超过支付时限。 */
+    PAYMENT_NOT_ALLOWED(83002, "order is not payable in its current status", HttpStatus.OK),
+    /** 渠道返回失败：订单仍停在待支付，可重试。 */
+    PAYMENT_FAILED(83003, "payment failed, the order is still unpaid", HttpStatus.OK),
+    REFUND_FAILED(83004, "refund failed", HttpStatus.OK),
 
     // 7xxxx 购物车与收藏
     CART_GOODS_NOT_SELECTABLE(70001, "goods cannot be added to cart", HttpStatus.OK),

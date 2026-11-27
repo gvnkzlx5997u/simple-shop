@@ -7,11 +7,14 @@ import com.simpleshop.order.enums.OrderStatus;
 
 /**
  * 下单成功的返回。订单详情由订单详情接口提供，这里只回创建结果，避免两套明细结构。
+ *
+ * <p>{@code pay_deadline} 让前端下单后立刻能起倒计时，不必再查一次详情。
  */
 public record OrderPlacedData(
         @JsonProperty("order_id") String orderId,
         @JsonProperty("order_no") String orderNo,
         @JsonProperty("total_amount") BigDecimal totalAmount,
         @JsonProperty("status") OrderStatus status,
-        @JsonProperty("create_at") String createAt) {
+        @JsonProperty("create_at") String createAt,
+        @JsonProperty("pay_deadline") String payDeadline) {
 }

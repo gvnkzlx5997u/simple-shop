@@ -57,17 +57,26 @@ public abstract class ApiTestBase extends DataLayerTestBase {
         return "Bearer " + token;
     }
 
-    protected MvcResult registerBuyer(
-            String username, String password, String phone, String location) throws Exception {
+    protected MvcResult registerBuyer(String username, String password, String phone)
+            throws Exception {
         Map<String, Object> body = new HashMap<>();
         body.put("username", username);
         body.put("password", password);
         body.put("phone", phone);
-        body.put("default_location", location);
         return mockMvc.perform(post("/api/buyer/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(body)))
                 .andReturn();
+    }
+
+    /**
+     * 阶段三的调用点还带着「默认交易地点」，注册已不再收这个字段。
+     * 保留重载只为让旧用例继续编译，第四参数被丢弃；T7 重写用例时一并删掉。
+     */
+    @Deprecated
+    protected MvcResult registerBuyer(
+            String username, String password, String phone, String location) throws Exception {
+        return registerBuyer(username, password, phone);
     }
 
     protected String loginBuyer(String username, String password) throws Exception {

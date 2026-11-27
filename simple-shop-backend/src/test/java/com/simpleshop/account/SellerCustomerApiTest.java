@@ -21,11 +21,9 @@ class SellerCustomerApiTest extends ApiTestBase {
     void listsCustomersWithRequiredFields() throws Exception {
         createBuyer();
         BuyerAccount located = buyerAccounts.saveAndFlush(BuyerAccount.register(
-                unique("buyer-"), PasswordHasher.hash("Other@1234"),
-                "13911112222", "线下交易点"));
+                unique("buyer-"), PasswordHasher.hash("Other@1234"), "13911112222"));
         BuyerAccount noLocation = buyerAccounts.saveAndFlush(BuyerAccount.register(
-                unique("buyer-"), PasswordHasher.hash("Other@1234"),
-                "13711112222", null));
+                unique("buyer-"), PasswordHasher.hash("Other@1234"), "13711112222"));
         String token = bearer(loginSeller("Abcd@1234"));
 
         MvcResult firstPage = mockMvc.perform(get("/api/seller/customers")
@@ -54,8 +52,7 @@ class SellerCustomerApiTest extends ApiTestBase {
                 + dataOf(secondPage).path("items").toString();
         assertThat(usernames)
                 .contains(located.getUsername())
-                .contains(noLocation.getUsername())
-                .contains("线下交易点");
+                .contains(noLocation.getUsername());
     }
 
     @Test
@@ -86,7 +83,6 @@ class SellerCustomerApiTest extends ApiTestBase {
         assertThat(data.path("id").asText()).isEqualTo(buyer.getId());
         assertThat(data.path("username").asText()).isEqualTo(buyer.getUsername());
         assertThat(data.path("phone").asText()).isEqualTo(buyer.getPhone());
-        assertThat(data.path("default_location").asText()).isEqualTo("默认地点");
         assertThat(data.path("create_at").asText()).endsWith("Z");
         assertThat(data.has("purchase_history")).isFalse();
     }

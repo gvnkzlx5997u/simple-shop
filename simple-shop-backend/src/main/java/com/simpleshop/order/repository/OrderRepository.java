@@ -1,6 +1,7 @@
 package com.simpleshop.order.repository;
 
-import java.util.Collection;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import jakarta.persistence.LockModeType;
@@ -56,16 +57,19 @@ public interface OrderRepository extends JpaRepository<Order, String> {
             Pageable pageable);
 
     /**
-     * 引用该商品的未完成订单数。商品手动下架与手动把库存改成 0 之前用它判断能否执行；
-     * 只读订单表、不加订单行锁，与下单的商品行锁配合即可挡住竞态。
+     * 超时任务扫到的订单 ID：只取待支付且已过截止时间的，按最旧优先，限量由调用方给。
+     *
+     * <p>命中 idx_order_status_create；返回 ID 而不是实体，避免把一批订单装进持久化上下文。
      */
     @Query("""
-            select count(i) from OrderItem i
-            where i.goodsId = :goodsId and i.order.status in :statuses
+            select o.id from Order o
+            where o.status = :status and o.createAt < :deadline
+            order by o.createAt asc
             """)
-    long countByGoodsIdAndOrderStatusIn(
-            @Param("goodsId") String goodsId,
-            @Param("statuses") Collection<OrderStatus> statuses);
+    List<String> findIdsByStatusAndCreateAtBefore(
+            @Param("status") OrderStatus status,
+            @Param("deadline") LocalDateTime deadline,
+            Pageable pageable);
 
     /**
      * 当日订单号已用的最大序列。订单号由「前缀 + 日期 + 补零序列」构成，

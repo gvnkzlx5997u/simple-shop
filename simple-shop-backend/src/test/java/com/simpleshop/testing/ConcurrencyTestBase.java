@@ -1,6 +1,8 @@
 package com.simpleshop.testing;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -18,11 +20,14 @@ import org.junit.jupiter.api.AfterEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
 import com.simpleshop.account.entity.BuyerAccount;
+import com.simpleshop.address.entity.Address;
+import com.simpleshop.address.repository.AddressRepository;
 import com.simpleshop.account.repository.BuyerAccountRepository;
 import com.simpleshop.cart.repository.CartItemRepository;
 import com.simpleshop.cart.service.CartService;
@@ -37,17 +42,23 @@ import com.simpleshop.favorite.service.FavoriteService;
 import com.simpleshop.goods.entity.Goods;
 import com.simpleshop.goods.repository.GoodsContentBlockRepository;
 import com.simpleshop.goods.repository.GoodsImageRepository;
+import com.simpleshop.aftersale.repository.AftersaleImageRepository;
+import com.simpleshop.aftersale.repository.AftersaleRepository;
 import com.simpleshop.goods.repository.GoodsRepository;
 import com.simpleshop.inventory.entity.GoodsStock;
 import com.simpleshop.inventory.repository.GoodsStockRepository;
 import com.simpleshop.order.entity.Order;
 import com.simpleshop.order.entity.OrderLine;
+import com.simpleshop.order.entity.ReceiverSnapshot;
 import com.simpleshop.order.enums.OrderStatus;
+import com.simpleshop.payment.api.PaymentChannel;
 import com.simpleshop.order.repository.OrderItemRepository;
 import com.simpleshop.order.repository.OrderRepository;
 import com.simpleshop.order.service.BuyerOrderService;
+import com.simpleshop.order.service.OrderTimeoutService;
 import com.simpleshop.order.service.SellerOrderService;
 import com.simpleshop.order.support.OrderNoGenerator;
+import com.simpleshop.payment.repository.PaymentRefundRepository;
 
 /**
  * 并发测试基类：无外层测试事务，被测服务在每个线程内开启并提交独立事务。
@@ -70,11 +81,17 @@ public abstract class ConcurrencyTestBase {
     @Autowired protected GoodsContentBlockRepository contentBlocks;
     @Autowired protected GoodsStockRepository stockItems;
     @Autowired protected BuyerAccountRepository buyerAccounts;
+    @Autowired protected AddressRepository addresses;
+    @Autowired protected AftersaleRepository aftersales;
+    @Autowired protected AftersaleImageRepository aftersaleImages;
     @Autowired protected OrderRepository orders;
     @Autowired protected OrderItemRepository orderItems;
     @Autowired protected OrderNoGenerator orderNoGenerator;
     @Autowired protected SellerOrderService sellerOrders;
     @Autowired protected BuyerOrderService buyerOrders;
+    @Autowired protected OrderTimeoutService timeouts;
+    @Autowired protected PaymentRefundRepository paymentRefunds;
+    @Autowired protected JdbcTemplate jdbcTemplate;
     @Autowired protected CartItemRepository cartItems;
     @Autowired protected FavoriteRepository favorites;
     @Autowired protected CartService cart;
@@ -86,6 +103,11 @@ public abstract class ConcurrencyTestBase {
         // 先删引用商品与买家的行：购物车、收藏、订单项、订单都通过外键 RESTRICT 指向它们。
         cartItems.deleteAllInBatch();
         favorites.deleteAllInBatch();
+        addresses.deleteAllInBatch();
+        // 售后单引用订单项与订单，必须先删，否则外键会拦住下面的删除
+        aftersaleImages.deleteAllInBatch();
+        aftersales.deleteAllInBatch();
+        paymentRefunds.deleteAllInBatch();
         orderItems.deleteAllInBatch();
         orders.deleteAllInBatch();
         contentBlocks.deleteAllInBatch();
@@ -108,8 +130,14 @@ public abstract class ConcurrencyTestBase {
 
     protected BuyerAccount createBuyer() {
         BuyerAccount buyer = BuyerAccount.register(
-                unique("buyer-"), PasswordHasher.hash("Buyer@1234"), "13800000000", "默认地点");
+                unique("buyer-"), PasswordHasher.hash("Buyer@1234"), "13800000000");
         return buyerAccounts.saveAndFlush(buyer);
+    }
+
+    /** 下单需要选一个已有地址：直接落一条地址行，不走还没实现的地址接口。 */
+    protected Address createAddress(BuyerAccount buyer) {
+        return addresses.saveAndFlush(Address.create(
+                buyer.getId(), "张三", "13800000000", "北京市朝阳区某路 1 号", true));
     }
 
     protected Goods publishedGoods(int stock) {
@@ -130,6 +158,7 @@ public abstract class ConcurrencyTestBase {
         return orders.saveAndFlush(Order.place(
                 orderNoGenerator.next(),
                 buyer.getId(),
+                new ReceiverSnapshot("张三", "13800000000", "北京市朝阳区某路 1 号"),
                 List.of(new OrderLine(goods.getId(), goods.getName(), goods.getPrice(), quantity))));
     }
 
@@ -137,9 +166,10 @@ public abstract class ConcurrencyTestBase {
     protected Order shippedOrder(BuyerAccount buyer, Goods goods, int quantity) {
         Order order = createOrder(buyer, goods, quantity);
         Order managed = orders.findById(order.getId()).orElseThrow();
+        managed.pay(PaymentChannel.ALIPAY, LocalDateTime.now(ZoneOffset.UTC));
         managed.confirm();
         managed.prepare();
-        managed.ship();
+        managed.ship("顺丰速运", "SF" + order.getId(), null);
         return orders.saveAndFlush(managed);
     }
 

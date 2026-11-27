@@ -35,7 +35,7 @@ class StorageTimeZoneTest extends DataLayerTestBase {
     @DisplayName("落库时间是 UTC 墙钟：裸查 datetime 列与 DatabaseTimeProvider 相差不超过 2 分钟")
     void storedDatetimeIsUtcWallClock() {
         BuyerAccount buyer = BuyerAccount.register(
-                unique("buyer-"), PasswordHasher.hash("Buyer@1234"), "13800000000", null);
+                unique("buyer-"), PasswordHasher.hash("Buyer@1234"), "13800000000");
         buyerAccounts.saveAndFlush(buyer);
 
         // 绕开 Hibernate 读取裸列：若驱动层再发生时区折算（按会话时区渲染），

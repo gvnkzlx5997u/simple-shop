@@ -39,14 +39,11 @@ class AuthApiTest extends ApiTestBase {
     }
 
     @Test
-    @DisplayName("买家注册校验用户名、密码、电话、默认地点与用户名唯一")
+    @DisplayName("买家注册校验用户名、密码、电话与用户名唯一")
     void buyerRegistrationValidatesFields() throws Exception {
         assertApiFieldError(registerBuyer(unique("buyer-"), "short", "13800000000", null), "password");
         assertApiCode(registerBuyer(unique("buyer-"), BUYER_PASSWORD, "12345", null), 10007);
         assertApiFieldError(registerBuyer("", BUYER_PASSWORD, "13800000000", null), "username");
-        assertApiFieldError(
-                registerBuyer(unique("buyer-"), BUYER_PASSWORD, "13800000000", "a".repeat(51)),
-                "default_location");
 
         String username = unique("buyer-");
         assertApiCode(registerBuyer(username, BUYER_PASSWORD, "13800000000", null), 0);

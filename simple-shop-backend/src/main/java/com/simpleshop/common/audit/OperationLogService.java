@@ -36,11 +36,19 @@ public class OperationLogService {
     public static final String CHANGE_PASSWORD = "CHANGE_PASSWORD";
 
     public static final String CREATE_ORDER = "CREATE_ORDER";
+    public static final String ORDER_PAY = "ORDER_PAY";
     public static final String ORDER_CONFIRM = "ORDER_CONFIRM";
     public static final String ORDER_PREPARE = "ORDER_PREPARE";
     public static final String ORDER_SHIP = "ORDER_SHIP";
-    public static final String ORDER_COMPLETE = "ORDER_COMPLETE";
+    /** 成交由买家确认收货推进；旧的「卖家完成」已下线，不要恢复 ORDER_COMPLETE。 */
+    public static final String ORDER_CONFIRM_RECEIPT = "ORDER_CONFIRM_RECEIPT";
     public static final String ORDER_CANCEL = "ORDER_CANCEL";
+    public static final String ORDER_TIMEOUT_CANCEL = "ORDER_TIMEOUT_CANCEL";
+
+    public static final String AFTERSALE_APPLY = "AFTERSALE_APPLY";
+    public static final String AFTERSALE_COMPLETE = "AFTERSALE_COMPLETE";
+    public static final String AFTERSALE_CANCEL = "AFTERSALE_CANCEL";
+    public static final String TARGET_AFTERSALE = "AFTERSALE";
 
     public static final String ADD_CART = "ADD_CART";
     public static final String REMOVE_CART = "REMOVE_CART";

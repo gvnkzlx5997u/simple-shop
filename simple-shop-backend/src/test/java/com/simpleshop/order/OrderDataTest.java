@@ -37,6 +37,7 @@ class OrderDataTest extends DataLayerTestBase {
         Order order = orders.saveAndFlush(Order.place(
                 orderNoGenerator.next(),
                 buyer.getId(),
+                receiver(),
                 List.of(
                         new OrderLine(first.getId(), first.getName(), first.getPrice(), 2),
                         new OrderLine(second.getId(), second.getName(), second.getPrice(), 1))));
@@ -47,7 +48,7 @@ class OrderDataTest extends DataLayerTestBase {
                 orderItems.findByOrder_IdOrderByGoodsNameAscIdAsc(order.getId());
         assertThat(loaded.getOrderNo()).startsWith("SO");
         assertThat(loaded.getBuyerId()).isEqualTo(buyer.getId());
-        assertThat(loaded.getStatus()).isEqualTo(OrderStatus.PENDING_CONFIRM);
+        assertThat(loaded.getStatus()).isEqualTo(OrderStatus.PENDING_PAYMENT);
         assertThat(loaded.getTotalAmount()).isEqualByComparingTo(new BigDecimal("299.97"));
         assertThat(loaded.getCreateAt()).isNotNull();
         assertThat(loaded.getUpdateAt()).isNotNull();
@@ -75,6 +76,7 @@ class OrderDataTest extends DataLayerTestBase {
         Order order = orders.saveAndFlush(Order.place(
                 orderNoGenerator.next(),
                 buyer.getId(),
+                receiver(),
                 List.of(
                         new OrderLine(first.getId(), first.getName(), new BigDecimal("0.01"), 3),
                         new OrderLine(second.getId(), second.getName(), new BigDecimal("12.30"), 7))));
@@ -95,32 +97,32 @@ class OrderDataTest extends DataLayerTestBase {
         Goods goods = createGoods(category);
         String orderNo = orderNoGenerator.next();
 
-        assertThatThrownBy(() -> Order.place(orderNo, buyer.getId(), List.of()))
+        assertThatThrownBy(() -> Order.place(orderNo, buyer.getId(), receiver(), List.of()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("at least one line");
 
-        assertThatThrownBy(() -> Order.place(orderNo, buyer.getId(), List.of(
+        assertThatThrownBy(() -> Order.place(orderNo, buyer.getId(), receiver(), List.of(
                 new OrderLine(goods.getId(), goods.getName(), goods.getPrice(), 1),
                 new OrderLine(goods.getId(), goods.getName(), goods.getPrice(), 2))))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("duplicate goods");
 
-        assertThatThrownBy(() -> Order.place(orderNo, buyer.getId(), List.of(
+        assertThatThrownBy(() -> Order.place(orderNo, buyer.getId(), receiver(), List.of(
                 new OrderLine(goods.getId(), goods.getName(), goods.getPrice(), 0))))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("quantity");
 
-        assertThatThrownBy(() -> Order.place(orderNo, buyer.getId(), List.of(
+        assertThatThrownBy(() -> Order.place(orderNo, buyer.getId(), receiver(), List.of(
                 new OrderLine(goods.getId(), goods.getName(), new BigDecimal("9.999"), 1))))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("2 decimals");
 
-        assertThatThrownBy(() -> Order.place(orderNo, buyer.getId(), List.of(
+        assertThatThrownBy(() -> Order.place(orderNo, buyer.getId(), receiver(), List.of(
                 new OrderLine(goods.getId(), goods.getName(), BigDecimal.ZERO, 1))))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("unit price");
 
-        assertThatThrownBy(() -> Order.place("SO" + "9".repeat(40), buyer.getId(), List.of(
+        assertThatThrownBy(() -> Order.place("SO" + "9".repeat(40), buyer.getId(), receiver(), List.of(
                 new OrderLine(goods.getId(), goods.getName(), goods.getPrice(), 1))))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("32");
@@ -134,11 +136,9 @@ class OrderDataTest extends DataLayerTestBase {
         Goods goods = createGoods(category);
         String orderNo = orderNoGenerator.next();
 
-        orders.saveAndFlush(Order.place(orderNo, buyer.getId(),
-                List.of(new OrderLine(goods.getId(), goods.getName(), goods.getPrice(), 1))));
+        orders.saveAndFlush(Order.place(orderNo, buyer.getId(), receiver(), List.of(new OrderLine(goods.getId(), goods.getName(), goods.getPrice(), 1))));
 
-        Order duplicate = Order.place(orderNo, buyer.getId(),
-                List.of(new OrderLine(goods.getId(), goods.getName(), goods.getPrice(), 1)));
+        Order duplicate = Order.place(orderNo, buyer.getId(), receiver(), List.of(new OrderLine(goods.getId(), goods.getName(), goods.getPrice(), 1)));
         assertThatThrownBy(() -> orders.saveAndFlush(duplicate))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
@@ -230,7 +230,8 @@ class OrderDataTest extends DataLayerTestBase {
         flushAndClear();
 
         assertThat(orders.findByOrderNo(order.getOrderNo())).map(Order::getId).hasValue(order.getId());
-        assertThat(orders.findWithLockById(order.getId())).map(Order::isUnfinished).hasValue(true);
+        assertThat(orders.findWithLockById(order.getId())).map(Order::getStatus)
+                .hasValue(OrderStatus.PENDING_PAYMENT);
         assertThat(orders.findByOrderNo("SO-NOT-EXISTS")).isEmpty();
     }
 }

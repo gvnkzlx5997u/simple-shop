@@ -61,6 +61,20 @@ simple-shop:
     login-per-minute: ${RATE_LIMIT_LOGIN:50}
     order-per-minute: ${RATE_LIMIT_ORDER:1000}
 
+  order:
+    # 下单起 24 小时未支付由系统取消；测试用极短值覆盖。
+    payment-timeout: ${ORDER_PAYMENT_TIMEOUT:24h}
+    # 超时扫描间隔与单批上限；启动即扫一次，补上停机期间到期的订单。
+    timeout-scan-interval-ms: ${ORDER_TIMEOUT_SCAN_INTERVAL_MS:60000}
+    timeout-batch-size: ${ORDER_TIMEOUT_BATCH_SIZE:200}
+
+  payment:
+    mock:
+      # 本阶段只有 Mock 网关；关闭且没接真实渠道时，支付会一律拒绝并告警。
+      enabled: ${PAYMENT_MOCK_ENABLED:true}
+      # 逗号分隔的渠道名，用于测试「支付失败仍待支付」；生产留空。
+      fail-channels: ${PAYMENT_MOCK_FAIL_CHANNELS:}
+
   pagination:
     default-size: 10
     max-size: 100

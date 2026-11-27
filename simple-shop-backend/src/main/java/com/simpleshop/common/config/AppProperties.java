@@ -2,6 +2,7 @@ package com.simpleshop.common.config;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
@@ -20,6 +21,8 @@ public class AppProperties {
     private final Session session = new Session();
     private final RateLimit rateLimit = new RateLimit();
     private final Pagination pagination = new Pagination();
+    private final Payment payment = new Payment();
+    private final Order order = new Order();
 
     public Media getMedia() {
         return media;
@@ -37,6 +40,14 @@ public class AppProperties {
         return pagination;
     }
 
+    public Payment getPayment() {
+        return payment;
+    }
+
+    public Order getOrder() {
+        return order;
+    }
+
     /** 媒体存储与上传限制。 */
     public static class Media {
 
@@ -51,6 +62,9 @@ public class AppProperties {
 
         /** 描述内容块中的视频。 */
         private DataSize descriptionVideoMaxSize = DataSize.ofMegabytes(20);
+
+        /** 售后凭证图：与商品图同样是 5MB，但独立配置，将来可以单独调。 */
+        private DataSize aftersaleImageMaxSize = DataSize.ofMegabytes(5);
 
         public String getDirectory() {
             return directory;
@@ -86,6 +100,14 @@ public class AppProperties {
 
         public DataSize getDescriptionVideoMaxSize() {
             return descriptionVideoMaxSize;
+        }
+
+        public DataSize getAftersaleImageMaxSize() {
+            return aftersaleImageMaxSize;
+        }
+
+        public void setAftersaleImageMaxSize(DataSize aftersaleImageMaxSize) {
+            this.aftersaleImageMaxSize = aftersaleImageMaxSize;
         }
 
         public void setDescriptionVideoMaxSize(DataSize descriptionVideoMaxSize) {
@@ -158,6 +180,77 @@ public class AppProperties {
 
         public void setOrderPerMinute(int orderPerMinute) {
             this.orderPerMinute = orderPerMinute;
+        }
+    }
+
+    /** 支付包配置。Mock 是本阶段的默认实现，真实渠道接入时在这里加开关。 */
+    public static class Payment {
+
+        private final Mock mock = new Mock();
+
+        public Mock getMock() {
+            return mock;
+        }
+
+        public static class Mock {
+
+            /** 关掉 Mock 又没有真实适配器时，启动会告警、支付一律拒绝，不静默装成功。 */
+            private boolean enabled = true;
+
+            /** 把这些渠道的支付强制置为失败；测试用来覆盖「失败仍待支付」的分支。 */
+            private List<String> failChannels = List.of();
+
+            public boolean isEnabled() {
+                return enabled;
+            }
+
+            public void setEnabled(boolean enabled) {
+                this.enabled = enabled;
+            }
+
+            public List<String> getFailChannels() {
+                return failChannels;
+            }
+
+            public void setFailChannels(List<String> failChannels) {
+                this.failChannels = failChannels;
+            }
+        }
+    }
+
+    /** 订单时序配置：支付时限由业务口径定死 24 小时，扫描间隔与批量留给超时任务。 */
+    public static class Order {
+
+        private Duration paymentTimeout = Duration.ofHours(24);
+
+        /** 超时扫描间隔（毫秒）；测试里调大，避免定时任务干扰用例。 */
+        private long timeoutScanIntervalMs = 60_000;
+
+        /** 每轮最多处理多少笔，避免一次扫全表、长事务。 */
+        private int timeoutBatchSize = 200;
+
+        public Duration getPaymentTimeout() {
+            return paymentTimeout;
+        }
+
+        public void setPaymentTimeout(Duration paymentTimeout) {
+            this.paymentTimeout = paymentTimeout;
+        }
+
+        public long getTimeoutScanIntervalMs() {
+            return timeoutScanIntervalMs;
+        }
+
+        public void setTimeoutScanIntervalMs(long timeoutScanIntervalMs) {
+            this.timeoutScanIntervalMs = timeoutScanIntervalMs;
+        }
+
+        public int getTimeoutBatchSize() {
+            return timeoutBatchSize;
+        }
+
+        public void setTimeoutBatchSize(int timeoutBatchSize) {
+            this.timeoutBatchSize = timeoutBatchSize;
         }
     }
 

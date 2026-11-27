@@ -57,7 +57,6 @@ public class SellerCustomerServiceImpl implements SellerCustomerService {
                 buyer.getId(),
                 buyer.getUsername(),
                 buyer.getPhone(),
-                buyer.getDefaultLocation(),
                 UtcIso8601.of(buyer.getCreateAt()));
     }
 
@@ -66,7 +65,6 @@ public class SellerCustomerServiceImpl implements SellerCustomerService {
                 buyer.getId(),
                 buyer.getUsername(),
                 buyer.getPhone(),
-                buyer.getDefaultLocation(),
                 UtcIso8601.of(buyer.getCreateAt()));
     }
 }

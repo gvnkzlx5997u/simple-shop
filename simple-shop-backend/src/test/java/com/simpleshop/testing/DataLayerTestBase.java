@@ -19,6 +19,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.simpleshop.account.entity.BuyerAccount;
+import com.simpleshop.address.entity.Address;
+import com.simpleshop.address.repository.AddressRepository;
 import com.simpleshop.account.repository.BuyerAccountRepository;
 import com.simpleshop.account.repository.SellerAccountRepository;
 import com.simpleshop.common.auth.PasswordHasher;
@@ -36,6 +38,7 @@ import com.simpleshop.inventory.entity.GoodsStock;
 import com.simpleshop.inventory.repository.GoodsStockRepository;
 import com.simpleshop.order.entity.Order;
 import com.simpleshop.order.entity.OrderLine;
+import com.simpleshop.order.entity.ReceiverSnapshot;
 import com.simpleshop.order.repository.OrderItemRepository;
 import com.simpleshop.order.repository.OrderRepository;
 import com.simpleshop.order.support.OrderNoGenerator;
@@ -53,6 +56,7 @@ public abstract class DataLayerTestBase {
 
     @Autowired protected SellerAccountRepository sellerAccounts;
     @Autowired protected BuyerAccountRepository buyerAccounts;
+    @Autowired protected AddressRepository addresses;
     @Autowired protected CategoryL1Repository categoryL1s;
     @Autowired protected CategoryL2Repository categoryL2s;
     @Autowired protected GoodsRepository goodsRepository;
@@ -79,8 +83,20 @@ public abstract class DataLayerTestBase {
 
     protected BuyerAccount createBuyer() {
         BuyerAccount buyer = BuyerAccount.register(
-                unique("buyer-"), PasswordHasher.hash("Buyer@1234"), "13800000000", "默认地点");
+                unique("buyer-"), PasswordHasher.hash("Buyer@1234"), "13800000000");
         return buyerAccounts.saveAndFlush(buyer);
+    }
+
+    /**
+     * 下单要选地址：直接落一条，不走还没实现的地址接口。
+     *
+     * <p>只有该买家的第一条才是默认——同一买家建两条默认会撞唯一索引，而测试里
+     * 「一个买家下多单」很常见。
+     */
+    protected Address createAddress(BuyerAccount buyer) {
+        boolean first = addresses.countByBuyerId(buyer.getId()) == 0;
+        return addresses.saveAndFlush(Address.create(
+                buyer.getId(), "张三", "13800000000", "北京市朝阳区某路 1 号", first));
     }
 
     protected Goods createGoods(CategoryL2 category) {
@@ -108,12 +124,18 @@ public abstract class DataLayerTestBase {
         entityManager.clear();
     }
 
-    /** 建一笔待确认订单：单商品、指定数量，用于订单相关测试的夹具。 */
+    /** 建一笔待支付订单：单商品、指定数量，用于订单相关测试的夹具。 */
     protected Order createOrder(BuyerAccount buyer, Goods goods, int quantity) {
         Order order = Order.place(
                 orderNoGenerator.next(),
                 buyer.getId(),
+                receiver(),
                 List.of(new OrderLine(goods.getId(), goods.getName(), goods.getPrice(), quantity)));
         return orders.saveAndFlush(order);
+    }
+
+    /** 订单夹具用的收货快照：订单只认快照，与地址簿无关。 */
+    protected ReceiverSnapshot receiver() {
+        return new ReceiverSnapshot("张三", "13800000000", "北京市朝阳区某路 1 号");
     }
 }

@@ -8,6 +8,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MvcResult;
 
+import com.fasterxml.jackson.databind.JsonNode;
+
 import com.simpleshop.testing.ApiTestBase;
 
 class OpenApiTest extends ApiTestBase {
@@ -20,6 +22,16 @@ class OpenApiTest extends ApiTestBase {
                 .andReturn();
 
         String body = result.getResponse().getContentAsString();
+        JsonNode document = objectMapper.readTree(body);
+
+        // 端点数量与 simple-shop-doc/阶段四/openapi.json 的快照一致；增删端点时同步改这里与快照
+        assertThat(document.path("paths").size()).isEqualTo(50);
+        assertThat(document.path("components").path("schemas").path("OrderData")
+                .path("properties").has("pay_deadline")).isTrue();
+        assertThat(document.path("components").path("schemas").path("OrderData")
+                .path("properties").has("refunded_amount")).isTrue();
+        assertThat(document.path("components").path("schemas").path("AftersaleData")
+                .path("properties").has("aftersale_no")).isTrue();
         assertThat(body).contains(
                 // 公共
                 "/api/public/health",
@@ -44,17 +56,27 @@ class OpenApiTest extends ApiTestBase {
                 "/api/seller/customers",
                 "/api/seller/customers/{id}",
                 // 订单
+                "/api/buyer/aftersales",
+                "/api/buyer/aftersales/{id}",
+                "/api/buyer/media",
+                "/api/buyer/addresses",
+                "/api/buyer/addresses/{id}",
+                "/api/buyer/addresses/{id}/default",
                 "/api/buyer/orders",
                 "/api/buyer/orders/{id}",
                 "/api/buyer/orders/{id}/items",
+                "/api/buyer/orders/{id}/pay",
+                "/api/buyer/orders/{id}/confirm-receipt",
                 "/api/buyer/orders/{id}/cancel",
+                "/api/seller/aftersales",
+                "/api/seller/aftersales/{id}",
                 "/api/seller/orders",
                 "/api/seller/orders/{id}",
                 "/api/seller/orders/{id}/items",
                 "/api/seller/orders/{id}/confirm",
                 "/api/seller/orders/{id}/prepare",
                 "/api/seller/orders/{id}/ship",
-                "/api/seller/orders/{id}/complete",
+                "/api/seller/orders/{id}/logistics",
                 "/api/seller/orders/{id}/cancel",
                 // 购物车与收藏
                 "/api/buyer/cart",
@@ -64,6 +86,10 @@ class OpenApiTest extends ApiTestBase {
                 "/api/buyer/favorites/{goodsId}");
 
         assertThat(body).doesNotContain(
+                // 阶段四：卖家不再有「完成订单」，成交由买家确认收货推进
+                "/api/seller/orders/{id}/complete",
+                // 阶段四：注册不再收「默认交易地点」
+                "default_location",
                 "/api/seller/goods/{id}/re-list",
                 "/api/buyer/intentions",
                 "/api/buyer/history",
