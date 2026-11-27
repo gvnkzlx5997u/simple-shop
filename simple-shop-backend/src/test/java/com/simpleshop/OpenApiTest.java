@@ -8,6 +8,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.MvcResult;
 
+import com.fasterxml.jackson.databind.JsonNode;
+
 import com.simpleshop.testing.ApiTestBase;
 
 class OpenApiTest extends ApiTestBase {
@@ -20,6 +22,16 @@ class OpenApiTest extends ApiTestBase {
                 .andReturn();
 
         String body = result.getResponse().getContentAsString();
+        JsonNode document = objectMapper.readTree(body);
+
+        // 端点数量与 simple-shop-doc/阶段四/openapi.json 的快照一致；增删端点时同步改这里与快照
+        assertThat(document.path("paths").size()).isEqualTo(50);
+        assertThat(document.path("components").path("schemas").path("OrderData")
+                .path("properties").has("pay_deadline")).isTrue();
+        assertThat(document.path("components").path("schemas").path("OrderData")
+                .path("properties").has("refunded_amount")).isTrue();
+        assertThat(document.path("components").path("schemas").path("AftersaleData")
+                .path("properties").has("aftersale_no")).isTrue();
         assertThat(body).contains(
                 // 公共
                 "/api/public/health",
