@@ -11,7 +11,7 @@ import type {
 
 /**
  * 买家端接口：浏览类走 /api/public/**（免令牌），账号类走 /api/buyer/**（需登录）。
- * 字段名、枚举值与错误码以 simple-shop-doc/阶段三/契约交接.md 与 openapi.json 为准。
+ * 字段名、枚举值与错误码以 simple-shop-doc/阶段四/openapi.json 与《契约交接》为准。
  */
 
 /** 商品列表/搜索：仅在售；keyword 与 category_id 可叠加。 */

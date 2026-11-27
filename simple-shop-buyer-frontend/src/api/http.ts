@@ -120,6 +120,32 @@ export async function post<T>(url: string, body?: unknown): Promise<T> {
   }
 }
 
+export async function put<T>(url: string, body?: unknown): Promise<T> {
+  try {
+    const res = await http.put<ApiResponse<T>>(url, body)
+    return unwrap(res)
+  } catch (err) {
+    throw toApiError(err)
+  }
+}
+
+/**
+ * multipart 上传。不手写 Content-Type，交给浏览器带 boundary，
+ * 否则后端解析不出分段，会当成参数缺失而不是文件非法。
+ */
+export async function upload<T>(
+  url: string,
+  form: FormData,
+  params?: Record<string, unknown>,
+): Promise<T> {
+  try {
+    const res = await http.post<ApiResponse<T>>(url, form, { params })
+    return unwrap(res)
+  } catch (err) {
+    throw toApiError(err)
+  }
+}
+
 export async function del<T>(url: string): Promise<T> {
   try {
     const res = await http.delete<ApiResponse<T>>(url)

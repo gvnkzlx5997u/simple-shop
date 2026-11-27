@@ -144,3 +144,8 @@
   /* 下拉的弹出列表会用这个底色画，必须实色，见 --color-surface-solid。 */
   background-color: var(--color-surface-solid);
 }
+
+@utility modal-box {
+  /* 弹窗盖在内容之上，半透明的 base-100 会把背后的文字透上来，必须实色。 */
+  background-color: var(--color-surface-solid);
+}

@@ -25,6 +25,12 @@ const router = createRouter({
       meta: { title: '购物车', requiresAuth: true },
     },
     {
+      path: '/checkout',
+      name: 'checkout',
+      component: () => import('../views/Checkout.vue'),
+      meta: { title: '结算', requiresAuth: true },
+    },
+    {
       path: '/favorites',
       name: 'favorites',
       component: () => import('../views/Favorites.vue'),
@@ -41,6 +47,36 @@ const router = createRouter({
       name: 'order-detail',
       component: () => import('../views/OrderDetail.vue'),
       meta: { title: '订单详情', requiresAuth: true },
+    },
+    {
+      path: '/orders/:id/pay',
+      name: 'order-pay',
+      component: () => import('../views/OrderPay.vue'),
+      meta: { title: '支付订单', requiresAuth: true },
+    },
+    {
+      path: '/addresses',
+      name: 'addresses',
+      component: () => import('../views/Addresses.vue'),
+      meta: { title: '收货地址', requiresAuth: true },
+    },
+    {
+      path: '/aftersales',
+      name: 'aftersales',
+      component: () => import('../views/Aftersales.vue'),
+      meta: { title: '我的售后', requiresAuth: true },
+    },
+    {
+      path: '/aftersales/apply',
+      name: 'aftersale-apply',
+      component: () => import('../views/AftersaleApply.vue'),
+      meta: { title: '申请售后', requiresAuth: true },
+    },
+    {
+      path: '/aftersales/:id',
+      name: 'aftersale-detail',
+      component: () => import('../views/AftersaleDetail.vue'),
+      meta: { title: '售后详情', requiresAuth: true },
     },
     {
       path: '/login',
@@ -60,7 +96,7 @@ const router = createRouter({
 
 /**
  * 登录守卫：`meta.requiresAuth` 为真的页面未登录时跳登录，并带 redirect 回原页。
- * 需要登录的是购物车、收藏、订单列表与订单详情四处，都靠同一个 meta 标记。
+ * 需要登录的页面都靠同一个 meta 标记，不在页面里各写一套。
  */
 router.beforeEach((to) => {
   const auth = useAuthStore()

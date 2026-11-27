@@ -209,20 +209,22 @@ export const useCartStore = defineStore('cart', () => {
   }
 
   /**
-   * 结算：把勾选且有效的行提交成订单（D3-5）。
+   * 结算：把勾选且有效的行提交成订单。
    *
+   * 地址必须由调用方给出（下单必填，且只能是地址簿里已有的一条）。
    * 后端下单**不会**顺带清购物车（订单服务与购物车表互不引用），
    * 所以成交后要自己把这几行删掉，否则同一件商品还能再被下单一次。
    * 删除失败不影响订单已成立，吞掉即可——下一次 load 仍会按服务端为准。
    *
    * 失败时**原样保留**勾选与数量，让用户能直接回购物车调整。
    */
-  async function submitOrder(): Promise<OrderPlacedData> {
+  async function submitOrder(addressId: string): Promise<OrderPlacedData> {
     const targets = checkedRows.value
     if (targets.length === 0) {
       throw new Error('empty selection')
     }
     const placed = await placeOrder(
+      addressId,
       targets.map((r) => ({ goods_id: r.goods_id, quantity: r.quantity })),
     )
     await Promise.allSettled(targets.map((r) => api.removeCartItem(r.goods_id)))
