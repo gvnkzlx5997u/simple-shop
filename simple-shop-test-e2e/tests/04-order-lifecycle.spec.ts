@@ -3,29 +3,32 @@ import { expect, test, type APIRequestContext } from '@playwright/test';
 import {
   advanceOrder,
   call,
+  confirmReceipt,
   createL1,
   createL2,
   getSellerGoods,
   newApi,
   newBuyer,
+  offShelf,
+  payOrder,
   placeOrder,
   publishGoods,
   sellerLogin,
   sellerOrderDetail,
   sellerOrderItems,
+  updateStock,
 } from '../helpers/api';
 import type { GoodsView, OrderStatus } from '../helpers/api';
 import { buyerFixture, goodsFixture, uniqueName } from '../helpers/data';
 import { SELLER_URL } from '../helpers/config';
 import {
-  confirmDialog,
   openSellerGoods,
   openSellerOrder,
   sellerAdvance,
   sellerLoginUi,
   sellerOrderRow,
+  sellerShip,
   statusTags,
-  toast,
 } from '../helpers/ui';
 
 /**
@@ -55,10 +58,12 @@ test.describe.serial('04 订单生命周期', () => {
     );
   }
 
-  /** 造一笔订单，返回订单号与 id。 */
+  type PlacedOrder = { orderId: string; orderNo: string; buyerId: string; token: string };
+
+  /** 造一笔订单，返回订单号、id 与买家 token（支付、确认收货都要用它）。 */
   async function newOrder(
     items: Array<{ goods: GoodsView; quantity: number }>,
-  ): Promise<{ orderId: string; orderNo: string; buyerId: string }> {
+  ): Promise<PlacedOrder> {
     const token = await newBuyer(ctx, buyerFixture('ord'));
     const placed = await placeOrder(
       ctx,
@@ -66,21 +71,28 @@ test.describe.serial('04 订单生命周期', () => {
       items.map((item) => ({ goods_id: item.goods.id, quantity: item.quantity })),
     );
     const detail = await sellerOrderDetail(ctx, sellerToken, placed.order_id);
-    return { orderId: placed.order_id, orderNo: placed.order_no, buyerId: detail.buyer.id };
+    return { orderId: placed.order_id, orderNo: placed.order_no, buyerId: detail.buyer.id, token };
   }
 
-  /** 用接口把订单推到指定状态（造前置状态用，断言仍走 UI）。 */
-  async function drive(orderId: string, target: OrderStatus): Promise<void> {
-    const path: Array<['confirm' | 'prepare' | 'ship' | 'complete', OrderStatus]> = [
-      ['confirm', 'CONFIRMED'],
-      ['prepare', 'PREPARED'],
-      ['ship', 'SHIPPED'],
-      ['complete', 'COMPLETED'],
-    ];
-    for (const [action, status] of path) {
-      await advanceOrder(ctx, sellerToken, orderId, action);
-      if (status === target) return;
-    }
+  /**
+   * 用接口把订单推到指定状态（造前置状态用，断言仍走 UI）。
+   *
+   * 阶段四的推进链是「买家付款 → 卖家确认 → 备货 → 发货 → 买家确认收货」：
+   * 卖家没有「完成」这个动作了，所以 target=COMPLETED 的最后一步必须由买家调。
+   */
+  async function drive(order: PlacedOrder, target: OrderStatus): Promise<void> {
+    await payOrder(ctx, order.token, order.orderId, 'ALIPAY');
+    if (target === 'PAID') return;
+    await advanceOrder(ctx, sellerToken, order.orderId, 'confirm');
+    if (target === 'CONFIRMED') return;
+    await advanceOrder(ctx, sellerToken, order.orderId, 'prepare');
+    if (target === 'PREPARED') return;
+    await advanceOrder(ctx, sellerToken, order.orderId, 'ship', {
+      carrier: '顺丰速运',
+      tracking_no: 'SF0000000009',
+    });
+    if (target === 'SHIPPED') return;
+    await confirmReceipt(ctx, order.token, order.orderId);
   }
 
   test.beforeAll(async () => {
@@ -96,7 +108,7 @@ test.describe.serial('04 订单生命周期', () => {
     await ctx.dispose();
   });
 
-  test('T04-01 列表：七个状态 tab，已取消的订单也在列表里', async ({ page }) => {
+  test('T04-01 列表：八个 tab（全部 + 七态），已取消的订单也在列表里', async ({ page }) => {
     const pending = await newOrder([{ goods: await newGoods(3), quantity: 1 }]);
     const canceled = await newOrder([{ goods: await newGoods(3), quantity: 1 }]);
     await advanceOrder(ctx, sellerToken, canceled.orderId, 'cancel');
@@ -104,8 +116,19 @@ test.describe.serial('04 订单生命周期', () => {
     await sellerLoginUi(page);
     await page.goto(`${SELLER_URL}/orders`);
 
-    // 全部 + 六个状态
-    await expect(page.getByRole('tab')).toHaveCount(7);
+    // 全部 + 待支付 / 已支付 / 已确认 / 备货完成 / 已发货 / 交易完成 / 已取消
+    await expect(page.getByRole('tab')).toHaveCount(8);
+    const labels = (await page.getByRole('tab').allTextContents()).map((text) => text.trim());
+    expect(labels).toEqual([
+      '全部',
+      '待支付',
+      '已支付',
+      '已确认',
+      '备货完成',
+      '已发货',
+      '交易完成',
+      '已取消',
+    ]);
     await expect(sellerOrderRow(page, pending.orderNo)).toBeVisible();
     await expect(sellerOrderRow(page, canceled.orderNo)).toBeVisible();
 
@@ -113,7 +136,7 @@ test.describe.serial('04 订单生命周期', () => {
     await expect(sellerOrderRow(page, canceled.orderNo)).toBeVisible();
     await expect(sellerOrderRow(page, pending.orderNo)).toHaveCount(0);
 
-    await page.getByRole('tab', { name: '待确认' }).click();
+    await page.getByRole('tab', { name: '待支付' }).click();
     await expect(sellerOrderRow(page, pending.orderNo)).toBeVisible();
     await expect(sellerOrderRow(page, canceled.orderNo)).toHaveCount(0);
   });
@@ -123,11 +146,11 @@ test.describe.serial('04 订单生命周期', () => {
 
     await sellerLoginUi(page);
     await page.goto(`${SELLER_URL}/orders`);
-    await page.getByRole('tab', { name: '待确认' }).click();
-    await expect(page).toHaveURL(new RegExp(`status=PENDING_CONFIRM`));
+    await page.getByRole('tab', { name: '待支付' }).click();
+    await expect(page).toHaveURL(/status=PENDING_PAYMENT/);
 
     await page.reload();
-    await expect(page.getByRole('tab', { name: '待确认' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('tab', { name: '待支付' })).toHaveAttribute('aria-selected', 'true');
     await expect(sellerOrderRow(page, order.orderNo)).toBeVisible();
   });
 
@@ -165,41 +188,48 @@ test.describe.serial('04 订单生命周期', () => {
     await expect(page.locator('table tfoot')).toContainText('¥45.00');
   });
 
-  test('T04-05 待确认：只有一个推进按钮，没有跳级入口', async ({ page }) => {
+  test('T04-05 待支付：卖家只能取消，没有确认入口', async ({ page }) => {
     const order = await newOrder([{ goods: await newGoods(2), quantity: 1 }]);
 
     await sellerLoginUi(page);
     await page.goto(`${SELLER_URL}/orders/${order.orderId}`);
 
-    await expect(statusTags(page).filter({ hasText: '待确认' })).toBeVisible();
-    await expect(page.getByTestId('order-next')).toHaveText('确认订单');
-    await expect(page.getByTestId('order-next')).toHaveCount(1);
+    await expect(statusTags(page).filter({ hasText: '待支付' })).toBeVisible();
+    await expect(page.getByTestId('order-next'), '待支付不给推进按钮').toHaveCount(0);
     await expect(page.getByTestId('order-cancel')).toBeVisible();
-    // 流程图上只有「待确认」是当前步
-    await expect(page.getByText('买家已下单，等待你确认')).toBeVisible();
+    await expect(page.getByText('买家还没付款，这一步要等付款之后才能操作')).toBeVisible();
+
+    // 流程条 6 格（待支付 → 交易完成），当前格是待支付
+    const progress = page.getByTestId('order-progress');
+    await expect(progress.getByRole('listitem')).toHaveCount(6);
+    await expect(progress.locator('[aria-current="step"]')).toHaveText('待支付');
   });
 
-  test('T04-06 四步推进：确认 → 备货完成 → 已发货 → 交易完成', async ({ page }) => {
+  test('T04-06 推进链：确认 → 备货完成 → 发货 → 买家收货完成', async ({ page }) => {
     const order = await newOrder([{ goods: await newGoods(3), quantity: 1 }]);
+    // 卖家第一步是「确认已支付单」，所以先让买家付款
+    await payOrder(ctx, order.token, order.orderId, 'ALIPAY');
 
     await sellerLoginUi(page);
     await page.goto(`${SELLER_URL}/orders/${order.orderId}`);
 
-    await sellerAdvance(page, '确认订单');
+    await sellerAdvance(page, '确认');
     await expect(statusTags(page).filter({ hasText: '已确认' })).toBeVisible();
     await expect(page.getByTestId('order-next')).toHaveText('标记备货完成');
 
-    await sellerAdvance(page, '标记备货完成');
+    await sellerAdvance(page, '确认');
     await expect(statusTags(page).filter({ hasText: '备货完成' })).toBeVisible();
     await expect(page.getByTestId('order-next')).toHaveText('开始发货');
 
-    await sellerAdvance(page, '开始发货');
+    // 发货走物流弹窗：承运商与单号都必填
+    await sellerShip(page, { carrierLabel: '顺丰', trackingNo: 'SF0001' });
     await expect(statusTags(page).filter({ hasText: '已发货' })).toBeVisible();
-    await expect(page.getByTestId('order-next')).toHaveText('交易完成');
+    await expect(page.getByTestId('order-next'), '发货后卖家没有「完成」按钮').toHaveCount(0);
 
-    await sellerAdvance(page, '交易完成');
+    // 最后一步只能由买家确认收货推进
+    await confirmReceipt(ctx, order.token, order.orderId);
+    await page.reload();
     await expect(statusTags(page).filter({ hasText: '交易完成' })).toBeVisible();
-    // 终态：动作区整行不渲染
     await expect(page.getByTestId('order-next')).toHaveCount(0);
     await expect(page.getByTestId('order-cancel')).toHaveCount(0);
 
@@ -207,88 +237,122 @@ test.describe.serial('04 订单生命周期', () => {
     expect(after.status).toBe('COMPLETED');
   });
 
-  test('T04-07 完成时按明细扣库存，扣到 0 商品自动下架（已售）', async ({ page }) => {
+  test('T04-07 成交时按明细扣库存，扣到 0 自动下架（已售）', async ({ page }) => {
     const goods = await newGoods(5);
     const order = await newOrder([{ goods, quantity: 2 }]);
-    await drive(order.orderId, 'SHIPPED');
+    await drive(order, 'SHIPPED');
 
     await sellerLoginUi(page);
     await page.goto(`${SELLER_URL}/orders/${order.orderId}`);
-    await sellerAdvance(page, '交易完成');
+    await expect(statusTags(page).filter({ hasText: '已发货' })).toBeVisible();
+    // 扣减时机在「买家确认收货」，卖家侧只观察结果
+    await confirmReceipt(ctx, order.token, order.orderId);
+    await page.reload();
     await expect(statusTags(page).filter({ hasText: '交易完成' })).toBeVisible();
 
     const after = await getSellerGoods(ctx, sellerToken, goods.id);
     expect(after.stock, '按明细数量扣 2').toBe(3);
     expect(after.status).toBe('ON_SALE');
 
-    // 另一件库存正好等于下单量：完成后库存归 0，商品自动下架并记「已售」
+    // 库存正好等于下单量：成交后归 0，商品自动下架并记「已售」
     const lastOne = await newGoods(2);
     const lastOrder = await newOrder([{ goods: lastOne, quantity: 2 }]);
-    await drive(lastOrder.orderId, 'SHIPPED');
-    await advanceOrder(ctx, sellerToken, lastOrder.orderId, 'complete');
+    await drive(lastOrder, 'SHIPPED');
+    await confirmReceipt(ctx, lastOrder.token, lastOrder.orderId);
 
     const soldOut = await getSellerGoods(ctx, sellerToken, lastOne.id);
     expect(soldOut.stock).toBe(0);
     expect(soldOut.status).toBe('OFF_SHELF');
     expect(soldOut.off_shelf_reason).toBe('SOLD_OUT');
+
+    // 例外：商品在成交前就下架，成交不扣库存（下架商品不再参与库存扣减）
+    const manual = await newGoods(5);
+    const manualOrder = await newOrder([{ goods: manual, quantity: 1 }]);
+    await drive(manualOrder, 'SHIPPED');
+    await offShelf(ctx, sellerToken, manual.id);
+    await confirmReceipt(ctx, manualOrder.token, manualOrder.orderId);
+
+    const untouched = await getSellerGoods(ctx, sellerToken, manual.id);
+    expect(untouched.stock, '下架商品成交不扣库存').toBe(5);
+    expect(untouched.off_shelf_reason).toBe('MANUAL');
   });
 
-  test('T04-08 完成缺货：整单拒绝（60004），订单停在已发货', async ({ page }) => {
-    // 库存 1，两位买家各下一单——下单只校验不锁库存，两单都能成功
-    const goods = await newGoods(1);
-    const first = await newOrder([{ goods, quantity: 1 }]);
-    const second = await newOrder([{ goods, quantity: 1 }]);
-    await drive(first.orderId, 'SHIPPED');
-    await drive(second.orderId, 'SHIPPED');
+  test('T04-08 成交缺货：整单拒绝（60004），订单停在已发货', async ({ page }) => {
+    // 库存 3、买家下单 2：把库存改到 1（>0 不触发下架），才测得到缺货拒绝
+    const goods = await newGoods(3);
+    const order = await newOrder([{ goods, quantity: 2 }]);
+    await drive(order, 'SHIPPED');
+    await updateStock(ctx, sellerToken, goods.id, 1);
 
-    // 先完成第一单：库存 1→0，商品自动下架
-    await advanceOrder(ctx, sellerToken, first.orderId, 'complete');
-    const afterFirst = await getSellerGoods(ctx, sellerToken, goods.id);
-    expect(afterFirst.stock).toBe(0);
+    const rejected = await call(
+      ctx,
+      'POST',
+      `/api/buyer/orders/${order.orderId}/confirm-receipt`,
+      {},
+      { token: order.token },
+    );
+    expect(rejected.body.code, '库存不足整单拒绝').toBe(60004);
 
-    // 第二单在界面上完成 → 被拒绝，提示整单拒绝且停在已发货
     await sellerLoginUi(page);
-    await page.goto(`${SELLER_URL}/orders/${second.orderId}`);
-    await page.getByTestId('order-next').click();
-    await confirmDialog(page, '交易完成');
+    await page.goto(`${SELLER_URL}/orders/${order.orderId}`);
+    await expect(statusTags(page).filter({ hasText: '已发货' }), '被拒后停在已发货').toBeVisible();
+    const afterFirst = await getSellerGoods(ctx, sellerToken, goods.id);
+    expect(afterFirst.stock, '被拒不扣库存').toBe(1);
 
-    await expect(toast(page).filter({ hasText: '库存不足' })).toBeVisible();
-    await expect(statusTags(page).filter({ hasText: '已发货' })).toBeVisible();
-    const afterSecond = await sellerOrderDetail(ctx, sellerToken, second.orderId);
-    expect(afterSecond.status).toBe('SHIPPED');
+    // 补货到 2 后买家重试 → 成交，库存 1→0 并自动下架
+    await updateStock(ctx, sellerToken, goods.id, 2);
+    await confirmReceipt(ctx, order.token, order.orderId);
+    await page.reload();
+    await expect(statusTags(page).filter({ hasText: '交易完成' })).toBeVisible();
+
+    const afterSecond = await getSellerGoods(ctx, sellerToken, goods.id);
+    expect(afterSecond.stock).toBe(0);
+    expect(afterSecond.off_shelf_reason).toBe('SOLD_OUT');
   });
 
-  test('T04-09 卖家取消：待确认与已发货都能取消', async ({ page }) => {
+  test('T04-09 卖家取消：待支付与已发货都能取消，退款口径不同', async ({ page }) => {
     const pending = await newOrder([{ goods: await newGoods(2), quantity: 1 }]);
     const shipped = await newOrder([{ goods: await newGoods(2), quantity: 1 }]);
-    await drive(shipped.orderId, 'SHIPPED');
+    await drive(shipped, 'SHIPPED');
 
     await sellerLoginUi(page);
 
-    // 待确认
+    // 待支付：没付钱，取消不提退款
     await page.goto(`${SELLER_URL}/orders/${pending.orderId}`);
     await page.getByTestId('order-cancel').click();
-    await confirmDialog(page, '取消订单');
+    const unpaidDialog = page.getByRole('dialog');
+    await expect(unpaidDialog).toContainText('这笔订单还没付款，取消不产生退款，也不影响库存');
+    await unpaidDialog.getByRole('button', { name: '取消订单', exact: true }).click();
     await expect(statusTags(page).filter({ hasText: '已取消' })).toBeVisible();
 
-    // 已发货（买家侧已不能取消，卖家仍可）
+    const pendingAfter = await sellerOrderDetail(ctx, sellerToken, pending.orderId);
+    expect(pendingAfter.refunded_amount).toBe(0);
+
+    // 已支付并已发货（买家侧已不能取消，卖家仍可）：按实付金额全额退款
     await page.goto(`${SELLER_URL}/orders/${shipped.orderId}`);
     await expect(page.getByTestId('order-cancel')).toBeVisible();
     await page.getByTestId('order-cancel').click();
-    await confirmDialog(page, '取消订单');
+    const paidDialog = page.getByRole('dialog');
+    await expect(paidDialog).toContainText('按实付金额全额原路退款');
+    await paidDialog.getByRole('button', { name: '取消订单', exact: true }).click();
     await expect(statusTags(page).filter({ hasText: '已取消' })).toBeVisible();
     await expect(page.getByTestId('order-next')).toHaveCount(0);
+
+    const shippedAfter = await sellerOrderDetail(ctx, sellerToken, shipped.orderId);
+    expect(shippedAfter.refunded_amount, '全额退款').toBe(Number(shippedAfter.total_amount));
   });
 
-  test('T04-10 交易完成后：界面没有任何动作，接口取消返回 60003', async ({ page }) => {
+  test('T04-10 交易完成后：无推进与取消，仍可改物流，接口取消 60003', async ({ page }) => {
     const order = await newOrder([{ goods: await newGoods(2), quantity: 1 }]);
-    await drive(order.orderId, 'COMPLETED');
+    await drive(order, 'COMPLETED');
 
     await sellerLoginUi(page);
     await page.goto(`${SELLER_URL}/orders/${order.orderId}`);
     await expect(statusTags(page).filter({ hasText: '交易完成' })).toBeVisible();
     await expect(page.getByTestId('order-next')).toHaveCount(0);
     await expect(page.getByTestId('order-cancel')).toHaveCount(0);
+    // 完成后仍可改物流（改单号不改状态）
+    await expect(page.getByTestId('order-logistics-edit')).toBeVisible();
 
     const result = await call(ctx, 'POST', `/api/seller/orders/${order.orderId}/cancel`, {}, {
       token: sellerToken,
@@ -299,18 +363,24 @@ test.describe.serial('04 订单生命周期', () => {
   test('T04-11 跳级推进 → 60002，状态不变', async () => {
     const order = await newOrder([{ goods: await newGoods(2), quantity: 1 }]);
 
-    const skip = await call(ctx, 'POST', `/api/seller/orders/${order.orderId}/complete`, {}, {
-      token: sellerToken,
-    });
-    expect(skip.body.code, '待确认不能直接完成').toBe(60002);
+    for (const action of ['confirm', 'prepare'] as const) {
+      const result = await call(ctx, 'POST', `/api/seller/orders/${order.orderId}/${action}`, {}, {
+        token: sellerToken,
+      });
+      expect(result.body.code, `待支付不能直接 ${action}`).toBe(60002);
+    }
 
-    const back = await call(ctx, 'POST', `/api/seller/orders/${order.orderId}/ship`, {}, {
-      token: sellerToken,
-    });
-    expect(back.body.code, '待确认不能直接发货').toBe(60002);
+    const ship = await call(
+      ctx,
+      'POST',
+      `/api/seller/orders/${order.orderId}/ship`,
+      { carrier: '顺丰速运', tracking_no: 'SF0002' },
+      { token: sellerToken },
+    );
+    expect(ship.body.code, '待支付不能直接发货').toBe(60002);
 
     const after = await sellerOrderDetail(ctx, sellerToken, order.orderId);
-    expect(after.status).toBe('PENDING_CONFIRM');
+    expect(after.status).toBe('PENDING_PAYMENT');
   });
 
   test('T04-12 重复取消按成功处理（防连点），状态停在已取消', async () => {

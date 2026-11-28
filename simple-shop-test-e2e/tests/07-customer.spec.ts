@@ -76,10 +76,13 @@ test.describe.serial('07 客户管理', () => {
     await sellerLoginUi(page);
     await page.goto(`${SELLER_URL}/customers`);
     await expect(page.getByRole('heading', { name: '客户管理' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: '用户名' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: '联系电话' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: '默认交易地点' })).toBeVisible();
+    // 表头只有四列：默认交易地点列已删
+    const headers = (await page.locator('thead th').allTextContents()).map((text) => text.trim());
+    expect(headers).toEqual(['用户名', '联系电话', '注册时间', '操作']);
+    await expect(page.getByText('默认交易地点')).toHaveCount(0);
+
     await expect(page.locator('tbody tr').first()).toBeVisible();
+    expect(await page.locator('tbody tr').count(), '一页最多 10 条').toBeLessThanOrEqual(10);
   });
 
   test('T07-02 客户详情：内嵌该客户的订单，且不再返回购买历史', async ({ page }) => {
@@ -92,10 +95,21 @@ test.describe.serial('07 客户管理', () => {
     await page.goto(`${SELLER_URL}/customers/${winnerId}`);
     await expect(page.getByRole('heading', { name: '客户详情' })).toBeVisible();
     await expect(page.getByText(winnerUsername)).toBeVisible();
+    await expect(page.getByText('默认交易地点'), '详情不再展示该字段').toHaveCount(0);
+    await expect(page.getByText('购买历史')).toHaveCount(0);
 
     // 内嵌订单列表：标题 + 该客户刚下的那一单
     await expect(page.getByRole('heading', { name: '该客户的订单' })).toBeVisible();
     await expect(page.getByRole('cell', { name: orderNo })).toBeVisible();
+    // 内嵌列表固定按该客户筛选，所以不再显示「买家」列
+    const orderHeaders = (await page.locator('thead th').allTextContents()).map((text) =>
+      text.trim(),
+    );
+    expect(orderHeaders).not.toContain('买家');
+
+    // 点行进订单详情
+    await page.getByRole('row').filter({ hasText: orderNo }).click();
+    await expect(page.getByRole('heading', { name: '订单详情' })).toBeVisible();
   });
 
   test('T07-05 改密页前端校验：空提交与新密码过短都就地提示', async ({ page }) => {

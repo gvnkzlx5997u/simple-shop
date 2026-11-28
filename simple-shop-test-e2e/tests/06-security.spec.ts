@@ -5,13 +5,14 @@ import {
   changePassword,
   createL1,
   createL2,
+  ensureAddress,
+  getSellerGoods,
   newApi,
   newBuyer,
   offShelf,
   placeOrder,
   publishGoods,
   sellerLogin,
-  updateStock,
 } from '../helpers/api';
 import { buyerFixture, goodsFixture, uniqueName } from '../helpers/data';
 import { SELLER_PASSWORD } from '../helpers/config';
@@ -19,8 +20,8 @@ import { SELLER_PASSWORD } from '../helpers/config';
 /**
  * 06 服务端拦截（绕过前端的负向调用）
  *
- * 阶段三口径：
- *  - 有未完成订单（待确认~已发货）时，手动下架与手动清零都被拒（20020），成交扣减到 0 不在此限；
+ * 阶段四口径：
+ *  - 有未完成订单也能手动下架、也能把库存清零（20020 已停用，不再校验未完成订单）；
  *  - 商品只有两态，下架后买家既不能加购（70001）也不能下单（20019）；
  *  - 改密会让该账号全部会话立即失效。
  *
@@ -45,29 +46,40 @@ test.describe.serial('06 服务端拦截', () => {
     await ctx.dispose();
   });
 
-  test('T06-01 有未完成订单时绕过前端下架 / 清零 → 20020', async () => {
-    const goods = await publishGoods(
+  test('T06-01 有未完成订单也能下架 / 清零（20020 已停用）', async () => {
+    // 两件事各用一件商品：手动下架后库存只读，同一件商品没法接着测清零
+    const offGoods = await publishGoods(
       ctx,
       sellerToken,
       goodsFixture(uniqueName('拦截下架'), l2Id, { stock: 2 }),
     );
+    const zeroGoods = await publishGoods(
+      ctx,
+      sellerToken,
+      goodsFixture(uniqueName('拦截清零'), l2Id, { stock: 2 }),
+    );
     const buyerToken = await newBuyer(ctx, buyerFixture('q1'));
-    await placeOrder(ctx, buyerToken, [{ goods_id: goods.id, quantity: 1 }]);
+    // 两笔待支付订单 = 未完成订单，阶段四起不再阻断下架与清零
+    await placeOrder(ctx, buyerToken, [{ goods_id: offGoods.id, quantity: 1 }]);
+    await placeOrder(ctx, buyerToken, [{ goods_id: zeroGoods.id, quantity: 1 }]);
 
-    const off = await call(ctx, 'POST', `/api/seller/goods/${goods.id}/off-shelf`, {}, {
+    const off = await call(ctx, 'POST', `/api/seller/goods/${offGoods.id}/off-shelf`, {}, {
       token: sellerToken,
     });
-    expect(off.body.code, '有未完成订单时手动下架应被拒').toBe(20020);
+    expect(off.body.code, '有未完成订单也允许手动下架').toBe(0);
+    expect(off.body.code, '20020 已停用，不应再出现').not.toBe(20020);
+    const afterOff = await getSellerGoods(ctx, sellerToken, offGoods.id);
+    expect(afterOff.status).toBe('OFF_SHELF');
+    expect(afterOff.off_shelf_reason).toBe('MANUAL');
 
-    const zero = await call(ctx, 'PUT', `/api/seller/goods/${goods.id}/stock`, { stock: 0 }, {
+    const zero = await call(ctx, 'PUT', `/api/seller/goods/${zeroGoods.id}/stock`, { stock: 0 }, {
       token: sellerToken,
     });
-    expect(zero.body.code, '有未完成订单时手动清零应被拒').toBe(20020);
-
-    // 改成其他正数不受限
-    const plus = await updateStock(ctx, sellerToken, goods.id, 5);
-    expect(plus.stock).toBe(5);
-    expect(plus.status).toBe('ON_SALE');
+    expect(zero.body.code, '有未完成订单也允许把库存改 0').toBe(0);
+    const afterZero = await getSellerGoods(ctx, sellerToken, zeroGoods.id);
+    expect(afterZero.stock).toBe(0);
+    expect(afterZero.status).toBe('OFF_SHELF');
+    expect(afterZero.off_shelf_reason).toBe('STOCK_ZERO');
   });
 
   test('T06-02 已下架商品：加购 70001、下单 20019', async () => {
@@ -79,6 +91,8 @@ test.describe.serial('06 服务端拦截', () => {
     await offShelf(ctx, sellerToken, goods.id);
 
     const buyerToken = await newBuyer(ctx, buyerFixture('q2'));
+    // 下单必须带地址，否则会先被 80004 拦，测不到 20019
+    const addressId = await ensureAddress(ctx, buyerToken);
 
     const cart = await call(ctx, 'POST', '/api/buyer/cart', { goods_id: goods.id }, {
       token: buyerToken,
@@ -89,7 +103,7 @@ test.describe.serial('06 服务端拦截', () => {
       ctx,
       'POST',
       '/api/buyer/orders',
-      { items: [{ goods_id: goods.id, quantity: 1 }] },
+      { address_id: addressId, items: [{ goods_id: goods.id, quantity: 1 }] },
       { token: buyerToken },
     );
     expect(order.body.code, '已下架商品不能下单').toBe(20019);

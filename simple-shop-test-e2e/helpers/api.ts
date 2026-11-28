@@ -238,7 +238,15 @@ export async function publicGoods(
 
 // ---------- 购物车、收藏与订单 ----------
 
-export type OrderStatus = 'PENDING_CONFIRM' | 'CONFIRMED' | 'PREPARED' | 'SHIPPED' | 'COMPLETED' | 'CANCELED';
+/** 订单七态：下单即待支付，付款后卖家才能确认，交易完成由买家确认收货推进。 */
+export type OrderStatus =
+  | 'PENDING_PAYMENT'
+  | 'PAID'
+  | 'CONFIRMED'
+  | 'PREPARED'
+  | 'SHIPPED'
+  | 'COMPLETED'
+  | 'CANCELED';
 
 export interface CartRow {
   goods_id: string;
@@ -275,9 +283,28 @@ export interface OrderRow {
   create_at: string;
   update_at: string;
   buyer: { id: string; username: string };
+  /** 下单时的收货快照；地址簿之后改名或删除都不影响这里 */
+  receiver_name: string | null;
+  receiver_phone: string | null;
+  receiver_address: string | null;
+  /** 未支付时两者都为 null */
+  payment_channel: 'BANK_CARD' | 'CREDIT_CARD' | 'ALIPAY' | 'WECHAT' | null;
+  paid_at: string | null;
+  /** 仅待支付单有值 */
+  pay_deadline: string | null;
+  /** 发货后才有；tracking_no 可能含换行（多包裹） */
+  carrier: string | null;
+  tracking_no: string | null;
+  logistics_remark: string | null;
+  /** 取消退款 + 售后退款（只算「已完成 + 退款类结果」） */
+  refunded_amount: number;
+  /** 该订单售后条数（含待处理与换货） */
+  aftersale_count: number;
 }
 
 export interface OrderItemRow {
+  /** 售后申请用它定位，不要用 goods_id */
+  order_item_id: string;
   goods_id: string;
   goods_name: string;
   unit_price: number;
@@ -321,17 +348,91 @@ export interface PlaceOrderItem {
   quantity: number;
 }
 
-/** 下单（不经购物车的直下，造数用）；已下架 20019、超库存 20015、商品不存在 20011。 */
+// ---------- 收货地址 ----------
+
+export interface AddressRow {
+  id: string;
+  receiver_name: string;
+  receiver_phone: string;
+  detail_address: string;
+  is_default: boolean;
+  create_at: string;
+  update_at: string;
+}
+
+export interface AddressInput {
+  receiver_name: string;
+  receiver_phone: string;
+  detail_address: string;
+}
+
+export async function createAddress(ctx: APIRequestContext, buyerToken: string, input: AddressInput) {
+  return ok<AddressRow>(ctx, 'POST', '/api/buyer/addresses', input, { token: buyerToken });
+}
+
+export async function listAddresses(ctx: APIRequestContext, buyerToken: string) {
+  return ok<{ items: AddressRow[] }>(ctx, 'GET', '/api/buyer/addresses', undefined, {
+    token: buyerToken,
+  });
+}
+
+export async function updateAddress(
+  ctx: APIRequestContext,
+  buyerToken: string,
+  id: string,
+  input: AddressInput,
+) {
+  return ok<AddressRow>(ctx, 'PUT', `/api/buyer/addresses/${id}`, input, { token: buyerToken });
+}
+
+export async function deleteAddress(ctx: APIRequestContext, buyerToken: string, id: string) {
+  return ok(ctx, 'DELETE', `/api/buyer/addresses/${id}`, undefined, { token: buyerToken });
+}
+
+export async function setDefaultAddress(ctx: APIRequestContext, buyerToken: string, id: string) {
+  return ok<AddressRow>(ctx, 'POST', `/api/buyer/addresses/${id}/default`, {}, {
+    token: buyerToken,
+  });
+}
+
+/**
+ * 下单必须带地址，但保留用例的下单点不应关心它：
+ * 第一次调用时为该买家建一条默认地址并缓存，之后复用。
+ */
+const defaultAddressCache = new Map<string, string>();
+
+/** 取该买家的默认地址 id；没有就建一条（首条自动默认）。 */
+export async function ensureAddress(ctx: APIRequestContext, buyerToken: string): Promise<string> {
+  const cached = defaultAddressCache.get(buyerToken);
+  if (cached) return cached;
+  const book = await listAddresses(ctx, buyerToken);
+  const existing = book.items.find((item) => item.is_default) ?? book.items[0];
+  const id =
+    existing?.id ??
+    (
+      await createAddress(ctx, buyerToken, {
+        receiver_name: 'E2E 收货人',
+        receiver_phone: '13900000000',
+        detail_address: 'E2E 省 E2E 市 E2E 路 1 号',
+      })
+    ).id;
+  defaultAddressCache.set(buyerToken, id);
+  return id;
+}
+
+/** 下单（不经购物车的直下，造数用）；已下架 20019、超库存 20015、缺地址 80004。 */
 export async function placeOrder(
   ctx: APIRequestContext,
   buyerToken: string,
   items: PlaceOrderItem[],
+  addressId?: string,
 ) {
+  const address = addressId ?? (await ensureAddress(ctx, buyerToken));
   return ok<{ order_id: string; order_no: string; total_amount: number; status: OrderStatus }>(
     ctx,
     'POST',
     '/api/buyer/orders',
-    { items },
+    { address_id: address, items },
     { token: buyerToken },
   );
 }
@@ -402,20 +503,250 @@ export async function sellerOrderItems(ctx: APIRequestContext, token: string, or
   );
 }
 
-/** 四个推进动作 + 卖家取消；都只回状态。跳级/终态推进返回 60002，完成缺货 60004。 */
+export interface LogisticsInput {
+  carrier: string;
+  tracking_no: string;
+  logistics_remark?: string;
+}
+
+/**
+ * 卖家推进：确认 → 备货完成 → 发货，以及取消。
+ * 发货必须带 `{carrier, tracking_no}`（缺一项 50002）；状态不符 / 跳级 60002。
+ */
 export async function advanceOrder(
   ctx: APIRequestContext,
   token: string,
   orderId: string,
-  action: 'confirm' | 'prepare' | 'ship' | 'complete' | 'cancel',
+  action: 'confirm' | 'prepare' | 'ship' | 'cancel',
+  logistics?: LogisticsInput,
 ) {
   return ok<{ order_id: string; order_no: string; status: OrderStatus }>(
     ctx,
     'POST',
     `/api/seller/orders/${orderId}/${action}`,
-    {},
+    action === 'ship' ? logistics : {},
     { token },
   );
+}
+
+/** 发货后改物流，状态不变；未发货返回 82002。 */
+export async function updateLogistics(
+  ctx: APIRequestContext,
+  token: string,
+  orderId: string,
+  input: LogisticsInput,
+) {
+  return ok<{ order_id: string; order_no: string; status: OrderStatus }>(
+    ctx,
+    'PUT',
+    `/api/seller/orders/${orderId}/logistics`,
+    input,
+    { token },
+  );
+}
+
+/** 买家支付（Mock 渠道恒成功）；已支付/已取消 83002，渠道不合法 83001。 */
+export async function payOrder(
+  ctx: APIRequestContext,
+  buyerToken: string,
+  orderId: string,
+  channel: 'BANK_CARD' | 'CREDIT_CARD' | 'ALIPAY' | 'WECHAT',
+) {
+  return ok<{ order_id: string; order_no: string; status: OrderStatus; paid_at: string }>(
+    ctx,
+    'POST',
+    `/api/buyer/orders/${orderId}/pay`,
+    { payment_channel: channel },
+    { token: buyerToken },
+  );
+}
+
+/** 买家确认收货：成交并扣库存；库存不足整单 60004。 */
+export async function confirmReceipt(ctx: APIRequestContext, buyerToken: string, orderId: string) {
+  return ok<{ order_id: string; order_no: string; status: OrderStatus }>(
+    ctx,
+    'POST',
+    `/api/buyer/orders/${orderId}/confirm-receipt`,
+    {},
+    { token: buyerToken },
+  );
+}
+
+/** 造一张「已发货」订单：下单 → 支付 → 确认 → 备货完成 → 发货。 */
+export async function shippedOrderViaApi(
+  ctx: APIRequestContext,
+  sellerToken: string,
+  buyerToken: string,
+  items: PlaceOrderItem[],
+  logistics: LogisticsInput = { carrier: '顺丰速运', tracking_no: 'SF0000000001' },
+) {
+  const order = await placeOrder(ctx, buyerToken, items);
+  await payOrder(ctx, buyerToken, order.order_id, 'ALIPAY');
+  await advanceOrder(ctx, sellerToken, order.order_id, 'confirm');
+  await advanceOrder(ctx, sellerToken, order.order_id, 'prepare');
+  await advanceOrder(ctx, sellerToken, order.order_id, 'ship', logistics);
+  return sellerOrderDetail(ctx, sellerToken, order.order_id);
+}
+
+/**
+ * 造一张「交易完成」订单（售后用例的前置）。
+ * 卖家没有「完成」动作，最后一步必须由买家确认收货推进。
+ */
+export async function completedOrderViaApi(
+  ctx: APIRequestContext,
+  sellerToken: string,
+  buyerToken: string,
+  items: PlaceOrderItem[],
+  logistics: LogisticsInput = { carrier: '顺丰速运', tracking_no: 'SF0000000002' },
+) {
+  const order = await shippedOrderViaApi(ctx, sellerToken, buyerToken, items, logistics);
+  await confirmReceipt(ctx, buyerToken, order.order_id);
+  return sellerOrderDetail(ctx, sellerToken, order.order_id);
+}
+
+// ---------- 售后 ----------
+
+export type AftersaleStatus = 'PENDING' | 'COMPLETED' | 'CANCELED';
+export type AftersaleResult = 'RETURN_AND_REFUND' | 'REFUND_ONLY' | 'EXCHANGE';
+
+export interface AftersaleRow {
+  aftersale_id: string;
+  aftersale_no: string;
+  order_id: string;
+  order_no: string;
+  order_item_id: string;
+  goods_name: string;
+  title: string;
+  status: AftersaleStatus;
+  result: AftersaleResult | null;
+  refund_amount: number | null;
+  refunded_at: string | null;
+  create_at: string;
+}
+
+export interface AftersaleDetailRow extends AftersaleRow {
+  description: string;
+  image_urls: string[];
+  update_at: string;
+}
+
+export interface AftersaleApplyInput {
+  order_item_id: string;
+  title: string;
+  description: string;
+  image_urls?: string[];
+}
+
+/** 申请成功只回这四项：标题、描述等要看详情接口。 */
+export interface AftersaleAppliedRow {
+  aftersale_id: string;
+  aftersale_no: string;
+  status: AftersaleStatus;
+  create_at: string;
+}
+
+export async function applyAftersale(
+  ctx: APIRequestContext,
+  buyerToken: string,
+  input: AftersaleApplyInput,
+) {
+  return ok<AftersaleAppliedRow>(ctx, 'POST', '/api/buyer/aftersales', input, {
+    token: buyerToken,
+  });
+}
+
+export async function listBuyerAftersales(
+  ctx: APIRequestContext,
+  buyerToken: string,
+  query: { status?: AftersaleStatus; order_id?: string; page?: number; page_size?: number } = {},
+) {
+  const search = toSearch(query);
+  return ok<{ items: AftersaleRow[]; page: number; page_size: number; total: number }>(
+    ctx,
+    'GET',
+    `/api/buyer/aftersales${search ? `?${search}` : ''}`,
+    undefined,
+    { token: buyerToken },
+  );
+}
+
+export async function buyerAftersaleDetail(
+  ctx: APIRequestContext,
+  buyerToken: string,
+  id: string,
+) {
+  return ok<AftersaleDetailRow>(ctx, 'GET', `/api/buyer/aftersales/${id}`, undefined, {
+    token: buyerToken,
+  });
+}
+
+/**
+ * 上传售后凭证图，返回可直接引用的 `/media/aftersale/...` 地址。
+ *
+ * 用 Playwright 的 `multipart` 而不是手搓 FormData：`data: FormData` 不会自动带
+ * multipart 边界，后端会按 `application/json` 收，直接 415。
+ */
+export async function uploadAftersaleImage(
+  ctx: APIRequestContext,
+  buyerToken: string,
+  file: { name: string; mimeType: string; buffer: Buffer },
+) {
+  const res = await ctx.fetch('/api/buyer/media?purpose=AFTERSALE_IMAGE', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${buyerToken}` },
+    multipart: {
+      file: { name: file.name, mimeType: file.mimeType, buffer: file.buffer },
+    },
+  });
+  const body = (await res.json()) as { code: number; message: string; data?: { url: string } };
+  if (body.code !== 0 || !body.data) {
+    throw new ApiError(res.status(), body.code, body.message);
+  }
+  return body.data.url;
+}
+
+export async function listSellerAftersales(
+  ctx: APIRequestContext,
+  token: string,
+  query: { status?: AftersaleStatus; order_no?: string; page?: number; page_size?: number } = {},
+) {
+  const search = toSearch(query);
+  return ok<{ items: AftersaleRow[]; page: number; page_size: number; total: number }>(
+    ctx,
+    'GET',
+    `/api/seller/aftersales${search ? `?${search}` : ''}`,
+    undefined,
+    { token },
+  );
+}
+
+export async function sellerAftersaleDetail(
+  ctx: APIRequestContext,
+  token: string,
+  id: string,
+) {
+  return ok<AftersaleDetailRow>(ctx, 'GET', `/api/seller/aftersales/${id}`, undefined, { token });
+}
+
+/** 卖家登记结果并完成：仅退款 / 退货退款会写退款额，换货不写；重复退款 81004。 */
+export async function completeSellerAftersale(
+  ctx: APIRequestContext,
+  token: string,
+  id: string,
+  result: AftersaleResult,
+) {
+  return ok<AftersaleRow>(ctx, 'POST', `/api/seller/aftersales/${id}/complete`, { result }, {
+    token,
+  });
+}
+
+/** 卖家取消 / 拒绝：与「拒绝」同义，已取消幂等，已完成 81002。 */
+export async function cancelSellerAftersale(
+  ctx: APIRequestContext,
+  token: string,
+  id: string,
+) {
+  return ok<AftersaleRow>(ctx, 'POST', `/api/seller/aftersales/${id}/cancel`, {}, { token });
 }
 
 // ---------- 客户 ----------

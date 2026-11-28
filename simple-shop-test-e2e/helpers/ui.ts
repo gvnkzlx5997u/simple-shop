@@ -83,16 +83,15 @@ export async function buyerLoginUi(page: Page, username: string, password: strin
   await page.waitForURL((url) => url.pathname.startsWith('/goods'), { timeout: 20_000 });
 }
 
-/** 买家注册（真实填表，注册成功后会自动登录并回到商品列表）。 */
+/** 买家注册（真实填表，注册成功后会自动登录并回到商品列表）。注册不再收默认交易地点。 */
 export async function buyerRegisterUi(
   page: Page,
-  input: { username: string; password: string; phone: string; location?: string },
+  input: { username: string; password: string; phone: string },
 ) {
   await page.goto(`${BUYER_URL}/register`);
   await page.getByLabel('用户名').fill(input.username);
   await page.getByLabel('密码').fill(input.password);
   await page.getByLabel('电话').fill(input.phone);
-  if (input.location) await page.getByLabel('默认交易地点').fill(input.location);
   await page.getByRole('button', { name: '注册并登录' }).click();
   await page.waitForURL((url) => url.pathname.startsWith('/goods'), { timeout: 20_000 });
 }
@@ -176,4 +175,78 @@ export async function openSellerOrder(page: Page, orderNo: string) {
 export async function sellerAdvance(page: Page, label: string) {
   await page.getByTestId('order-next').click();
   await confirmDialog(page, label);
+}
+
+/**
+ * 卖家发货：详情点「开始发货」→ 物流弹窗里选承运商、填单号 → 提交。
+ * 承运商按下拉的**显示名**选（顺丰 / 京东 …），存进订单的是公司全名。
+ */
+export async function sellerShip(
+  page: Page,
+  input: { carrierLabel?: string; carrierOther?: string; trackingNo: string; remark?: string },
+) {
+  await page.getByTestId('order-next').click();
+  const dialog = page.getByTestId('logistics-dialog');
+  await expect(dialog).toBeVisible();
+  if (input.carrierOther !== undefined) {
+    await page.getByTestId('logistics-carrier').selectOption({ label: '其他（手动填写）' });
+    await page.getByTestId('logistics-carrier-other').fill(input.carrierOther);
+  } else if (input.carrierLabel) {
+    await page.getByTestId('logistics-carrier').selectOption({ label: input.carrierLabel });
+  }
+  await page.getByTestId('logistics-tracking-no').fill(input.trackingNo);
+  if (input.remark !== undefined) await page.getByTestId('logistics-remark').fill(input.remark);
+  await page.getByTestId('logistics-submit').click();
+  await expect(dialog).toBeHidden();
+}
+
+/** 卖家改物流：详情里点「修改物流」，弹窗回填后改单号并保存。 */
+export async function sellerEditLogistics(page: Page, trackingNo: string, remark?: string) {
+  await page.getByTestId('order-logistics-edit').click();
+  const dialog = page.getByTestId('logistics-dialog');
+  await expect(dialog).toBeVisible();
+  await page.getByTestId('logistics-tracking-no').fill(trackingNo);
+  if (remark !== undefined) await page.getByTestId('logistics-remark').fill(remark);
+  await page.getByTestId('logistics-submit').click();
+  await expect(dialog).toBeHidden();
+}
+
+/** 卖家售后：按售后号打开详情（列表筛选交给调用方，这里直接走深链）。 */
+export async function openSellerAftersale(page: Page, aftersaleId: string) {
+  await page.goto(`${SELLER_URL}/aftersales/${aftersaleId}`);
+  await expect(page.getByRole('heading', { name: '售后详情' })).toBeVisible();
+}
+
+// ---------------- 买家：地址 / 结算 / 支付 / 收货 / 售后 ----------------
+
+export async function buyerOpenAddresses(page: Page) {
+  await page.goto(`${BUYER_URL}/addresses`);
+  await expect(page.getByRole('heading', { name: '收货地址' })).toBeVisible();
+}
+
+export async function buyerOpenCheckout(page: Page) {
+  await page.goto(`${BUYER_URL}/checkout`);
+  await expect(page.getByRole('heading', { name: '结算' })).toBeVisible();
+}
+
+export async function buyerOpenAftersales(page: Page) {
+  await page.goto(`${BUYER_URL}/aftersales`);
+  await expect(page.getByRole('heading', { name: '我的售后' })).toBeVisible();
+}
+
+/** 支付页选渠道并提交；成功后回订单详情并带 `?paid=1`。 */
+export async function buyerPayOnPage(page: Page, channelLabel: string) {
+  await page
+    .locator('label')
+    .filter({ hasText: channelLabel })
+    .getByTestId('pay-channel')
+    .check();
+  await page.getByTestId('pay-submit').click();
+  await page.waitForURL((url) => url.pathname.startsWith('/orders/') && url.searchParams.has('paid'));
+}
+
+/** 买家确认收货：先点操作区的「确认收货」，再点内联二次确认。 */
+export async function buyerConfirmReceiptOnPage(page: Page) {
+  await page.getByRole('button', { name: '确认收货', exact: true }).click();
+  await page.getByTestId('order-confirm-receipt').click();
 }

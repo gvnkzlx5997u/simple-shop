@@ -5,6 +5,7 @@ import {
   addToCart,
   createL1,
   createL2,
+  ensureAddress,
   listBuyerOrders,
   listCart,
   listFavorites,
@@ -137,6 +138,8 @@ test.describe.serial('02b 买家购物车与收藏', () => {
     await clearCart();
     await addToCart(ctx, buyerToken, main.id);
     await addToCart(ctx, buyerToken, second.id);
+    // 下单必须带地址；helper 会给该买家建一条默认地址并缓存
+    await ensureAddress(ctx, buyerToken);
 
     await buyerLoginUi(page, buyer.username, buyer.password);
     await buyerOpenCart(page);
@@ -227,6 +230,8 @@ test.describe.serial('02b 买家购物车与收藏', () => {
     await clearCart();
     await addToCart(ctx, buyerToken, main.id);
     await addToCart(ctx, buyerToken, second.id);
+    // 下单必须带地址；helper 会给该买家建一条默认地址并缓存
+    await ensureAddress(ctx, buyerToken);
 
     await buyerLoginUi(page, buyer.username, buyer.password);
     await buyerOpenCart(page);
@@ -235,7 +240,14 @@ test.describe.serial('02b 买家购物车与收藏', () => {
     await mainRow.getByTestId('cart-qty').blur();
     await expect(buyerCartTotal(page)).toHaveText('¥45.00');
 
+    // 下单已改成「购物车 → 结算页 → 提交订单」两步
     await page.getByRole('button', { name: '去结算' }).click();
+    await expect(page).toHaveURL(/\/checkout$/);
+    await expect(page.getByTestId('checkout-address').first(), '默认地址预选').toBeChecked();
+    await expect(page.locator('table tbody tr')).toHaveCount(2);
+    await expect(page.getByTestId('checkout-total')).toHaveText('¥45.00');
+
+    await page.getByTestId('checkout-submit').click();
 
     // 成功后直接进订单详情（不是留在购物车弹提示）
     await expect(page).toHaveURL(/\/orders\/[^/]+$/);
@@ -334,6 +346,8 @@ test.describe.serial('02b 买家购物车与收藏', () => {
     await clearCart();
     await addToCart(ctx, buyerToken, main.id);
     await addToCart(ctx, buyerToken, second.id);
+    // 下单必须带地址；helper 会给该买家建一条默认地址并缓存
+    await ensureAddress(ctx, buyerToken);
 
     await buyerLoginUi(page, buyer.username, buyer.password);
     await buyerOpenCart(page);
@@ -354,6 +368,8 @@ test.describe.serial('02b 买家购物车与收藏', () => {
     await clearCart();
     await addToCart(ctx, buyerToken, main.id);
     await addToCart(ctx, buyerToken, second.id);
+    // 下单必须带地址；helper 会给该买家建一条默认地址并缓存
+    await ensureAddress(ctx, buyerToken);
 
     await buyerLoginUi(page, buyer.username, buyer.password);
     await buyerOpenCart(page);
@@ -382,12 +398,19 @@ test.describe.serial('02b 买家购物车与收藏', () => {
     await buyerOpenCart(page);
     await expect(page.getByTestId('cart-row')).toHaveCount(2);
 
-    // 页面加载后卖家把该商品下架 → 提交时后端整单拒绝 20019
-    await offShelf(ctx, sellerToken, stale.id);
+    // 停在结算页时卖家把该商品下架 → 提交被整单拒绝 20019
     await page.getByRole('button', { name: '去结算' }).click();
-    await expect(page.getByText('有商品已下架，请回购物车处理')).toBeVisible();
+    await expect(page).toHaveURL(/\/checkout$/);
+    await offShelf(ctx, sellerToken, stale.id);
 
-    // 失败后自动重拉购物车：失效行当场置灰锁住并给提示条
+    const before = await listBuyerOrders(ctx, buyerToken);
+    await page.getByTestId('checkout-submit').click();
+    await expect(page.getByText('有商品已下架，请回购物车处理')).toBeVisible();
+    const after = await listBuyerOrders(ctx, buyerToken);
+    expect(after.total, '被拒不应产生订单').toBe(before.total);
+
+    // 回购物车：失效行置灰、不可勾选，并给提示条
+    await buyerOpenCart(page);
     await expect(buyerCartRow(page, stale.name)).toHaveClass(/disabled/);
     await expect(page.getByTestId('warn-bar')).toBeVisible();
     // 有效行的勾选保留
@@ -409,14 +432,17 @@ test.describe.serial('02b 买家购物车与收藏', () => {
     await buyerCartRow(page, short.name).getByTestId('cart-qty').blur();
 
     const before = await listBuyerOrders(ctx, buyerToken);
-    // 页面加载后卖家把库存改到 1 → 提交 3 件被 20015 拒
-    await updateStock(ctx, sellerToken, short.id, 1);
+    // 停在结算页时卖家把库存改到 1 → 提交 3 件被 20015 拒
     await page.getByRole('button', { name: '去结算' }).click();
+    await expect(page).toHaveURL(/\/checkout$/);
+    await updateStock(ctx, sellerToken, short.id, 1);
+    await page.getByTestId('checkout-submit').click();
     await expect(page.getByText('库存不足，请回购物车调整数量')).toBeVisible();
 
     const after = await listBuyerOrders(ctx, buyerToken);
     expect(after.total, '被拒不应产生订单').toBe(before.total);
-    // 行仍在购物车（数量按新库存夹取），不被清掉
+    // 回购物车：行仍在（数量按新库存夹取），不被清掉
+    await buyerOpenCart(page);
     await expect(buyerCartRow(page, short.name)).toHaveCount(1);
   });
 

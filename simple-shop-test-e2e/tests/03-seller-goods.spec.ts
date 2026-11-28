@@ -34,7 +34,7 @@ import {
  *  - 商品只有 ON_SALE / OFF_SHELF 两态，下架原因 MANUAL / STOCK_ZERO / SOLD_OUT 与状态成对出现；
  *  - 手动下架是终态：没有重新上架接口，库存只读，类别仍可改挂；
  *  - 库存耗尽 / 已售下架的商品，库存改回 >0 保存即自动上架；
- *  - 有未完成订单时禁止手动下架、禁止手动清零（20020）。
+ *  - 阶段四起：有未完成订单也能手动下架、也能把库存清零（20020 已停用）。
  *
  * 阶段二的三条已删除：T03-04「重新上架」、T03-10「缺 confirm → 20028」（接口与码位都已下线），
  * 以及「下架后不进历史」（历史页已删除，改由「已下架 + 原因」筛选承担）。
@@ -144,23 +144,51 @@ test.describe('03 卖家商品与库存', () => {
     await expect(sellerGoodsCard(page, name)).toContainText('手动下架');
   });
 
-  test('T03-05 有未完成订单时手动下架 → 拒绝（20020），状态不变', async ({ page }) => {
-    const name = uniqueName('有订单');
-    const goods = await publishGoods(ctx, sellerToken, goodsFixture(name, l2Id, { stock: 2 }));
-
-    const buyerToken = await newBuyer(ctx, buyerFixture('q'));
+  test('T03-14 有未完成订单也能手动下架（20020 已停用）', async ({ page }) => {
+    const name = uniqueName('有单下架');
+    const goods = await publishGoods(ctx, sellerToken, goodsFixture(name, l2Id, { stock: 5 }));
+    const buyerToken = await newBuyer(ctx, buyerFixture('t0314'));
+    // 待支付也是「未完成订单」：阶段四起不再阻断下架
     await placeOrder(ctx, buyerToken, [{ goods_id: goods.id, quantity: 1 }]);
 
     await sellerLoginUi(page);
     await sellerSearchGoods(page, name);
     await openSellerGoods(page, name);
-
     await page.getByRole('button', { name: '下架', exact: true }).click();
     await confirmDialog(page);
 
-    await expect(toast(page).filter({ hasText: '未完成订单' })).toBeVisible();
+    await expect(statusTags(page).filter({ hasText: '已下架' })).toBeVisible();
+    await expect(statusTags(page).filter({ hasText: '手动下架' })).toBeVisible();
+    await expect(toast(page).filter({ hasText: '未完成订单' }), '不再有拦截提示').toHaveCount(0);
+    await expect(page.getByText('有未完成订单')).toHaveCount(0);
+
     const after = await getSellerGoods(ctx, sellerToken, goods.id);
-    expect(after.status, '被拒后商品状态不应变化').toBe('ON_SALE');
+    expect(after.status).toBe('OFF_SHELF');
+    expect(after.off_shelf_reason).toBe('MANUAL');
+  });
+
+  test('T03-15 有未完成订单也能把库存改 0（转库存耗尽）', async ({ page }) => {
+    const name = uniqueName('有单清零');
+    const goods = await publishGoods(ctx, sellerToken, goodsFixture(name, l2Id, { stock: 5 }));
+    const buyerToken = await newBuyer(ctx, buyerFixture('t0315'));
+    await placeOrder(ctx, buyerToken, [{ goods_id: goods.id, quantity: 2 }]);
+
+    await sellerLoginUi(page);
+    await sellerSearchGoods(page, name);
+    await openSellerGoods(page, name);
+
+    await page.getByRole('button', { name: '修改库存' }).click();
+    await page.locator('.goods__stock-input').fill('0');
+    await page.getByRole('button', { name: '保存' }).click();
+
+    await expect(statusTags(page).filter({ hasText: '已下架' })).toBeVisible();
+    await expect(statusTags(page).filter({ hasText: '库存耗尽' })).toBeVisible();
+    await expect(page.getByText('补货即自动上架', { exact: false })).toBeVisible();
+
+    const after = await getSellerGoods(ctx, sellerToken, goods.id);
+    expect(after.stock).toBe(0);
+    expect(after.status).toBe('OFF_SHELF');
+    expect(after.off_shelf_reason).toBe('STOCK_ZERO');
   });
 
   test('T03-06 删除被商品引用的类别 → 拒绝（20006）', async () => {
