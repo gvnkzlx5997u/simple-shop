@@ -1,8 +1,21 @@
 # simple-shop 在线购物系统
 
-> 单卖家在线购物系统：买家注册登录后浏览在售商品，加入购物车或收藏，从购物车多件下单；卖家在后台确认、备货、发货并登记交易完成。系统不承载支付与物流。
->
-> **当前阶段：阶段四（挑战需求 C）后端已交付，前端与 E2E 待改造。** 实现覆盖 V4 迁移、七态订单、支付（Mock）、收货地址、物流、售后、取消与超时退款；接口契约见 `simple-shop-doc/阶段四/openapi.json` 与《契约交接》。
+> 单卖家在线购物系统：买家注册登录后浏览在售商品，加入购物车或收藏，结算下单并支付，确认收货后可申请售后；卖家在后台维护商品与类别、确认备货发货、处理售后。系统不承载真实支付渠道与物流轨迹。
+
+## 阶段进度
+
+> 阶段状态与完成进度只登记在这里和各端 README，`AGENTS.md` 不再记录。
+
+| 阶段 | 范围 | 后端 | 买家端 | 卖家端 | E2E |
+| --- | --- | :---: | :---: | :---: | :---: |
+| **阶段四（挑战需求 C）** | 支付升级、配送升级、售后服务升级 | ✅ 已交付 | ✅ 已交付 | ✅ 已交付 | ⏳ 待改造 |
+| 阶段三 | 订单取代购买意向、商品两态、库存独立、历史与评价下线 | ✅ 已交付 | ✅ 已交付 | ✅ 已交付 | ✅ 90 条（阶段三收口时） |
+
+> 阶段一、阶段二已归档，只作追溯，文档见 [`simple-shop-doc/`](simple-shop-doc/README.md)。
+
+**当前工作：阶段四 E2E 套件改造。** 最终用例清单已产出（15 spec / 142 条），见 [阶段四 E2E 用例清单](simple-shop-doc/阶段四/阶段四-E2E用例清单.md)；`simple-shop-test-e2e/tests/` 现有 90 条仍是阶段三口径（六态、卖家完成、无地址下单），对阶段四后端会成片失败，改造前不要拿它当验收依据。
+
+阶段四已实现：V4 迁移、订单七态、支付（Mock 四渠道）、收货地址簿、物流（承运商 + 多行单号）、售后（按订单项申请与处理）、取消与超时退款。接口契约见 [openapi.json](simple-shop-doc/阶段四/openapi.json) 与[契约交接](simple-shop-doc/阶段四/契约交接.md)。
 
 ## 项目定位
 
@@ -15,30 +28,27 @@
 - **售后**：交易完成的订单可按订单项申请售后，卖家线下协商后登记结果（退货并退款 / 仅退款 / 换货），退款按整行金额自动写入；同一订单项只能退款一次。
 - **订单状态**：七态（待支付 → 已支付 → 已确认 → 备货完成 → 已发货 → 交易完成 / 已取消），交易完成由**买家确认收货**推进，卖家没有「完成订单」入口。
 
-## 阶段四交付状态
-
-**后端已交付**：V4 迁移、七态订单、支付（Mock）、收货地址、物流、售后、取消与超时退款、测试收口。
-**待进行**：买家端与卖家端页面改造、E2E 用例改造。
-
-- 阶段四文档见 [阶段四目录](simple-shop-doc/阶段四/目录.md)：需求总结、团队自决实现项、支付包设计、[契约交接](simple-shop-doc/阶段四/契约交接.md)、[openapi.json](simple-shop-doc/阶段四/openapi.json)。
-- 后端任务计划是仓库根目录的临时文档（不入库）。
-
 ## 仓库结构
 
-| 目录 | 职责 |
-| --- | --- |
-| simple-shop-backend/ | Spring Boot 后端，REST + 媒体文件 |
-| simple-shop-buyer-frontend/ | 买家端 SPA |
-| simple-shop-seller-frontend/ | 卖家端 SPA |
-| simple-shop-test-e2e/ | Playwright 端到端测试 |
-| simple-shop-doc/ | 项目文档 |
-| deploy/ | 本地构建的三容器 Compose 部署 |
-| deploy-cloud/ | 使用云端镜像的三容器 Compose 部署 |
+| 目录 | 职责 | 说明 |
+| --- | --- | --- |
+| `simple-shop-backend/` | Spring Boot 后端，REST + 媒体文件 | 见 [README](simple-shop-backend/README.md) |
+| `simple-shop-buyer-frontend/` | 买家端 SPA | 见 [README](simple-shop-buyer-frontend/README.md) |
+| `simple-shop-seller-frontend/` | 卖家端 SPA | 见 [README](simple-shop-seller-frontend/README.md) |
+| `simple-shop-test-e2e/` | Playwright 端到端测试 | 见 [README](simple-shop-test-e2e/README.md) |
+| `simple-shop-doc/` | 分阶段项目文档 | 见 [文档目录](simple-shop-doc/README.md) |
+| `deploy/` | 本地构建的三容器 Compose 部署 | 见 [部署说明](deploy/README.md) |
+| `deploy-cloud/` | 使用云端镜像的三容器 Compose 部署 | 同上 |
+
+跨模块的硬约束（契约同步、错误码、迁移、时间、单副本等）写在 [AGENTS.md](AGENTS.md)。
 
 ## 文档
 
-阶段三文档见 [阶段三目录](simple-shop-doc/阶段三/目录.md)。历史阶段文档已失去时效性，仅作参考。
+- 当前口径：[阶段四文档目录](simple-shop-doc/阶段四/目录.md) —— 需求、澄清记录、需求总结、团队自决实现项、支付包设计、契约交接、openapi.json、E2E 用例清单。
+- 阶段一至阶段三文档已失去时效性，仅作追溯；入口见 [文档目录](simple-shop-doc/README.md)。
 
 ## 运行与部署
 
-构建与运行方式见各目录的 README。阶段三的部署方式与阶段二基本无差别，仅镜像版本改为1.5，数据库存量数据自行备份，原数据库需删除并重新构建。
+构建与运行方式见各目录 README。容器部署（本地构建与云端镜像两套编排）见 [deploy/README.md](deploy/README.md)。
+
+> 阶段四数据库按 V4 重建：订单表必须为空才能执行 V4（收货快照列非空无默认值）。升级前先备份，再删库或删数据卷，具体步骤见后端 README「数据库」一节。

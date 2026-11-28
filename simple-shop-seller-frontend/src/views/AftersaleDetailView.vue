@@ -28,8 +28,8 @@ import { formatDateTime, formatPrice } from '../utils/format'
 /**
  * 售后详情（卖家）。
  *
- * 处理方式只有两条路：登记结果并完成，或取消（同拒绝）。两者都是终态，
- * 完成后不能改结果，取消后买家可重新申请、生成新单号。
+ * 处理方式：登记结果并完成，或取消（同拒绝），两者都是终态，
+ * 完成后不能改结果。
  * 退款金额由后端按订单项快照算，页面只展示，不提供输入框。
  */
 const route = useRoute()
@@ -245,7 +245,10 @@ async function submitCancel(): Promise<void> {
             }}
           </p>
         </div>
-        <div v-else-if="detail.status === 'CANCELED'" class="rounded-box bg-base-200 px-3 py-2 text-xs">
+        <div
+          v-else-if="detail.status === 'CANCELED'"
+          class="rounded-box bg-base-200 px-3 py-2 text-xs"
+        >
           <p class="m-0">已取消（同拒绝）：买家可以重新申请，重新申请会生成新的售后单号。</p>
         </div>
         <div v-else class="rounded-box bg-base-200 px-3 py-2 text-xs">
@@ -254,7 +257,10 @@ async function submitCancel(): Promise<void> {
           </p>
         </div>
 
-        <div v-if="canComplete || canCancel" class="flex flex-wrap items-center justify-end gap-2 border-t border-base-300 pt-4">
+        <div
+          v-if="canComplete || canCancel"
+          class="flex flex-wrap items-center justify-end gap-2 border-t border-base-300 pt-4"
+        >
           <button
             v-if="canCancel"
             type="button"

@@ -6,19 +6,10 @@ import { describeError } from '../utils/errorText'
 /**
  * 分页列表的公共状态与加载。
  *
- * 之前商品列表、我的订单、我的收藏三处各写了一遍「page / total / 加载 / 错误 / 翻页」，
- * 其中订单与收藏还各写了一遍「当前页被删空自动回退」。这个 composable 把它们收成一份。
+ * **筛选条件不进这里**：fetcher 闭包引用调用方自己的筛选状态（关键字、类别、订单状态）
  *
- * **筛选条件不进这里**：fetcher 闭包引用调用方自己的筛选状态（关键字、类别、订单状态），
- * 只接收页码——这样换筛选的逻辑仍然留在页面里，composable 不需要知道筛的是什么。
- *
- * 三处现状存在细微差异，用选项保留，避免重构顺手改了行为：
- * - 商品列表：没有「空页回退」，失败时连 total 一起归零（分页条随之隐藏）；
- * - 订单 / 收藏：有「空页回退」，失败时保留上一次的 total。
- *
- * 与卖家端同名 composable 的差别：那份带请求竞态守卫（useRequestSequence），
- * 买家端这三个页面在加载期间都会禁用翻页与筛选入口，不会出现旧响应覆盖新响应，
- * 因此这里没有引入守卫——**这是有意为之，不是漏做**。
+ * 与卖家端同名 composable 的差别：未引入useRequestSequence,
+ * 买家端加载期间禁用翻页与筛选入口，不会出现旧响应覆盖新响应
  */
 export interface PagedListOptions {
   /** 每页条数，只用于算总页数；实际请求参数由调用方的 fetcher 传。 */
@@ -49,9 +40,6 @@ export function usePagedList<T>(
   const canNext = computed(() => page.value < totalPages.value && !loading.value)
   /**
    * 是否需要显示分页条：只有超过一页时才有意义。
-   *
-   * 之前三处不一致——商品列表用 `total > pageSize` 自己判，订单与收藏只要有数据就画一条，
-   * 于是「只有 1 页」时也会出现一条两个按钮都是灰的横条，看着像坏了。现在统一到这一处。
    */
   const hasPager = computed(() => total.value > options.pageSize)
 
