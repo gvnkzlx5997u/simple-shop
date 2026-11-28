@@ -49,17 +49,16 @@ function viewDetail(id: string): void {
             <tr>
               <th>用户名</th>
               <th>联系电话</th>
-              <th>默认交易地点</th>
               <th>注册时间</th>
               <th class="w-16 text-right">操作</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="loading && customers.length === 0">
-              <td colspan="5" class="text-sm text-base-content/60">加载中…</td>
+              <td colspan="4" class="text-sm text-base-content/60">加载中…</td>
             </tr>
             <tr v-else-if="customers.length === 0 && !error">
-              <td colspan="5" class="text-sm text-base-content/60">{{ M10.emptyCustomers }}</td>
+              <td colspan="4" class="text-sm text-base-content/60">{{ M10.emptyCustomers }}</td>
             </tr>
             <tr
               v-for="customer in customers"
@@ -73,7 +72,6 @@ function viewDetail(id: string): void {
             >
               <td class="font-medium">{{ customer.username }}</td>
               <td>{{ customer.phone }}</td>
-              <td>{{ customer.default_location ?? '—' }}</td>
               <td class="text-base-content/70">{{ formatDateTime(customer.create_at) }}</td>
               <td class="text-right">
                 <button

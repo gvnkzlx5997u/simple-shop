@@ -21,7 +21,8 @@ const TONE_CLASS: Record<TagTone, string> = {
 </script>
 
 <template>
-  <span class="badge badge-sm" :class="TONE_CLASS[tone]" data-testid="status-tag">
+  <!-- nowrap：列被挤窄时徽章不会按字竖排（「已 取 消」），宁可让表格横向滚动。 -->
+  <span class="badge badge-sm whitespace-nowrap" :class="TONE_CLASS[tone]" data-testid="status-tag">
     {{ label }}
   </span>
 </template>

@@ -41,6 +41,16 @@ const router = createRouter({
           component: () => import('../views/OrderDetailView.vue'),
         },
         {
+          path: 'aftersales',
+          name: 'aftersales',
+          component: () => import('../views/AftersaleListView.vue'),
+        },
+        {
+          path: 'aftersales/:id',
+          name: 'aftersale-detail',
+          component: () => import('../views/AftersaleDetailView.vue'),
+        },
+        {
           path: 'customers',
           name: 'customers',
           component: () => import('../views/CustomerListView.vue'),

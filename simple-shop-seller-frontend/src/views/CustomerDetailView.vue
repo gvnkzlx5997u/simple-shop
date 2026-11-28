@@ -76,14 +76,12 @@ watch(customerId, load)
         </div>
       </div>
 
+      <!-- 阶段四起客户资料里没有「默认交易地点」：地址改为买家自己的地址簿，
+           订单里存的是下单时的收货快照，所以这里只看账号信息。 -->
       <dl class="mt-4 grid grid-cols-1 gap-x-10 gap-y-3 text-sm sm:grid-cols-2">
         <div class="flex flex-col gap-0.5">
           <dt class="text-xs text-base-content/60">联系电话</dt>
           <dd class="m-0">{{ data.phone }}</dd>
-        </div>
-        <div class="flex flex-col gap-0.5">
-          <dt class="text-xs text-base-content/60">默认交易地点</dt>
-          <dd class="m-0">{{ data.default_location ?? '—' }}</dd>
         </div>
       </dl>
     </div>

@@ -8,9 +8,17 @@ import AppIcon from '../common/AppIcon.vue'
 /**
  * 订单状态流程图：横向铺开正向流程，走过的格子换色、当前格子实心、未到的保持灰底。
  *
+ * 阶段四是六格：待支付 → 已支付 → 已确认 → 备货完成 → 已发货 → 交易完成。
  * 「已取消」是出边不是阶段，不放进流程里；终态订单由调用方直接不渲染本组件。
  */
-const FLOW: OrderStatus[] = ['PENDING_CONFIRM', 'CONFIRMED', 'PREPARED', 'SHIPPED', 'COMPLETED']
+const FLOW: OrderStatus[] = [
+  'PENDING_PAYMENT',
+  'PAID',
+  'CONFIRMED',
+  'PREPARED',
+  'SHIPPED',
+  'COMPLETED',
+]
 
 const props = defineProps<{ status: OrderStatus }>()
 

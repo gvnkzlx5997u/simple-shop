@@ -9,6 +9,24 @@ export function fail<T = never>(code: number): Validated<T> {
   return { ok: false, code }
 }
 
+/**
+ * 把校验结果翻成输入框下面的红字。
+ *
+ * 空值单独给一句「请输入…」：后端对「空」与「格式不对」回的是同一个码（50002），
+ * 直接按码翻译会得到「请检查输入内容」——对着一个空框说"检查"，用户不知道该干什么。
+ */
+export function fieldErrorMessage(
+  raw: string,
+  result: Validated<unknown>,
+  emptyText: string,
+  codeText: (code: number) => string,
+): string | undefined {
+  if (result.ok) {
+    return undefined
+  }
+  return raw.trim().length === 0 ? emptyText : codeText(result.code)
+}
+
 /** 按码点计字符数（与后端对商品名/描述/失败备注的口径一致）。 */
 export function countChars(value: string): number {
   return Array.from(value).length
