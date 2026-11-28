@@ -51,11 +51,11 @@ import { errorMessage } from '../utils/error'
 import { formatDateTime, formatPrice } from '../utils/format'
 
 /**
- * 订单详情。卖家端只有卖家一个角色，操作只按订单状态判断，不涉及角色维度；
- * 「能点哪些按钮」全部来自 orderActions，页面不自己写状态判断。
+ * 订单详情
  *
- * 订单头、明细、售后是三次独立请求：任一块失败都不该拖垮另外两块，
- * 所以各自持有 loading / error / 重试，互不阻塞。
+ * 「能点哪些按钮」来自 orderActions
+ *
+ * 订单头、明细、售后是三次独立请求，各自 loading / error / 重试。
  */
 const route = useRoute()
 const toast = useToast()
@@ -165,12 +165,11 @@ const statusTone = computed<TagTone>(() =>
   order.value ? ORDER_STATUS_TONES[order.value.status] : 'default',
 )
 
-/** 终态不画流程图：没有「下一步」，画出来反而误导。 */
+//终态不画流程图
 const terminal = computed(() => (order.value ? isTerminalOrder(order.value.status) : false))
 const pendingPayment = computed(() => (order.value ? isPendingPayment(order.value.status) : false))
 
 // ---- 动作：确认 / 备货完成 / 发货 / 改物流 / 取消 ----
-// 「哪些动作可用」由 orderActions 决定；这里只负责每个动作的确认话术与调用哪个接口。
 
 interface ActionCopy {
   /** 二次确认文案：说清做什么、之后会怎样。 */
@@ -496,7 +495,9 @@ const quantityTotal = computed(() => items.value.reduce((sum, item) => sum + ite
       <div v-if="itemsError" role="alert" class="alert alert-error alert-soft text-sm">
         <AppIcon name="forbidden" />
         <span>{{ itemsError }}</span>
-        <button type="button" class="btn btn-xs btn-outline ml-auto" @click="loadItems">重试</button>
+        <button type="button" class="btn btn-xs btn-outline ml-auto" @click="loadItems">
+          重试
+        </button>
       </div>
 
       <p v-else-if="itemsLoading && items.length === 0" class="text-sm text-base-content/60">

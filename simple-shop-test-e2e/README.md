@@ -1,14 +1,14 @@
 # simple-shop E2E
 
-> **当前状态：阶段三用例已完成并经阶段F 收口。** 阶段二 57 条逐条判定去留后留 42 条，
-> 再按 Backlog 新增 34 条；阶段F 又把买家遗留对账脚本 d3/d5 的可自动化部分收编进主套件
-> （新增 14 条，含新 spec 02c），并删除 d3/d5 本身。`tests/` 共 **10 spec / 90 条**。
+> **阶段进度：E2E 待改造。** `tests/` 现有 10 spec / 90 条，仍按**阶段三口径**编写（六态、卖家「完成订单」、购物车直接下单），对阶段四后端会成片失败，暂不作为验收依据。
+> 阶段四最终用例清单已产出：[阶段四 E2E 用例清单](../simple-shop-doc/阶段四/阶段四-E2E用例清单.md) —— 目标 15 spec / 142 条（保留 63、修改 26、新增 53）。套件改造落地后再回填本文件的条数、批次与已知现象。
+> 整体进度见[根 README](../README.md)。
 
 Playwright 驱动**系统已装的 Edge**（不下载 Chromium），对真实运行中的前后端做端到端验收。
 
-- 规模：**10 个 spec / 90 条用例**，全量跑约 **1.5 分钟**（含建 60+ 个商品/账号的造数）
+- 现状规模：**10 个 spec / 90 条用例**（阶段三口径，全量约 **1.5 分钟**）
 - 稳定性：`workers:1` 串行；空库重建后全量跑通（90/90）
-- 历史套件都在 `archive/`（`阶段一/` 36 条、`阶段二/` 57 条原件），**不要放回 `tests/`**，否则会被 `playwright test` 误跑；对应关系见 `archive/目录.md`
+- 历史套件都在 `archive/`，**不要放回 `tests/`**，否则会被 `playwright test` 误跑；对应关系见 `archive/目录.md`，注意旧套件的状态口径可能过时
 
 ---
 
@@ -59,6 +59,8 @@ java -Dserver.port=8080 \
 $env:RATE_LIMIT_ENABLED="false";$env:DB_PASSWORD=<你的 MySQL 口令>;$env:DB_URL="jdbc:mysql://localhost:3306/simple_shop_e2e?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&connectionTimeZone=UTC&rewriteBatchedStatements=true";java -jar .\target\simple-shop.war
 ```
 
+阶段四联调还要注意：`MEDIA_DIR=./target/test-media`（售后凭证图落盘，**每轮跑前清空**）、`PAYMENT_MOCK_ENABLED=true`（默认就开）；要复现「支付失败仍待支付」用 `PAYMENT_MOCK_FAIL_CHANNELS=ALIPAY` 重启后端，不要改请求参数。完整的环境清单与批次划分见[阶段四 E2E 用例清单](../simple-shop-doc/阶段四/阶段四-E2E用例清单.md) §1.1 与 §6。
+
 
 ### 2. E2E 库跑前重建（保证可重复）
 
@@ -75,15 +77,10 @@ npm run db:reset     # DROP + CREATE simple_shop_e2e
 
 ### 2.5 为什么数据库操作走 node 而不是命令行
 
-| 命令行（旧） | node 直连（现在） |
-| --- | --- |
-| 依赖 `mysql.exe` 的安装路径 / PATH，本机只装了 MySQL Shell 就跑不起来 | 只依赖 npm 依赖 `mysql2`，`npm ci` 即可 |
-| SQL 要过 `cmd.exe`：多行被拆成多条只执行第一段，引号要自己转义，中文要加 `--default-character-set=utf8mb4` | 参数化查询直接传，无 shell 解析、无字符集参数 |
-| 失败只能从 stderr 文本猜，退出码混着告警 | 抛带 `code` 的异常，消息里直接给出「连的哪个库 + 哪句 SQL + 可能原因」 |
-| 只支持 Windows | Windows / macOS / Linux / WSL 一致 |
+防止出现环境问题，node能保证跨系统兼容性。
 
 **边界**：只有「重建库」与「手工联调夹具」用数据库连接；**测试（单元 / E2E）一律不连库**——
-造数走接口、断言看接口返回与页面，避免用例跟着表结构漂移。阶段F 已删除直连库对账的 d3/d5 脚本。
+造数走接口、断言看接口返回与页面，避免用例跟着表结构漂移。
 
 ### 3. 依赖
 
@@ -97,7 +94,7 @@ npm ci
 
 ```bash
 npm run clean                                # 清掉上一轮的 report/ evidence/ test-results/（只删生成物）
-npm test                                     # 全量（6 个 spec 42 条；含新增共 9 个 spec 76 条，约 2 分钟）
+npm test                                     # 全量（10 个 spec / 90 条，约 1.5 分钟）
 npx playwright test --headed                 # 看着它点
 npx playwright test tests/03-seller-goods.spec.ts   # 只跑某个 spec（低配机器推荐分批跑）
 npm run report                               # 看 HTML 报告
@@ -113,6 +110,7 @@ npm run typecheck                            # 类型检查（Playwright 运行�
 | 缓存 | 每轮失败后 `npm run clean` | trace + 截图单轮可达几十 MB，越攒越慢 |
 | 跑完 | 关掉三个服务再开新的一轮 | 三个服务常驻比跑用例本身更占内存 |
 | 证据 | 只在需要定位时保留 `evidence/`，确认后清理 | 报告与 trace 对下一轮没有价值 |
+| 后台 | 关闭IDE等应用，用终端启动 | 节省内存 |
 
 地址和账号写在 `.env` 里（改一次，Playwright 与对账脚本共用）；想临时换一组值就覆盖环境变量，不必改文件：
 
@@ -134,19 +132,19 @@ API_URL=http://localhost
 
 ---
 
-## 二·五、关于容器化（本轮不做，理由如下）
+## 二·五、关于容器化（暂不做）
 
 **结论：E2E 不做容器化，用「本地三服务 + 独立库」跑。**
 
 | 原因 | 说明 |
 | --- | --- |
-| 开发机没有 Docker | 容器化后这套用例在开发机上跑不起来，而 E2E 的价值恰恰是"改完立刻能跑" |
+| 要求Docker环境 | 不能保证开发机上有docker安装 |
 | 调试成本 | 每轮要先构建 backend/frontend 镜像、等 mysql healthy，一轮从 20 秒变成几分钟 |
 | 数据隔离用库解决就够 | 独立库 `simple_shop_e2e` + 跑前重建（`npm run db:reset`），同样能保证可重复 |
 
-**代价（必须知道）**：本地三端口形态**不等于部署形态**。部署时是 nginx 单容器同时托管买家 `/`、卖家 `/seller/`，并反代 `/api`、`/media`。这条链路本轮 E2E 没有覆盖到。
+**代价（必须知道）**：本地三端口形态**不等于部署形态**。部署时是 nginx 单容器同时托管买家 `/`、卖家 `/seller/`，并反代 `/api`、`/media`。这条链路 E2E 不覆盖。
 
-**补救**：用例里没有任何硬编码地址，切部署形态只改环境变量、不改一行代码：
+**补救**：用例里没有任何硬编码地址，切部署形态改环境变量后运行（`.env`或临时变量）：
 
 ```bash
 BUYER_URL=http://localhost        \
@@ -155,11 +153,11 @@ API_URL=http://localhost          \
 npx playwright test
 ```
 
-建议在「部署收口」时，于 Compose 环境跑一次同一套件，作为部署形态的证据（这一步依赖有 Docker 的机器）。
-
 ---
 
-## 三、用例清单（90 条）
+## 三、用例清单（阶段三口径，90 条）
+
+> 下表是**现有套件**的实际覆盖，状态口径仍是阶段三的六态与「卖家完成订单」。阶段四的验收以[用例清单](../simple-shop-doc/阶段四/阶段四-E2E用例清单.md)为准；两者冲突时按清单改，不要把旧断言当契约。
 
 | Spec | 条数 | 覆盖 |
 | --- | :---: | --- |
@@ -174,9 +172,6 @@ npx playwright test
 | `07-customer.spec.ts` | 3 | 客户列表、**客户详情内嵌该客户订单且不再返回购买历史**、改密页前端校验 |
 | `08-cross-end.spec.ts` | 9 | **买卖联调**：加购结算→卖家可见、推进状态同步、完成扣库存、发货前买家取消、发货后不可取消、有未完成订单下架被拒/取消后可下架、下单不锁库存、买家订单列表筛选与倒序、**买家停留详情时卖家发货→取消被 60003 拦** |
 
-> 阶段二的 `04-trade.spec.ts`（8 条）**整组删除**：意向队列、交易裁决、冻结、归档在阶段三都不存在。
-> 阶段F 已把买家遗留对账脚本 d3/d5 的可自动化部分收编（02b/02c/01/02/08 新增 14 条），脚本本身删除；
-> 逐条去留判定见 `simple-shop-doc/阶段三/阶段F-买家端规范化计划.md` §5 与《阶段E-E2E用例清单》。
 
 ### 数据策略
 
@@ -190,7 +185,6 @@ npx playwright test
 
 | 现象 | 说明 |
 | --- | --- |
-| ~~详情页价格显示 `¥99.9`~~ | 买家端已统一 `toFixed(2)`，现在显示 `¥99.90`；阶段三用例按两位小数断言 |
 | 改密用例会真改卖家口令 | T06-04 用 `try/finally` 保证恢复；若进程被强杀，需手动把口令改回 `Abcd@1234` |
 | **`VIDEO_INVALID(20025)` 实际不可达** | 单文件上限（`max-file-size=20MB`）与视频业务上限（20MB）相同，>20MB 的视频在容器层就被拦成 `MEDIA_INVALID(20026)`，永远走不到业务层的 20025。T05-13 按实际行为断言 |
 | 列表筛选项与商品卡没有稳定类名 | 卖家端换 daisyUI 后靠 `aria-label`（`按状态与下架原因筛选`、`搜索商品名称`）、`data-testid`（`status-tag`、`toast-item`）与 `role=link + 名称` 定位；改版时优先保住这几个钩子 |
@@ -209,7 +203,7 @@ simple-shop-test-e2e/
 │  ├─ api.ts                # 接口封装（造数 + 负向调用）
 │  ├─ data.ts               # 唯一后缀 + 商品/买家工厂
 │  └─ ui.ts                 # 登录、确认弹窗、卡片/状态/提示定位
-├─ tests/                   # 10 个 spec（90 条，阶段三 + 阶段F 收口）
+├─ tests/                   # 10 个 spec（90 条，阶段三口径，待按阶段四清单改造）
 ├─ scripts/
 │  ├─ db.js                 # MySQL 访问层（仅重建库 + 手工联调夹具；测试不连库）
 │  ├─ reset-e2e-db.js       # 重建独立 E2E 库（跨平台，npm run db:reset）
@@ -227,7 +221,8 @@ simple-shop-test-e2e/
 
 ## 六、未覆盖（如实标注）
 
-- **导航栏购物车角标**：买家端未实现（Backlog #10 有、前端没有），未写用例；
+- **阶段四的全部新增能力**（地址簿、结算选地址、四渠道支付与失败重试、确认收货与缺货拒绝、售后申请/列表/详情、凭证图上传、物流多行单号）：现有套件零覆盖，用例已设计在[阶段四 E2E 用例清单](../simple-shop-doc/阶段四/阶段四-E2E用例清单.md)，等改造落地。
+- **导航栏购物车角标**：功能未实现。
 - **「在售但库存 0」的购物车行**：阶段三库存归零即自动下架，该状态不可达，只测了「已下架行不可选」；
 - 媒体上传的 **UI 流程**（接口层的图片/视频各类边界已覆盖，但没走完整发布链路的界面操作）；
 - 浏览器返回/多标签页并发（刷新保持已由 02b-14 / 02b-17 覆盖，返回与多标签未覆盖）；
@@ -250,15 +245,9 @@ npm run perf -- --url=... --runs=7 --settle=1500 --budget-lcp=2.5   # 当门禁�
 输出每次的 TTFB/FCP/LCP/CLS/TBT/请求数/传输量，再给中位数、p75、极差与 **LCP 元素**。
 `--auth=seller` 会先调接口拿令牌写进 localStorage，用来测登录后的页面。
 
-### 为什么不用 DevTools 手点
+不能使用DevTool手动测试，读数不准。
 
-| 手工测量的问题 | 这里的做法 |
-| --- | --- |
-| CPU/网络限速经常在导航之后才生效，前几帧是满速跑的 | 用 CDP 在 `goto` **之前**打限速 |
-| 单次结果方差极大（同一页面 1.2s 与 1.9s 都出现过） | 跑 N 次取中位数 + p75 + 极差 |
-| LCP 在首次交互/页面隐藏时才定稿，读早了拿到的是候选值 | `PerformanceObserver(buffered)` + load 后再等 `--settle` |
-| `npm run preview` 默认没有 /api 代理，首页可能量在「接口 404」的画面上 | preview 复用 server 的代理配置；首页用真实令牌登录后再测 |
-| 只看一个秒数，不知道是谁拖慢的 | 同时报 LCP 元素（标签 + 尺寸 + 文本）与请求数、传输量、长任务 |
+买家端暂未适配，如需测量买家端，先改代码适配（`scripts/perf.mjs`）。
 
 如果某次运行 FCP/LCP 为 0，脚本会提示：多半是**首屏被整页淡入/白屏包住**（合成器动画不产生 paint，
 Chromium 就不报 FCP），可以用 `--motion=reduce` 复测确认。卖家端就踩过这个坑，已在 `main.ts`

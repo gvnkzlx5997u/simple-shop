@@ -9,14 +9,11 @@ import type { LogisticsFormErrors } from '../../validation/logistics'
 import AppIcon from '../common/AppIcon.vue'
 
 /**
- * 发货与改物流共用一个弹窗：两者请求体完全一样，差别只有标题、说明与提交后的状态变化。
- * 分开写会得到两份几乎相同的表单，改校验时必然漏掉一份。
+ * 发货与改物流共用一个弹窗，请求体一致，差别只有标题、说明与提交后的状态变化。
  *
- * 承运商按需求做成「固定清单 + 其他」：清单见 constants/carriers.ts，
- * 选「其他」时再出现一个名称输入框（文档要求"选择其他时填写名称"）。
+ * 承运商见 constants/carriers.ts，
  *
- * 校验在本地先做（必填、长度、控制字符），通过后由页面负责发请求；
- * 弹窗自己不发请求，提交中的禁用与结果提示交给页面，避免两处都管 loading。
+ * 校验在本地先做，弹窗自己不发请求，提交中的禁用与结果提示交给页面，避免两处都管 loading。
  */
 const props = withDefaults(
   defineProps<{

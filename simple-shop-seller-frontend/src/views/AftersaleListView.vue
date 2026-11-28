@@ -21,9 +21,7 @@ import { formatDateTime, formatPrice } from '../utils/format'
 /**
  * 售后管理（卖家）。
  *
- * 只有「全部 + 三态」一个筛选维度，外加订单号搜索：买家端是按自己的单看，
- * 卖家端是按「哪笔订单出事」找，所以订单号比商品名更常用。
- * 状态与订单号都写回 URL，刷新与分享能还原同一视图。
+ * 「全部 + 三态」筛选，外加订单号搜索，状态与订单号都写回 URL
  */
 const PAGE_SIZE = 10
 
@@ -48,9 +46,7 @@ function isAftersaleStatus(value: string): value is AftersaleStatus {
 }
 
 const initialStatus = queryValue('status')
-const status = ref<AftersaleStatus | ''>(
-  isAftersaleStatus(initialStatus) ? initialStatus : '',
-)
+const status = ref<AftersaleStatus | ''>(isAftersaleStatus(initialStatus) ? initialStatus : '')
 const orderNoInput = ref(queryValue('order_no').trim())
 const appliedOrderNo = ref(queryValue('order_no').trim())
 

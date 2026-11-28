@@ -37,9 +37,6 @@ export const OFF_SHELF_REASON_TONES: Record<OffShelfReason, TagTone> = {
 /**
  * 订单状态的展示顺序：与流转顺序一致，终态「已取消」放最后。
  * 状态标签页、详情页流程图与操作按钮都按这个顺序取，不要各自硬编码。
- *
- * 阶段四是七态：前面多了待支付与已支付（付款后才轮到卖家确认），
- * 后面交易完成改由买家确认收货推进，卖家不再有「完成订单」这个动作。
  */
 export const ORDER_STATUS_ORDER: readonly OrderStatus[] = [
   'PENDING_PAYMENT',
@@ -82,17 +79,15 @@ export const ORDER_STATUS_HINTS: Record<OrderStatus, string> = {
   PAID: '买家已付款，等待你确认接单。确认后进入「已确认」，接下来要备货。',
   CONFIRMED: '已接单，去备货；备好后标记「备货完成」。',
   PREPARED: '备货完成，下一步开始发货；发货必须填承运商与运单号。',
-  SHIPPED:
-    '已发货，等买家确认收货。发货后仍可改物流单号；交易完成前也可以取消，已付款会全额退款。',
-  COMPLETED:
-    '订单已完成，库存已扣减；买家可就这笔订单申请售后，物流单号仍可在「物流信息」里修改。',
+  SHIPPED: '已发货，等买家确认收货。发货后仍可改物流单号；交易完成前也可以取消，已付款会全额退款。',
+  COMPLETED: '订单已完成，库存已扣减；买家可就这笔订单申请售后，物流单号仍可在「物流信息」里修改。',
   CANCELED: '订单已取消，整单终止，没有后续操作。',
 }
 
 // ---- 支付 ----
 
 /**
- * 支付渠道中文名。本期全部走 Mock、恒成功，
+ * 支付渠道中文名。
  * 卖家端只在订单详情里展示买家用了哪个渠道，不做任何支付操作。
  */
 export const PAYMENT_CHANNEL_LABELS: Record<PaymentChannel, string> = {

@@ -4,11 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 
 import { listOrders } from '../../api/orders'
 import type { OrderData, OrderStatus } from '../../api/types'
-import {
-  ORDER_STATUS_LABELS,
-  ORDER_STATUS_ORDER,
-  ORDER_STATUS_TONES,
-} from '../../constants/labels'
+import { ORDER_STATUS_LABELS, ORDER_STATUS_ORDER, ORDER_STATUS_TONES } from '../../constants/labels'
 import { M10 } from '../../constants/messages'
 import { usePagedList } from '../../composables/usePagedList'
 import { formatDateTime, formatPrice } from '../../utils/format'
@@ -16,25 +12,15 @@ import AppIcon from '../common/AppIcon.vue'
 import Pagination from '../common/Pagination.vue'
 import StatusTag from '../common/StatusTag.vue'
 
-/**
- * 订单列表：订单管理页与客户/商品详情里的「该客户/该商品的订单」共用这一份实现，
- * 差别只在筛选条件与是否写回 URL。
- *
- * 组件负责「状态标签页 + 列表 + 分页」；标题与所在版式由宿主给。
- */
+/** 订单列表：负责「状态标签页 + 列表 + 分页」；标题与所在版式由宿主给。*/
 interface Props {
   /** 按买家筛选（客户详情的「该客户的订单」）。 */
   buyerId?: string | null
   /** 按商品筛选（商品详情的「该商品的订单」）。 */
   goodsId?: string | null
   pageSize?: number
-  /** 一条订单都没有时的提示；状态 tab 在筛的时候统一用 emptyOrdersFiltered。 */
   emptyText?: string
-  /**
-   * 是否把状态与页码写回 URL。
-   * 独立页面（/orders）要写，刷新与分享才能还原；嵌在客户/商品详情里时不写，
-   * 否则会把宿主的地址改花，而宿主地址标识的是客户或商品，不是订单列表的筛选。
-   */
+  /**是否把状态与页码写回 URL。*/
   syncQuery?: boolean
   /** 是否显示「买家」列；嵌在客户详情里时每行都是同一个人，列出来是噪音。 */
   showBuyer?: boolean
