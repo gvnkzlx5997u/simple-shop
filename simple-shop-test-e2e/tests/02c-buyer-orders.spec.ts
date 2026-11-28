@@ -54,16 +54,22 @@ test.describe.serial('02c 买家订单列表与详情', () => {
     await ctx.dispose();
   });
 
-  test('T02c-01 单件经购物车下单 → 跳详情、待确认、金额正确', async ({ page }) => {
+  test('T02c-01 单件经购物车下单 → 跳详情、待支付、金额正确', async ({ page }) => {
     await addToCart(ctx, buyerToken, goods.id);
     await buyerLoginUi(page, buyer.username, buyer.password);
     await buyerOpenCart(page);
     await page.getByRole('button', { name: '去结算' }).click();
 
+    await expect(page).toHaveURL(/\/checkout$/);
+    await expect(page.getByTestId('checkout-address').first()).toBeChecked();
+    await page.getByTestId('checkout-submit').click();
+
     await expect(page).toHaveURL(/\/orders\/[^/]+$/);
-    await expect(page.getByTestId('status-tag')).toHaveText('待确认');
+    await expect(page.getByTestId('status-tag')).toHaveText('待支付');
     await expect(page.getByTestId('order-total')).toContainText('¥15.00');
     await expect(page.getByTestId('order-items').locator('tbody tr')).toHaveCount(1);
+    await expect(page.getByTestId('order-pay-entry')).toBeVisible();
+    await expect(page.getByTestId('pay-countdown')).toBeVisible();
   });
 
   test('T02c-02 订单分页：第 1 页 10 笔，翻第 2 页余量正确', async ({ page }) => {

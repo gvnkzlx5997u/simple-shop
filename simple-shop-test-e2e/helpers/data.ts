@@ -16,14 +16,30 @@ export function uniqueName(prefix: string): string {
   return `${prefix}-${RUN_ID}-${seq}`;
 }
 
-/** 一个买家账号（电话 11 位数字，满足"至少 7 位数字"） */
+/** 一个买家账号（电话 11 位数字，满足"至少 7 位数字"）；注册不再收默认交易地点 */
 export function buyerFixture(prefix = 'buyer') {
   const name = uniqueName(prefix);
   return {
     username: name,
     password: 'Buyer@12345',
     phone: '13800000000',
-    default_location: '教学楼 A',
+  };
+}
+
+/** 一条收货地址；名称与地址带序号，便于区分「最新创建的那条」 */
+export function addressFixture(index: number) {
+  return {
+    receiver_name: `收货人${index}`,
+    receiver_phone: `1390000000${index % 10}`,
+    detail_address: `E2E 省 E2E 市 E2E 路 ${index} 号`,
+  };
+}
+
+/** 一条售后申请的内容；描述带换行，用于断言「原样保留换行」 */
+export function aftersaleFixture(index: number) {
+  return {
+    title: `E2E 售后标题 ${index}`,
+    description: `第一行说明 ${index}\n第二行说明 ${index}`,
   };
 }
 

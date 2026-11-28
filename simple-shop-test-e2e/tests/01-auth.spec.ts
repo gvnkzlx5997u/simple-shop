@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test';
 
 import { buyerLogin, call, newApi, newBuyer, sellerLogin } from '../helpers/api';
-import { buyerFixture } from '../helpers/data';
-import { SELLER_URL } from '../helpers/config';
+import { buyerFixture, uniqueName } from '../helpers/data';
+import { BUYER_URL, SELLER_URL } from '../helpers/config';
 import { buyerLoginUi, buyerRegisterUi, sellerLoginUi } from '../helpers/ui';
 
 /**
@@ -39,16 +39,35 @@ test.describe('01 认证与令牌隔离', () => {
     await expect(page.getByRole('heading', { name: '商品列表' })).toHaveCount(0);
   });
 
-  test('T01-04 买家注册 → 自动登录并进入商品列表', async ({ page }) => {
+  test('T01-04 买家注册 → 自动登录并进入商品列表（不再收默认交易地点）', async ({ page }) => {
     const fixture = buyerFixture('reg');
+    await page.goto(`${BUYER_URL}/register`);
+    await expect(page.getByLabel('默认交易地点'), '注册表单已删掉该字段').toHaveCount(0);
+
     await buyerRegisterUi(page, {
       username: fixture.username,
       password: fixture.password,
       phone: fixture.phone,
-      location: fixture.default_location,
     });
     await expect(page).toHaveURL(/\/goods/);
     await expect(page.getByPlaceholder('搜索商品名称或描述')).toBeVisible();
+
+    // 新买家没有地址：地址页应是空态，而不是带着一条注册时填的地点
+    await page.goto(`${BUYER_URL}/addresses`);
+    await expect(page.getByText('还没有收货地址')).toBeVisible();
+
+    // 接口层：再传已废弃字段不会被静默接受（校验器把它当未知参数拒掉）
+    const ctx = await newApi();
+    const extra = await call(ctx, 'POST', '/api/buyer/auth/register', {
+      username: uniqueName('reg-extra'),
+      password: 'Buyer@12345',
+      phone: '13800000000',
+      default_location: '不该被接收',
+    });
+    expect(extra.status).toBe(400);
+    expect(extra.body.code).toBe(50002);
+    expect(extra.body.errors?.some((item) => item.field === 'default_location')).toBe(true);
+    await ctx.dispose();
   });
 
   test('T01-05 买家登录成功 → 进入商品列表', async ({ page }) => {

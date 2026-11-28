@@ -4,18 +4,21 @@ import {
   advanceOrder,
   addToCart,
   call,
+  confirmReceipt,
   createL1,
   createL2,
+  ensureAddress,
   getSellerGoods,
   listBuyerOrders,
   listCart,
   listSellerOrders,
   newApi,
   newBuyer,
-  offShelf,
+  payOrder,
   placeOrder,
   publishGoods,
   sellerLogin,
+  sellerOrderDetail,
 } from '../helpers/api';
 import type { GoodsView } from '../helpers/api';
 import { buyerFixture, goodsFixture, uniqueName } from '../helpers/data';
@@ -28,7 +31,6 @@ import {
   openSellerOrder,
   sellerLoginUi,
   statusTags,
-  toast,
 } from '../helpers/ui';
 
 /**
@@ -79,6 +81,8 @@ test.describe.serial('08 买卖两端联调', () => {
 
     await addToCart(ctx, token, goodsA.id);
     await addToCart(ctx, token, goodsB.id);
+    // 下单必须带地址；helper 会给该买家建一条默认地址
+    await ensureAddress(ctx, token);
 
     await buyerLoginUi(page, fixture.username, fixture.password);
     await buyerOpenCart(page);
@@ -88,6 +92,9 @@ test.describe.serial('08 买卖两端联调', () => {
     await expect(buyerCartTotal(page)).toHaveText('¥45.00');
 
     await page.getByRole('button', { name: '去结算' }).click();
+    await expect(page).toHaveURL(/\/checkout$/);
+    await expect(page.getByTestId('checkout-address').first()).toBeChecked();
+    await page.getByTestId('checkout-submit').click();
     await expect(page).toHaveURL(/\/orders\/[^/]+$/);
 
     // 卖家侧：同一笔订单，两行明细
@@ -102,36 +109,60 @@ test.describe.serial('08 买卖两端联调', () => {
     // 购物车里已下单的行被清掉
     const cart = await listCartCount(token);
     expect(cart).toBe(0);
+
+    // 卖家列表也要能看到：买家名、金额、物流列「未发货」
+    await sellerLoginUi(page);
+    await page.goto(`${SELLER_URL}/orders`);
+    const row = page.getByRole('row').filter({ hasText: hit!.order_no });
+    await expect(row).toContainText(fixture.username);
+    await expect(row).toContainText('¥45.00');
+    await expect(row).toContainText('未发货');
   });
 
   test('T08-02 卖家推进 → 买家侧状态同步可见', async ({ page }) => {
     const goods = await newGoods(3);
     const { fixture, token } = await newBuyerToken();
     const placed = await placeOrderViaApi(token, goods.id, 1);
-
-    await advanceOrder(ctx, sellerToken, placed.order_id, 'confirm');
-    await advanceOrder(ctx, sellerToken, placed.order_id, 'prepare');
-    await advanceOrder(ctx, sellerToken, placed.order_id, 'ship');
+    // 卖家第一步是「确认已支付单」
+    await payOrder(ctx, token, placed.order_id, 'ALIPAY');
 
     await buyerLoginUi(page, fixture.username, fixture.password);
+
+    await advanceOrder(ctx, sellerToken, placed.order_id, 'confirm');
     await page.goto(`${BUYER_URL}/orders/${placed.order_id}`);
+    await expect(page.getByTestId('status-tag')).toHaveText('已确认');
+
+    await advanceOrder(ctx, sellerToken, placed.order_id, 'prepare');
+    await page.reload();
+    await expect(page.getByTestId('status-tag')).toHaveText('备货完成');
+
+    await advanceOrder(ctx, sellerToken, placed.order_id, 'ship', {
+      carrier: '顺丰速运',
+      tracking_no: 'SF8002',
+    });
+    await page.reload();
     await expect(page.getByTestId('status-tag')).toHaveText('已发货');
     // 已发货后买家侧不再有取消入口
     await expect(page.getByRole('button', { name: '取消订单' })).toHaveCount(0);
   });
 
-  test('T08-03 卖家完成 → 买家看到交易完成，库存按明细扣减', async ({ page }) => {
+  test('T08-03 买家确认收货 → 双方都是交易完成，库存按明细扣减', async ({ page }) => {
     const goods = await newGoods(5);
     const { fixture, token } = await newBuyerToken();
     const placed = await placeOrderViaApi(token, goods.id, 2);
 
+    await payOrder(ctx, token, placed.order_id, 'ALIPAY');
     await advanceOrder(ctx, sellerToken, placed.order_id, 'confirm');
     await advanceOrder(ctx, sellerToken, placed.order_id, 'prepare');
-    await advanceOrder(ctx, sellerToken, placed.order_id, 'ship');
-    await advanceOrder(ctx, sellerToken, placed.order_id, 'complete');
+    await advanceOrder(ctx, sellerToken, placed.order_id, 'ship', {
+      carrier: '顺丰速运',
+      tracking_no: 'SF8003',
+    });
+    // 成交只能由买家确认收货推进
+    await confirmReceipt(ctx, token, placed.order_id);
 
     const after = await getSellerGoods(ctx, sellerToken, goods.id);
-    expect(after.stock, '完成时按明细扣 2').toBe(3);
+    expect(after.stock, '成交时按明细扣 2').toBe(3);
 
     await buyerLoginUi(page, fixture.username, fixture.password);
     await page.goto(`${BUYER_URL}/orders/${placed.order_id}`);
@@ -147,7 +178,7 @@ test.describe.serial('08 买卖两端联调', () => {
     await buyerLoginUi(page, fixture.username, fixture.password);
     await page.goto(`${BUYER_URL}/orders/${placed.order_id}`);
     await page.getByRole('button', { name: '取消订单' }).click();
-    await page.getByRole('button', { name: '确认取消' }).click();
+    await page.getByTestId('order-cancel').click();
     await expect(page.getByTestId('status-tag')).toHaveText('已取消');
 
     await sellerLoginUi(page);
@@ -156,15 +187,23 @@ test.describe.serial('08 买卖两端联调', () => {
     await expect(statusTags(page).filter({ hasText: '已取消' })).toBeVisible();
     await expect(page.getByTestId('order-next')).toHaveCount(0);
     await expect(page.getByTestId('order-cancel')).toHaveCount(0);
+
+    // 待支付单取消不退款
+    const detail = await sellerOrderDetail(ctx, sellerToken, placed.order_id);
+    expect(detail.refunded_amount).toBe(0);
   });
 
   test('T08-05 发货后买家不能取消：界面无入口、接口 60003', async ({ page }) => {
     const goods = await newGoods(3);
     const { fixture, token } = await newBuyerToken();
     const placed = await placeOrderViaApi(token, goods.id, 1);
+    await payOrder(ctx, token, placed.order_id, 'ALIPAY');
     await advanceOrder(ctx, sellerToken, placed.order_id, 'confirm');
     await advanceOrder(ctx, sellerToken, placed.order_id, 'prepare');
-    await advanceOrder(ctx, sellerToken, placed.order_id, 'ship');
+    await advanceOrder(ctx, sellerToken, placed.order_id, 'ship', {
+      carrier: '顺丰速运',
+      tracking_no: 'SF8005',
+    });
 
     await buyerLoginUi(page, fixture.username, fixture.password);
     await page.goto(`${BUYER_URL}/orders/${placed.order_id}`);
@@ -177,25 +216,29 @@ test.describe.serial('08 买卖两端联调', () => {
     expect(result.body.code, '已发货后买家取消应被拒').toBe(60003);
   });
 
-  test('T08-06 有未完成订单时卖家下架被拒，取消订单后可以下架', async ({ page }) => {
+  test('T08-06 有未完成订单也能下架；取消订单后仍是已下架', async ({ page }) => {
     const goods = await newGoods(2);
     const { token } = await newBuyerToken();
     const placed = await placeOrderViaApi(token, goods.id, 1);
 
-    // 界面上点「下架」→ 被 20020 拦住
+    // 未完成订单不再阻断下架
     await sellerLoginUi(page);
     await page.goto(`${SELLER_URL}/goods/${goods.id}`);
     await page.getByRole('button', { name: '下架', exact: true }).click();
     await page.getByRole('dialog').getByRole('button', { name: '确认', exact: true }).click();
-    await expect(toast(page).filter({ hasText: '未完成订单' })).toBeVisible();
-    expect((await getSellerGoods(ctx, sellerToken, goods.id)).status).toBe('ON_SALE');
+    await expect(statusTags(page).filter({ hasText: '已下架' })).toBeVisible();
+    await expect(statusTags(page).filter({ hasText: '手动下架' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '修改库存' }), '手动下架后库存只读')
+      .toHaveCount(0);
 
-    // 卖家取消订单后再下架：成功
+    // 取消订单不会让商品恢复上架；类别仍可改挂
     await advanceOrder(ctx, sellerToken, placed.order_id, 'cancel');
-    await offShelf(ctx, sellerToken, goods.id);
     const after = await getSellerGoods(ctx, sellerToken, goods.id);
     expect(after.status).toBe('OFF_SHELF');
     expect(after.off_shelf_reason).toBe('MANUAL');
+
+    await page.reload();
+    await expect(page.getByRole('button', { name: '改挂类别' })).toBeVisible();
   });
 
   test('T08-07 下单不锁库存：商品仍在售，另一个买家还能下单', async () => {
@@ -204,7 +247,7 @@ test.describe.serial('08 买卖两端联调', () => {
     const second = await newBuyerToken();
 
     const orderA = await placeOrderViaApi(first.token, goods.id, 1);
-    expect(orderA.status).toBe('PENDING_CONFIRM');
+    expect(orderA.status).toBe('PENDING_PAYMENT');
 
     // 商品没被冻结/下架，仍然在售
     const mid = await getSellerGoods(ctx, sellerToken, goods.id);
@@ -212,10 +255,10 @@ test.describe.serial('08 买卖两端联调', () => {
 
     // 第二个买家同一件商品下单也成功（下单只校验、不预占）
     const orderB = await placeOrderViaApi(second.token, goods.id, 1);
-    expect(orderB.status).toBe('PENDING_CONFIRM');
+    expect(orderB.status).toBe('PENDING_PAYMENT');
 
     const orders = await listSellerOrders(ctx, sellerToken, { goods_id: goods.id, page_size: 50 });
-    expect(orders.items.filter((item) => item.status === 'PENDING_CONFIRM')).toHaveLength(2);
+    expect(orders.items.filter((item) => item.status === 'PENDING_PAYMENT')).toHaveLength(2);
   });
 
   test('T08-08 买家订单列表：全部订单、按状态筛选、按下单时间倒序', async ({ page }) => {
@@ -253,8 +296,10 @@ test.describe.serial('08 买卖两端联调', () => {
     const goods = await newGoods(3);
     const { fixture, token } = await newBuyerToken();
     const placed = await placeOrderViaApi(token, goods.id, 1);
+    // 卖家确认只对待支付之后的单生效，先让买家付款
+    await payOrder(ctx, token, placed.order_id, 'ALIPAY');
 
-    // 买家先打开详情（此时待确认，有取消入口）
+    // 买家先打开详情（此时已支付，有取消入口）
     await buyerLoginUi(page, fixture.username, fixture.password);
     await page.goto(`${BUYER_URL}/orders/${placed.order_id}`);
     await expect(page.getByRole('button', { name: '取消订单' })).toBeVisible();
@@ -262,12 +307,15 @@ test.describe.serial('08 买卖两端联调', () => {
     // 卖家在买家停留期间推进到已发货
     await advanceOrder(ctx, sellerToken, placed.order_id, 'confirm');
     await advanceOrder(ctx, sellerToken, placed.order_id, 'prepare');
-    await advanceOrder(ctx, sellerToken, placed.order_id, 'ship');
+    await advanceOrder(ctx, sellerToken, placed.order_id, 'ship', {
+      carrier: '顺丰速运',
+      tracking_no: 'SF8009',
+    });
 
     // 买家页面上的取消按钮是旧状态渲染的，点了应被 60003 拦下并给可读提示
     await page.getByRole('button', { name: '取消订单' }).click();
-    await page.getByRole('button', { name: '确认取消' }).click();
-    await expect(page.getByText('已发货，不能取消')).toBeVisible();
+    await page.getByTestId('order-cancel').click();
+    await expect(page.getByText('订单已发货或已完成，不能取消')).toBeVisible();
 
     // 刷新后与服务端一致：已发货、无取消入口
     await page.reload();
