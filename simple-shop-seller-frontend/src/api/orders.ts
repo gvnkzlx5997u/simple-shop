@@ -5,6 +5,7 @@ import type {
   OrderStatus,
   OrderStatusData,
   PageResponse,
+  ShipLogisticsRequest,
 } from './types'
 
 const ORDERS_PATH = '/seller/orders'
@@ -49,8 +50,8 @@ export function listOrderItems(orderId: string): Promise<OrderItemsData> {
 }
 
 /**
- * 确认订单：待确认 → 已确认。
- * 五个推进动作共用一种返回（只回状态），当前状态不允许时返回 60002。
+ * 确认订单：已支付 → 已确认。
+ * 各推进动作共用一种返回（只回状态），当前状态不允许时返回 60002。
  */
 export function confirmOrder(orderId: string): Promise<OrderStatusData> {
   return request<OrderStatusData>({
@@ -67,22 +68,30 @@ export function prepareOrder(orderId: string): Promise<OrderStatusData> {
   })
 }
 
-/** 开始发货：备货完成 → 已发货；此后买家不可取消。 */
-export function shipOrder(orderId: string): Promise<OrderStatusData> {
+/**
+ * 开始发货：备货完成 → 已发货。
+ * 必须带承运商与单号：买家查物流靠这两项，缺一项后端按参数错误拒绝（50002）。
+ */
+export function shipOrder(orderId: string, body: ShipLogisticsRequest): Promise<OrderStatusData> {
   return request<OrderStatusData>({
     method: 'post',
     url: ORDERS_PATH + '/' + encodeURIComponent(orderId) + '/ship',
+    data: body,
   })
 }
 
 /**
- * 交易完成：已发货 → 交易完成，按明细数量一次性扣减库存。
- * 任一商品库存不足则整单拒绝（60004），订单停在已发货，不做部分完成。
+ * 修改物流：发货后（含交易完成）可改，状态不变；未发货返回 82002。
+ * 与发货共用一份请求体。
  */
-export function completeOrder(orderId: string): Promise<OrderStatusData> {
+export function updateOrderLogistics(
+  orderId: string,
+  body: ShipLogisticsRequest,
+): Promise<OrderStatusData> {
   return request<OrderStatusData>({
-    method: 'post',
-    url: ORDERS_PATH + '/' + encodeURIComponent(orderId) + '/complete',
+    method: 'put',
+    url: ORDERS_PATH + '/' + encodeURIComponent(orderId) + '/logistics',
+    data: body,
   })
 }
 

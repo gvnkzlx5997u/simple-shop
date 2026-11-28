@@ -86,7 +86,13 @@ const { items, total, page, loading, error, load } = usePagedList<OrderData>(
 const statusFiltered = computed(() => status.value !== '')
 
 /** 空态与加载态要跨满整行；列数随「买家」列是否显示变化。 */
-const columnCount = computed(() => (props.showBuyer ? 6 : 5))
+const columnCount = computed(() => (props.showBuyer ? 7 : 6))
+
+/** 列表只放得下一行：多包裹单号取第一行，全文靠 title 提示与详情页看。 */
+function firstTrackingLine(order: OrderData): string {
+  const raw = order.tracking_no ?? ''
+  return raw.split(/\r?\n/)[0] ?? ''
+}
 
 /**
  * 只改动 status / page 两个键，其余查询参数原样保留：
@@ -181,6 +187,7 @@ function openDetail(orderId: string): void {
               <th>状态</th>
               <th class="text-right">商品项</th>
               <th class="text-right">订单金额</th>
+              <th>物流</th>
               <th>下单时间</th>
             </tr>
           </thead>
@@ -224,6 +231,18 @@ function openDetail(orderId: string): void {
               </td>
               <td class="text-right tabular-nums">{{ order.item_count }}</td>
               <td class="text-right tabular-nums">{{ formatPrice(order.total_amount) }}</td>
+              <td class="text-xs">
+                <template v-if="order.carrier || order.tracking_no">
+                  <span class="font-medium">{{ order.carrier ?? '—' }}</span>
+                  <span
+                    class="block max-w-[180px] truncate text-base-content/70"
+                    :title="order.tracking_no ?? ''"
+                  >
+                    {{ firstTrackingLine(order) }}
+                  </span>
+                </template>
+                <span v-else class="text-base-content/40">未发货</span>
+              </td>
               <td class="text-base-content/70">{{ formatDateTime(order.create_at) }}</td>
             </tr>
           </tbody>

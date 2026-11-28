@@ -40,8 +40,10 @@ export function getGoods(id: string): Promise<GoodsDetailData> {
 }
 
 /**
- * 修改库存。在售改成 0 触发库存耗尽下架（20020：有未完成订单时被拒）；
- * 库存耗尽/已售下架的商品改成大于 0 保存即自动上架；手动下架的商品库存只读（20023）。
+ * 修改库存。在售改成 0 触发「库存耗尽」下架；
+ * 库存耗尽 / 已售下架的商品改成大于 0 保存即自动上架；手动下架的商品库存只读（20023）。
+ *
+ * 阶段四起不再有「有未完成订单就不许改库存」的限制（20020 已停用）。
  */
 export function updateGoodsStock(id: string, stock: number): Promise<GoodsDetailData> {
   return request<GoodsDetailData>({
@@ -62,7 +64,7 @@ export function updateGoodsCategory(id: string, categoryId: string): Promise<Goo
 
 /**
  * 手动下架。手动下架是终态：没有重新上架接口，库存变为只读、类别仍可改挂。
- * 有未完成订单（待确认至已发货）时被拒 20020，非在售状态被拒 20019。
+ * 非在售状态被拒 20019；阶段四起不再校验未完成订单（限制已随需求删减）。
  */
 export function takeGoodsOffShelf(id: string): Promise<GoodsDetailData> {
   return request<GoodsDetailData>({
