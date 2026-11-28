@@ -18,6 +18,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { to: '/', label: '商品列表', icon: 'product', matches: ['/', '/goods', '/publish'] },
   { to: '/orders', label: '订单管理', icon: 'list', matches: ['/orders'] },
+  { to: '/aftersales', label: '售后管理', icon: 'confirm', matches: ['/aftersales'] },
   { to: '/categories', label: '类别管理', icon: 'file', matches: ['/categories'] },
   { to: '/customers', label: '客户管理', icon: 'user', matches: ['/customers'] },
   { to: '/password', label: '修改密码', icon: 'key', matches: ['/password'] },

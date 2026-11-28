@@ -1,5 +1,5 @@
 /**
- * 后端接口的数据契约（阶段三，与 openapi.json / 后端 DTO 的 JSON 字段逐字对应）。
+ * 后端接口的数据契约（阶段四，与 openapi.json / 后端 DTO 的 JSON 字段逐字对应）。
  *
  * 字段名保持后端返回的 snake_case，不做驼峰转换：少一层映射就少一处与契约漂移的地方。
  */
@@ -37,6 +37,10 @@ export const ApiCode = {
   USERNAME_TAKEN: 10005,
   USERNAME_INVALID: 10006,
   PHONE_INVALID: 10007,
+  /**
+   * 已停用：阶段四起注册不再收 default_location，码位不复用
+   * （旧日志里出现过 10008，复用会被误读成新语义）。
+   */
   DEFAULT_LOCATION_INVALID: 10008,
   ACCOUNT_NOT_FOUND: 10009,
   ACCOUNT_INVALID: 10010,
@@ -56,7 +60,10 @@ export const ApiCode = {
   IMAGE_LIMIT_EXCEEDED: 20017,
   MAIN_IMAGE_REQUIRED: 20018,
   GOODS_NOT_ON_SALE: 20019,
-  /** 有未完成订单：禁止手动下架，也禁止手动把库存改为 0。 */
+  /**
+   * 已停用：阶段四起有未完成订单也能手动下架、也能把库存改成 0，
+   * 后端不再返回本码。码位保留不复用。
+   */
   GOODS_HAS_UNFINISHED_ORDER: 20020,
   GOODS_STATUS_MISMATCH: 20023,
   VIDEO_INVALID: 20025,
@@ -67,6 +74,13 @@ export const ApiCode = {
   ORDER_STATUS_INVALID: 60002,
   ORDER_NOT_CANCELABLE: 60003,
   ORDER_STOCK_SHORTAGE: 60004,
+  // 8xxxx 售后与物流（80001–80004 是买家地址簿，卖家端到不了）
+  AFTERSALE_NOT_FOUND: 81001,
+  AFTERSALE_STATUS_INVALID: 81002,
+  AFTERSALE_REFUND_DUPLICATED: 81004,
+  AFTERSALE_RESULT_REQUIRED: 81005,
+  AFTERSALE_IMAGE_LIMIT_EXCEEDED: 81007,
+  LOGISTICS_NOT_EDITABLE: 82002,
   // 5xxxx 通用
   INTERNAL_ERROR: 50000,
   TOO_MANY_REQUESTS: 50001,
@@ -228,14 +242,21 @@ export interface GoodsCategoryRequest {
 /**
  * 订单状态：整单流转，只能按序前进一格，不可跳级或回退。
  * 明细没有独立状态，状态判断只读订单头。
+ *
+ * 与阶段三的差别只在两端：前面多了待支付与已支付（付款后才轮到卖家确认），
+ * 后面交易完成改由买家确认收货推进，卖家不再有「完成订单」这个动作。
  */
 export type OrderStatus =
-  | 'PENDING_CONFIRM'
+  | 'PENDING_PAYMENT'
+  | 'PAID'
   | 'CONFIRMED'
   | 'PREPARED'
   | 'SHIPPED'
   | 'COMPLETED'
   | 'CANCELED'
+
+/** 支付渠道：本期全走 Mock，恒成功；失败时后端不写 payment_channel 与 paid_at。 */
+export type PaymentChannel = 'BANK_CARD' | 'CREDIT_CARD' | 'ALIPAY' | 'WECHAT'
 
 /** 订单里的买家引用：只有 ID 与实时用户名，不含电话等账号字段。 */
 export interface BuyerRefData {
@@ -245,6 +266,9 @@ export interface BuyerRefData {
 /**
  * 订单头：列表项与详情共用同一形状，**不含订单项**。
  * 注意主键字段是 order_id（不是 id），明细由 listOrderItems 按订单 ID 另行查询。
+ *
+ * 「快照类」字段（收货三项）是下单时的值，地址簿后续改名或删除都不影响这里；
+ * 「支付/物流类」字段按状态先后出现，未到那一步时后端给 null，界面据此隐藏整块。
  */
 export interface OrderData {
   order_id: string
@@ -257,9 +281,28 @@ export interface OrderData {
   create_at: string
   update_at: string
   buyer: BuyerRefData
+  /** 收货人快照，下单时写入。 */
+  receiver_name: string | null
+  receiver_phone: string | null
+  receiver_address: string | null
+  /** 未支付时为 null；支付成功后才有值，失败时两者必须都为空。 */
+  payment_channel: PaymentChannel | null
+  paid_at: string | null
+  /** 仅待支付订单有值；倒计时用它，不要自己按 24 小时算。 */
+  pay_deadline: string | null
+  /** 发货后才有；tracking_no 可能含换行（一个订单多个包裹）。 */
+  carrier: string | null
+  tracking_no: string | null
+  logistics_remark: string | null
+  /** 已退金额 = 取消退款 + 售后退款（只算「已完成 + 退款类结果」）。 */
+  refunded_amount: number
+  /** 该订单售后条数（含待处理与换货），不等于退款笔数。 */
+  aftersale_count: number
 }
 /** 订单项：商品引用 + 下单快照 + 数量，小计由后端给（前端不做浮点乘法）。 */
 export interface OrderItemData {
+  /** 售后申请用它定位，不要用 goods_id：同一商品可能出现在多个订单里。 */
+  order_item_id: string
   goods_id: string
   goods_name: string
   unit_price: number
@@ -277,13 +320,54 @@ export interface OrderStatusData {
   status: OrderStatus
   update_at: string
 }
+/**
+ * 发货与改物流共用一份请求体：承运商、单号必填，备注可空。
+ * 与后端 ShipLogisticsRequest 的校验口径一致（承运商 ≤50、单号与备注 ≤500 码点）。
+ */
+export interface ShipLogisticsRequest {
+  carrier: string
+  tracking_no: string
+  logistics_remark?: string | null
+}
+
+// ---- 售后 ----
+/** 售后三态；「已拒绝」没有独立状态，拒绝 = 取消。 */
+export type AftersaleStatus = 'PENDING' | 'COMPLETED' | 'CANCELED'
+/** 处理结果由卖家完成时登记；申请阶段不选类型。 */
+export type AftersaleResult = 'RETURN_AND_REFUND' | 'REFUND_ONLY' | 'EXCHANGE'
+/** 售后摘要：列表项用，不含描述与图片。 */
+export interface AftersaleData {
+  aftersale_id: string
+  aftersale_no: string
+  order_id: string
+  order_no: string
+  order_item_id: string
+  goods_name: string
+  title: string
+  status: AftersaleStatus
+  /** 未完成时为 null；换货不产生退款，refund_amount 与 refunded_at 都是 null。 */
+  result: AftersaleResult | null
+  refund_amount: number | null
+  refunded_at: string | null
+  create_at: string
+}
+/** 售后详情：摘要之外另给买家描述与凭证图（按申请时的顺序）。 */
+export interface AftersaleDetailData extends AftersaleData {
+  description: string
+  image_urls: string[]
+  update_at: string
+}
+/** 完成售后：result 必填三选一，缺失或非法后端返回 81005。 */
+export interface AftersaleCompleteRequest {
+  result: AftersaleResult
+}
 
 // ---- 客户 ----
+/** 客户摘要：账号基本信息。买家注册即成为客户。 */
 export interface CustomerSummaryData {
   id: string
   username: string
   phone: string
-  default_location: string | null
   create_at: string
 }
 /** 客户详情：只有基本信息。购买历史改查卖家订单列表（buyer_id 筛选）。 */
@@ -291,6 +375,5 @@ export interface CustomerDetailData {
   id: string
   username: string
   phone: string
-  default_location: string | null
   create_at: string
 }

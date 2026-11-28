@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import { ApiError } from '../api/http'
@@ -11,6 +11,7 @@ import { apiCodeMessage, M10 } from '../constants/messages'
 import { useAuthStore } from '../stores/auth'
 import { errorMessage } from '../utils/error'
 import { validateAccount, validateLoginPassword } from '../validation'
+import { fieldErrorMessage } from '../validation/shared'
 
 const route = useRoute()
 const router = useRouter()
@@ -26,12 +27,22 @@ const submitting = ref(false)
 const sessionExpired = computed(() => route.query.reason === 'expired')
 const themeLabel = computed(() => (isDark.value ? '切换到浅色' : '切换到深色'))
 
+/**
+ * 校验失败的文案：空值单独说「请输入」。
+ * 校验器按后端口径只回 50002（空值与格式问题同一个码），直接翻译会得到
+ * 「请检查输入内容」——对着一个空框说"检查"，用户不知道该干什么。
+ */
 async function onSubmit(): Promise<void> {
   const accountResult = validateAccount(account.value)
   const passwordResult = validateLoginPassword(password.value)
   errors.value = {
-    account: accountResult.ok ? undefined : apiCodeMessage(accountResult.code),
-    password: passwordResult.ok ? undefined : apiCodeMessage(passwordResult.code),
+    account: fieldErrorMessage(account.value, accountResult, M10.accountRequired, apiCodeMessage),
+    password: fieldErrorMessage(
+      password.value,
+      passwordResult,
+      M10.passwordRequired,
+      apiCodeMessage,
+    ),
   }
   if (!accountResult.ok || !passwordResult.ok) {
     return
@@ -51,6 +62,18 @@ async function onSubmit(): Promise<void> {
     submitting.value = false
   }
 }
+
+// 一开始打字就把对应的红字清掉，别让「请输入账号」贴在已经填好的框下面。
+watch(account, () => {
+  if (errors.value.account) {
+    errors.value = { ...errors.value, account: undefined }
+  }
+})
+watch(password, () => {
+  if (errors.value.password) {
+    errors.value = { ...errors.value, password: undefined }
+  }
+})
 </script>
 
 <template>

@@ -30,12 +30,12 @@ function onSubmit(): void {
       ? undefined
       : oldResult.code === ApiCode.OLD_PASSWORD_MISMATCH
         ? M10.oldPasswordMismatch
-        : '请填写原密码',
+        : M10.oldPasswordRequired,
     next: newResult.ok
       ? undefined
       : newResult.code === ApiCode.PASSWORD_INVALID
         ? M10.newPasswordTooShort
-        : '请填写新密码',
+        : M10.newPasswordRequired,
     confirm: newPassword.value === confirmPassword.value ? undefined : M10.passwordMismatch,
   }
   if (!oldResult.ok || !newResult.ok || errors.value.confirm) {
