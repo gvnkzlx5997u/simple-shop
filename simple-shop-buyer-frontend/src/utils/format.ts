@@ -37,3 +37,19 @@ export function formatMoney(value: number | string | null | undefined): string {
   if (n == null || !Number.isFinite(n)) return '0.00'
   return n.toFixed(2)
 }
+
+/**
+ * 剩余毫秒 → `HH:mm:ss`。已过期与非法值一律归零，不显示负数。
+ * 时限本身来自后端的 `pay_deadline`，这里只负责把差值渲染出来。
+ */
+export function formatCountdown(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return '00:00:00'
+  const total = Math.floor(ms / 1000)
+  return (
+    pad(Math.floor(total / 3600)) +
+    ':' +
+    pad(Math.floor((total % 3600) / 60)) +
+    ':' +
+    pad(total % 60)
+  )
+}

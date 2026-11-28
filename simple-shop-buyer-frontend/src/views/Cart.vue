@@ -6,12 +6,11 @@ import EmptyState from '../components/common/EmptyState.vue'
 import CartRow from '../components/cart/CartRow.vue'
 import CartSummaryBar from '../components/cart/CartSummaryBar.vue'
 import { useCartStore } from '../stores/cart'
-import { describeError, describeSubmitError } from '../utils/errorText'
+import { describeError } from '../utils/errorText'
 
 const cart = useCartStore()
 const router = useRouter()
 
-const submitting = ref(false)
 const movingFav = ref(false)
 const notice = ref('')
 const actionError = ref('')
@@ -44,25 +43,10 @@ async function onRemove(goodsId: string): Promise<void> {
   }
 }
 
-async function onSubmit(): Promise<void> {
+/** 下单要先选地址，所以这里只跳转，真正的提交在结算页。 */
+function onCheckout(): void {
   if (checkedLineCount.value === 0) return
-  submitting.value = true
-  actionError.value = ''
-  notice.value = ''
-  try {
-    const placed = await cart.submitOrder()
-    // D2-5：成功直接进订单详情——那里有订单号、状态和逐件明细，
-    // 比在购物车页弹一句话让人放心;购物车里的行已经由 store 清掉了。
-    void router.push({ name: 'order-detail', params: { id: placed.order_id } })
-  } catch (err) {
-    actionError.value = describeSubmitError(err)
-    // 失败后重新拉一次购物车：失败多半是「提交瞬间商品下架 / 库存变了」，
-    // 不刷新的话页面上还是旧库存，用户照着旧数字再点一次还是失败。
-    // 刷新只影响失效行（会被取消勾选），有效行的勾选与数量由 syncLocal 原样保留。
-    await cart.load()
-  } finally {
-    submitting.value = false
-  }
+  void router.push({ name: 'checkout' })
 }
 
 /**
@@ -149,10 +133,9 @@ onMounted(() => {
         :total-quantity="cart.totalQuantity"
         :total-amount="cart.totalAmount"
         :moving-fav="movingFav"
-        :submitting="submitting"
         @toggle-all="cart.toggleAll"
         @move-fav="onMoveToFavorites"
-        @checkout="onSubmit"
+        @checkout="onCheckout"
       />
     </template>
   </div>

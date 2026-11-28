@@ -12,7 +12,6 @@ const router = useRouter()
 const username = ref('')
 const password = ref('')
 const phone = ref('')
-const location = ref('')
 const submitting = ref(false)
 const errorText = ref('')
 
@@ -21,7 +20,6 @@ async function onSubmit() {
     username: username.value,
     password: password.value,
     phone: phone.value,
-    location: location.value,
   })
   if (reason) {
     errorText.value = reason
@@ -30,12 +28,11 @@ async function onSubmit() {
   submitting.value = true
   errorText.value = ''
   try {
-    // 注册成功后后端不返回令牌，这里再登录一次（交接文档 4.2）。
+    // 注册成功后后端不返回令牌，这里再登录一次。
     await auth.registerAndLogin({
       username: username.value.trim(),
       password: password.value,
       phone: phone.value.trim(),
-      default_location: location.value.trim() || undefined,
     })
     router.replace({ name: 'goods-list' })
   } catch (err) {
@@ -69,12 +66,6 @@ async function onSubmit() {
         <small class="mt-1 block text-xs text-base-content/60">
           必填，7~20 位，其中至少 7 位数字（如 13800138000）
         </small>
-      </label>
-
-      <label class="block">
-        <span class="mb-1 block text-base-content/60">默认交易地点</span>
-        <input v-model="location" class="input w-full" aria-label="默认交易地点" />
-        <small class="mt-1 block text-xs text-base-content/60">可不填，最多 50 字</small>
       </label>
 
       <p v-if="errorText" class="text-error">{{ errorText }}</p>

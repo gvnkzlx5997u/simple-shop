@@ -53,8 +53,9 @@ beforeEach(() => {
     order_id: 'o1',
     order_no: 'SO1',
     total_amount: 0,
-    status: 'PENDING_CONFIRM',
+    status: 'PENDING_PAYMENT',
     create_at: '2026-11-11T10:00:00Z',
+    pay_deadline: '2026-11-12T10:00:00Z',
   })
 })
 
@@ -165,15 +166,15 @@ describe('加购与移除', () => {
 })
 
 describe('submitOrder', () => {
-  it('成功：只带明细与数量，成交后清行清本地', async () => {
+  it('成功：带地址与明细数量，成交后清行清本地', async () => {
     vi.mocked(cartApi.fetchCart)
       .mockResolvedValueOnce({ items: [item(), item({ goods_id: 'g2', price: 20 })] })
       .mockResolvedValue({ items: [] })
     await cart.load()
     cart.setQuantity('g1', 2)
-    const placed = await cart.submitOrder()
+    const placed = await cart.submitOrder('addr1')
     expect(placed.order_id).toBe('o1')
-    expect(placeOrder).toHaveBeenCalledWith([
+    expect(placeOrder).toHaveBeenCalledWith('addr1', [
       { goods_id: 'g1', quantity: 2 },
       { goods_id: 'g2', quantity: 1 },
     ])
@@ -189,14 +190,14 @@ describe('submitOrder', () => {
     await cart.load()
     cart.setQuantity('g1', 2)
     vi.mocked(placeOrder).mockRejectedValueOnce(new ApiError(ApiCode.GOODS_NOT_ON_SALE, 'x'))
-    await expect(cart.submitOrder()).rejects.toThrow()
+    await expect(cart.submitOrder('addr1')).rejects.toThrow()
     expect(loadCartLocal('alice').g1).toEqual({ quantity: 2, checked: true })
     expect(cartApi.removeCartItem).not.toHaveBeenCalled()
   })
 
   it('无勾选行拒绝提交', async () => {
     await cart.load()
-    await expect(cart.submitOrder()).rejects.toThrow('empty selection')
+    await expect(cart.submitOrder('addr1')).rejects.toThrow('empty selection')
   })
 })
 

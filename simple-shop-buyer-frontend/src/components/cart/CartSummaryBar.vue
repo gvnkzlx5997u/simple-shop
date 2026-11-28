@@ -7,7 +7,6 @@ defineProps<{
   totalQuantity: number
   totalAmount: number
   movingFav: boolean
-  submitting: boolean
 }>()
 
 const emit = defineEmits<{
@@ -40,7 +39,7 @@ const emit = defineEmits<{
     <button
       class="to-fav btn btn-outline btn-sm"
       data-testid="cart-to-fav"
-      :disabled="lineCount === 0 || movingFav || submitting"
+      :disabled="lineCount === 0 || movingFav"
       @click="emit('move-fav')"
     >
       {{ movingFav ? '转移中…' : '转收藏' }}
@@ -49,10 +48,10 @@ const emit = defineEmits<{
     <button
       class="checkout btn btn-primary btn-sm"
       data-testid="cart-checkout"
-      :disabled="lineCount === 0 || submitting || movingFav"
+      :disabled="lineCount === 0 || movingFav"
       @click="emit('checkout')"
     >
-      {{ submitting ? '提交中…' : '去结算' }}
+      去结算
     </button>
   </div>
 </template>

@@ -10,7 +10,7 @@
 - 订单取代购买意向，商品只有「在售 / 已下架」两态；不要沿用阶段二的意向排队、商品冻结与归档搬表。
 - 项目按阶段迭代，新需求可能改变业务口径，先确认需求与状态模型，再改实现；不要全部沿用旧口径。
 - 后端只提供 REST 与 `/media`。买家端与卖家端是两个独立 SPA。
-- **阶段状态：阶段四（挑战需求 C）后端已交付，前端与 E2E 待改造。** 数据层（V4）、订单七态主链、地址、售后、横切与测试全部完成，契约冻结在 `simple-shop-doc/阶段四/openapi.json` 与《契约交接》。阶段四文档见 `simple-shop-doc/阶段四/目录.md`；阶段一、阶段二、阶段三文档已失去时效性，仅作参考。
+- **阶段状态：阶段四（挑战需求 C）后端与买家端已交付，卖家端与 E2E 待改造。** 数据层（V4）、订单七态主链、地址、售后、横切与测试全部完成，契约冻结在 `simple-shop-doc/阶段四/openapi.json` 与《契约交接》。买家端已按该契约完成地址、结算、支付、确认收货与售后，交接见 `simple-shop-test-e2e/买家端交接说明.md`。阶段四文档见 `simple-shop-doc/阶段四/目录.md`；阶段一、阶段二、阶段三文档已失去时效性，仅作参考。
 
 ## 2. 仓库与技术栈
 
@@ -139,7 +139,7 @@ npx playwright test
 - **两套主题**：`data-theme="shop-light" | "shop-dark"` 挂在 `<html>`。切换与持久化只走 `composables/useTheme`，页面内不要直接改 `document.documentElement.dataset.theme`；首屏主题由 `index.html` 内联脚本先定，避免闪白。存储键各端独立（卖家 `simple-shop.seller.theme`、买家 `simple-shop.buyer.theme`）。
 - **图标**：统一走 `components/common/AppIcon.vue`（内联 `<svg>` + `currentColor`），不要在模板里用 `<img src="*.svg">` 直插图标——`assets/` 里的图标是固定黑色填充，深色主题下会糊成黑块。新增图标把 path 的 `d` 加进 `PATHS` 即可。
 - **后台密度（仅卖家）**：数据密集型界面默认取 `-sm` 一档（`btn-sm`、`input-sm`、`select-sm`、`table-sm`），用默认尺寸会把一屏信息量挤掉。**买家端是 storefront，用默认尺寸**，不照搬 `-sm`，也不做卖家那条补偿字号的 `@utility`。
-- **买家端差异**：与卖家共用样式底座与公共件契约（StatusTag/Pagination/EmptyState/AppIcon），但保留内联二次确认（不用 modal）、内联 notice/alert（不用全局 toast）、960px 居中顶栏布局；表单用包裹式 `<label>`（或 `for`/`id`）保证 `getByLabel` 可访问名，不照搬卖家 fieldset/legend（legend 不给 input 起名）。
+- **买家端差异**：与卖家共用样式底座与公共件契约（StatusTag/Pagination/EmptyState/AppIcon），但保留内联二次确认（确认动作不用 modal）、内联 notice/alert（不用全局 toast）、960px 居中顶栏布局；**表单走弹窗**，外壳统一用 `components/common/FormModal.vue`（点遮罩或取消关闭，`modal-box` 底色取 `--color-surface-solid`），新建与编辑共用一个表单组件；表单用包裹式 `<label>`（或 `for`/`id`）保证 `getByLabel` 可访问名，不照搬卖家 fieldset/legend（legend 不给 input 起名）。
 
 ## 6. 数据与迁移
 

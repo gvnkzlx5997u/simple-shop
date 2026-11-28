@@ -2,12 +2,11 @@ import { describe, expect, it } from 'vitest'
 
 import { validateRegister } from '../../src/validation/register'
 
-const ok = { username: 'buyer1', password: 'Abcd1234', phone: '13800138000', location: '' }
+const ok = { username: 'buyer1', password: 'Abcd1234', phone: '13800138000' }
 
 describe('validateRegister', () => {
   it('合法输入通过', () => {
     expect(validateRegister(ok)).toBe('')
-    expect(validateRegister({ ...ok, location: '北京' })).toBe('')
   })
 
   it('用户名：空 / 超 50 / 空格 / 尖括号', () => {
@@ -31,14 +30,6 @@ describe('validateRegister', () => {
     expect(validateRegister({ ...ok, phone: '-------' })).toBe('电话里至少要有 7 位数字')
     expect(validateRegister({ ...ok, phone: '123456-' })).toBe('电话里至少要有 7 位数字')
     expect(validateRegister({ ...ok, phone: '138-0013-8000' })).toBe('')
-  })
-
-  it('地点：可选，但超 50 / 换行 / 尖括号拒绝', () => {
-    expect(validateRegister({ ...ok, location: 'a'.repeat(51) })).toBe(
-      '默认交易地点最多 50 字，不能含换行或尖括号',
-    )
-    expect(validateRegister({ ...ok, location: 'a\nb' })).toBe('默认交易地点最多 50 字，不能含换行或尖括号')
-    expect(validateRegister({ ...ok, location: 'a<b>' })).toBe('默认交易地点最多 50 字，不能含换行或尖括号')
   })
 
   it('首尾空白被 trim 后校验', () => {

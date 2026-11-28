@@ -28,6 +28,8 @@ async function onLogout() {
         <RouterLink v-if="auth.isLoggedIn" class="nav-link" to="/cart">购物车</RouterLink>
         <RouterLink v-if="auth.isLoggedIn" class="nav-link" to="/favorites">收藏</RouterLink>
         <RouterLink v-if="auth.isLoggedIn" class="nav-link" to="/orders">订单</RouterLink>
+        <RouterLink v-if="auth.isLoggedIn" class="nav-link" to="/addresses">地址</RouterLink>
+        <RouterLink v-if="auth.isLoggedIn" class="nav-link" to="/aftersales">售后</RouterLink>
       </nav>
 
       <div class="ml-auto flex items-center gap-3">

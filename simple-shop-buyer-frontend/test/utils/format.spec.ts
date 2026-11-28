@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatMoney, formatTime } from '../../src/utils/format'
+import { formatCountdown, formatMoney, formatTime } from '../../src/utils/format'
 
 // 时区由 vitest.config 的 env.TZ=UTC 固定（node 只在启动时读 TZ，运行时改无效）。
 
@@ -30,5 +30,23 @@ describe('formatMoney', () => {
     expect(formatMoney(undefined)).toBe('0.00')
     expect(formatMoney(NaN)).toBe('0.00')
     expect(formatMoney('abc')).toBe('0.00')
+  })
+})
+
+describe('formatCountdown', () => {
+  it('剩余毫秒渲染成 HH:mm:ss', () => {
+    expect(formatCountdown(24 * 3600 * 1000)).toBe('24:00:00')
+    expect(formatCountdown(3600 * 1000 + 2 * 60 * 1000 + 3000)).toBe('01:02:03')
+    expect(formatCountdown(9000)).toBe('00:00:09')
+  })
+
+  it('不足一秒向下取整，不四舍五入', () => {
+    expect(formatCountdown(1999)).toBe('00:00:01')
+  })
+
+  it('已过期与非法值归零，不出现负数', () => {
+    expect(formatCountdown(0)).toBe('00:00:00')
+    expect(formatCountdown(-5000)).toBe('00:00:00')
+    expect(formatCountdown(NaN)).toBe('00:00:00')
   })
 })
